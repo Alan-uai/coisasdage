@@ -53,7 +53,14 @@ export default function ProductsPage() {
     <div className="flex flex-col min-h-screen">
       <div className="p-4 sm:p-6 lg:p-8 space-y-12">
         <header className="text-center">
-          <h1 className="text-4xl font-bold tracking-tight font-headline">Coisas da Gê</h1>
+          <Image
+            src="https://res.cloudinary.com/artesa-aconchegante-demo/image/upload/f_auto,q_auto/v1/Home/LogoGe2"
+            alt="Coisas da Gê"
+            width={300}
+            height={100}
+            className="mx-auto"
+            priority
+          />
           <p className="text-muted-foreground mt-2">Explore nossas criações feitas à mão com amor.</p>
         </header>
         

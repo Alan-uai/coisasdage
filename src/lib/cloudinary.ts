@@ -33,12 +33,13 @@ export async function getLogoUrl(): Promise<string | null> {
   try {
     const { resources } = await cloudinary.api.resources({
       type: 'upload',
-      prefix: 'Logotipo/', // Search in the root "Logotipo" folder
+      prefix: 'Logotipo/',
       max_results: 10,
       context: true,
     });
-
-    const activeLogo = resources.find((resource: any) => resource.context?.active === 'true');
+    
+    // FIX: Custom metadata is under context.custom
+    const activeLogo = resources.find((resource: any) => resource.context?.custom?.active === 'true');
 
     if (activeLogo) {
       logoUrlCache = activeLogo.secure_url;
@@ -46,7 +47,7 @@ export async function getLogoUrl(): Promise<string | null> {
       return activeLogo.secure_url;
     }
 
-    console.warn('No active logo found in Cloudinary under Logotipo/.');
+    console.warn('No active logo found in Cloudinary under Logotipo/. Make sure it has metadata "active" set to "true".');
     return null;
 
   } catch (error) {
@@ -72,25 +73,24 @@ export async function getProducts(): Promise<Product[]> {
       max_results: 500,
       context: true,
     });
-
-    // DEBUG: Log the raw response from Cloudinary
-    console.log(`[Cloudinary Debug] Found ${resources.length} total resources.`);
-    if (resources.length > 0) {
-      console.log('[Cloudinary Debug] Example resource:', JSON.stringify(resources[0], null, 2));
-    }
-
-
+    
     const products: Product[] = resources.map((resource: any): Product | null => {
-      if (!resource.context) return null;
-
-      // The category is the name of the folder the image is in.
-      const category = resource.folder;
-
-      // Exclude Logotipo from products and ensure there is a category
-      if (!category || category === 'Logotipo') {
+      // FIX: Custom metadata is under context.custom
+      const context = resource.context?.custom;
+      if (!context) return null;
+      
+      // FIX: More robustly exclude the Logotipo folder
+      if (resource.folder.includes('Logotipo')) {
         return null;
       }
 
+      // FIX: Get category from the last part of the folder path
+      const category = resource.folder?.split('/').pop();
+
+      if (!category) {
+        return null;
+      }
+      
       const { 
         id, 
         name, 
@@ -101,7 +101,7 @@ export async function getProducts(): Promise<Product[]> {
         colors, 
         materials, 
         imageHint 
-      } = resource.context as Record<string, string>;
+      } = context as Record<string, string>;
 
       // Essential fields: id, name, and price from context.
       if (!id || !name || !price) {
@@ -136,6 +136,7 @@ export async function getProducts(): Promise<Product[]> {
 }
 
 export async function getProductById(id: string): Promise<Product | null> {
+    // FIX: Corrected broken comment
     // This function will rely on the cached getProducts() result for performance
     const products = await getProducts();
     return products.find(p => p.id === id) || null;

@@ -67,12 +67,18 @@ export async function getProducts(): Promise<Product[]> {
   }
 
   try {
-    // Search all uploaded resources without a specific prefix to find all product folders.
     const { resources } = await cloudinary.api.resources({
       type: 'upload',
       max_results: 500,
       context: true,
     });
+
+    // DEBUG: Log the raw response from Cloudinary
+    console.log(`[Cloudinary Debug] Found ${resources.length} total resources.`);
+    if (resources.length > 0) {
+      console.log('[Cloudinary Debug] Example resource:', JSON.stringify(resources[0], null, 2));
+    }
+
 
     const products: Product[] = resources.map((resource: any): Product | null => {
       if (!resource.context) return null;
@@ -97,7 +103,7 @@ export async function getProducts(): Promise<Product[]> {
         imageHint 
       } = resource.context as Record<string, string>;
 
-      // Essential fields: id, name, and price from context. Category is from the folder.
+      // Essential fields: id, name, and price from context.
       if (!id || !name || !price) {
           return null;
       }

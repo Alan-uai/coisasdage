@@ -33,7 +33,7 @@ export default function ProductDetailPage({ params }: { params: { slug: string }
           </div>
           <div className="flex flex-col">
             <h1 className="text-3xl lg:text-4xl font-bold font-headline">{product.name}</h1>
-            <p className="text-lg text-muted-foreground mt-2">{product.category === 'Rugs' ? 'Tapete' : 'Kit de Crochê'}</p>
+            <p className="text-lg text-muted-foreground mt-2">{product.category}</p>
             <p className="text-3xl font-bold mt-4">R$ {product.price.toFixed(2).replace('.', ',')}</p>
             <Separator className="my-6" />
             <p className="text-base leading-relaxed">{product.description}</p>

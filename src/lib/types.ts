@@ -5,7 +5,8 @@ export type Product = {
   price: number;
   imageUrl: string;
   imageHint: string;
-  category: 'Rugs' | 'Crochet Kits';
+  category: string;
+  readyMade?: boolean;
   options: {
     sizes: string[];
     colors: string[];

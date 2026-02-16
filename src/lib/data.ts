@@ -7,7 +7,7 @@ export const products: Product[] = [
     name: 'Jogo de Banheiro Conchas (2 peças)',
     description: 'Um lindo conjunto de 2 peças para banheiro em crochê, com tapete para o vaso e tapete de saída de banho. Padrão de conchas.',
     price: 120.00,
-    imageUrl: 'https://res.cloudinary.com/dme6as4bi/image/upload/v1/Home/Jogo-Banho/jogo-banho-conchas.jpg',
+    imageUrl: 'jogo-banho-conchas.jpg',
     imageHint: 'crochet bathroom set',
     category: 'Jogo-Banho',
     readyMade: true, // For "pronta entrega"
@@ -22,7 +22,7 @@ export const products: Product[] = [
     name: 'Jogo de Banheiro Flores (2 peças)',
     description: 'Decore seu banheiro com este conjunto de 2 peças em crochê com detalhes de flores.',
     price: 125.50,
-    imageUrl: 'https://res.cloudinary.com/dme6as4bi/image/upload/v1/Home/Jogo-Banho/jogo-banho-flores.jpg',
+    imageUrl: 'jogo-banho-flores.jpg',
     imageHint: 'floral bathroom rug',
     category: 'Jogo-Banho',
     options: {
@@ -38,7 +38,7 @@ export const products: Product[] = [
     name: 'Jogo Americano Folhas (2 peças)',
     description: 'Conjunto de 2 jogos americanos de crochê com um lindo padrão de folhas. Ideal para uma mesa posta elegante.',
     price: 110.00,
-    imageUrl: 'https://res.cloudinary.com/dme6as4bi/image/upload/v1/Home/Jogo-Duplo/jogo-americano-folhas.jpg',
+    imageUrl: 'jogo-americano-folhas.jpg',
     imageHint: 'crochet placemat',
     category: 'Jogo-Duplo',
     options: {
@@ -52,7 +52,7 @@ export const products: Product[] = [
     name: 'Kit Tapetes de Cozinha (2 peças)',
     description: 'Um par de tapetes de cozinha em crochê, uma passadeira e um tapete menor, para um ambiente mais acolhedor.',
     price: 180.00,
-    imageUrl: 'https://res.cloudinary.com/dme6as4bi/image/upload/v1/Home/Jogo-Duplo/kit-tapetes-cozinha.jpg',
+    imageUrl: 'kit-tapetes-cozinha.jpg',
     imageHint: 'crochet kitchen rugs',
     category: 'Jogo-Duplo',
     readyMade: true, // For "pronta entrega"
@@ -69,7 +69,7 @@ export const products: Product[] = [
     name: 'Jogo de Banheiro Oásis (3 peças)',
     description: 'Um conjunto completo de 3 peças para banheiro em crochê: tapete do vaso, tampa e tapete de saída de banho.',
     price: 155.00,
-    imageUrl: 'https://res.cloudinary.com/dme6as4bi/image/upload/v1/Home/Jogo-Triplo/jogo-banheiro-oasis.jpg',
+    imageUrl: 'jogo-banheiro-oasis.jpg',
     imageHint: '3 piece bathroom set',
     category: 'Jogo-Triplo',
     options: {
@@ -83,7 +83,7 @@ export const products: Product[] = [
     name: 'Jogo de Passadeira Cozinha (3 peças)',
     description: 'Jogo de cozinha com 1 passadeira e 2 tapetes menores, ideal para proteger e decorar o piso.',
     price: 210.00,
-    imageUrl: 'https://res.cloudinary.com/dme6as4bi/image/upload/v1/Home/Jogo-Triplo/jogo-passadeira-cozinha.jpg',
+    imageUrl: 'jogo-passadeira-cozinha.jpg',
     imageHint: 'crochet kitchen runner',
     category: 'Jogo-Triplo',
     options: {

@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import { products } from '@/lib/data';
+import { getCloudinaryImageUrl } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
 import { ProductCustomizationForm } from './product-customization-form';
 
@@ -23,7 +24,7 @@ export default function ProductDetailPage({ params }: { params: { slug: string }
         <div className="grid md:grid-cols-2 gap-8 lg:gap-12 max-w-6xl mx-auto">
           <div className="overflow-hidden rounded-lg">
             <Image
-              src={product.imageUrl}
+              src={getCloudinaryImageUrl(product.category, product.imageUrl)}
               alt={product.name}
               width={800}
               height={600}

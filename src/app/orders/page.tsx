@@ -1,5 +1,6 @@
 import { orders } from '@/lib/data';
 import { products } from '@/lib/data';
+import { getCloudinaryImageUrl } from '@/lib/utils';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -47,7 +48,7 @@ export default function OrdersPage() {
                   {product && (
                      <Link href={`/products/${product.id}`} className="block flex-shrink-0">
                       <Image
-                        src={product.imageUrl}
+                        src={getCloudinaryImageUrl(product.category, product.imageUrl)}
                         alt={product.name}
                         width={150}
                         height={100}

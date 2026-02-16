@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { products } from '@/lib/data';
+import { getCloudinaryImageUrl } from '@/lib/utils';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
@@ -12,7 +13,7 @@ const ProductCard = ({ product }: { product: Product }) => (
     <CardHeader className="p-0">
       <Link href={`/products/${product.id}`} className="block overflow-hidden">
         <Image
-          src={product.imageUrl}
+          src={getCloudinaryImageUrl(product.category, product.imageUrl)}
           alt={product.name}
           width={600}
           height={400}

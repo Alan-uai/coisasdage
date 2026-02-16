@@ -54,7 +54,7 @@ export default function ProductsPage() {
       <div className="p-4 sm:p-6 lg:p-8 space-y-12">
         <header className="text-center">
           <Image
-            src="https://res.cloudinary.com/artesa-aconchegante-demo/image/upload/f_auto,q_auto/v1/Home/LogoGe2"
+            src="https://res.cloudinary.com/dme6as4bi/image/upload/f_auto,q_auto/v1/Home/LogoGe2"
             alt="Coisas da Gê"
             width={300}
             height={100}

@@ -1,6 +1,5 @@
 import { orders } from '@/lib/data';
-import { products } from '@/lib/data';
-import { getCloudinaryImageUrl } from '@/lib/utils';
+import { getProducts } from '@/lib/cloudinary';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -19,7 +18,9 @@ const statusMap: { [key in StatusKey]: { text: string; value: number; variant: '
   Delivered: { text: 'Entregue', value: 100, variant: 'outline' },
 };
 
-export default function OrdersPage() {
+export default async function OrdersPage() {
+  const products = await getProducts();
+
   return (
     <div className="flex flex-col min-h-screen p-4 sm:p-6 lg:p-8">
       <header className="mb-8">
@@ -48,7 +49,7 @@ export default function OrdersPage() {
                   {product && (
                      <Link href={`/products/${product.id}`} className="block flex-shrink-0">
                       <Image
-                        src={getCloudinaryImageUrl(product.category, product.imageUrl)}
+                        src={product.imageUrl}
                         alt={product.name}
                         width={150}
                         height={100}

@@ -1,18 +1,18 @@
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
-import { products } from '@/lib/data';
-import { getCloudinaryImageUrl } from '@/lib/utils';
+import { getProducts, getProductById } from '@/lib/cloudinary';
 import { Separator } from '@/components/ui/separator';
 import { ProductCustomizationForm } from './product-customization-form';
 
 export async function generateStaticParams() {
+  const products = await getProducts();
   return products.map((product) => ({
     slug: product.id,
   }));
 }
 
-export default function ProductDetailPage({ params }: { params: { slug: string } }) {
-  const product = products.find((p) => p.id === params.slug);
+export default async function ProductDetailPage({ params }: { params: { slug: string } }) {
+  const product = await getProductById(params.slug);
 
   if (!product) {
     notFound();
@@ -24,7 +24,7 @@ export default function ProductDetailPage({ params }: { params: { slug: string }
         <div className="grid md:grid-cols-2 gap-8 lg:gap-12 max-w-6xl mx-auto">
           <div className="overflow-hidden rounded-lg">
             <Image
-              src={getCloudinaryImageUrl(product.category, product.imageUrl)}
+              src={product.imageUrl}
               alt={product.name}
               width={800}
               height={600}

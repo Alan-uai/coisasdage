@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { getProducts } from '@/lib/cloudinary';
+import { getProducts, getLogoUrl } from '@/lib/cloudinary';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
@@ -37,7 +37,11 @@ const ProductCard = ({ product }: { product: Product }) => (
 );
 
 export default async function ProductsPage() {
-  const products = await getProducts();
+  const [logoUrl, products] = await Promise.all([
+    getLogoUrl(),
+    getProducts()
+  ]);
+  
   const readyMadeProducts = products.filter(product => product.readyMade);
   
   const productsByCategory = products.reduce((acc, product) => {
@@ -54,14 +58,18 @@ export default async function ProductsPage() {
     <div className="flex flex-col min-h-screen">
       <div className="p-4 sm:p-6 lg:p-8 space-y-12">
         <header className="text-center">
-          <Image
-            src="https://res.cloudinary.com/dme6as4bi/image/upload/v1771274618/LogoGe2.png"
-            alt="Coisas da Gê"
-            width={300}
-            height={100}
-            className="mx-auto"
-            priority
-          />
+          {logoUrl ? (
+            <Image
+              src={logoUrl}
+              alt="Coisas da Gê"
+              width={300}
+              height={100}
+              className="mx-auto"
+              priority
+            />
+          ) : (
+            <h1 className="text-4xl font-bold tracking-tight font-headline">Coisas da Gê</h1>
+          )}
           <p className="text-muted-foreground mt-2">Explore nossas criações feitas à mão com amor.</p>
         </header>
         

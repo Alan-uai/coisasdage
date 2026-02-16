@@ -15,6 +15,46 @@ let productsCache: Product[] | null = null;
 let cacheTimestamp: number | null = null;
 const CACHE_DURATION = 60 * 1000; // 1 minute
 
+// Cache for the logo
+let logoUrlCache: string | null = null;
+let logoCacheTimestamp: number | null = null;
+
+export async function getLogoUrl(): Promise<string | null> {
+  const now = Date.now();
+  if (logoUrlCache && logoCacheTimestamp && (now - logoCacheTimestamp < CACHE_DURATION)) {
+    return logoUrlCache;
+  }
+  
+  if (!process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+    console.warn('Cloudinary API key/secret not configured. Cannot fetch logo.');
+    return null; 
+  }
+
+  try {
+    const { resources } = await cloudinary.api.resources({
+      type: 'upload',
+      prefix: 'Home/Logotipo/',
+      max_results: 10,
+      context: true,
+    });
+
+    const activeLogo = resources.find((resource: any) => resource.context?.active === 'true');
+
+    if (activeLogo) {
+      logoUrlCache = activeLogo.secure_url;
+      logoCacheTimestamp = now;
+      return activeLogo.secure_url;
+    }
+
+    console.warn('No active logo found in Cloudinary under Home/Logotipo/.');
+    return null;
+
+  } catch (error) {
+    console.error('Error fetching logo from Cloudinary:', error);
+    return null;
+  }
+}
+
 export async function getProducts(): Promise<Product[]> {
   const now = Date.now();
   if (productsCache && cacheTimestamp && (now - cacheTimestamp < CACHE_DURATION)) {
@@ -42,6 +82,11 @@ export async function getProducts(): Promise<Product[]> {
       const folderParts = resource.folder?.split('/') || [];
       // The category will be the second part, e.g., 'Jogo-Banho'
       const category = folderParts.length > 1 ? folderParts[1] : null;
+
+      // Exclude Logotipo from products
+      if (category === 'Logotipo') {
+        return null;
+      }
 
       const { 
         id, 

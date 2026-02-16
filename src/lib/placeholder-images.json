@@ -1,3 +1,40 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "rug-boho",
+      "description": "A beautiful bohemian style rug with tassels.",
+      "imageUrl": "https://images.unsplash.com/photo-1654077774185-bd6c7331525a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxib2hlbWlhbiUyMHJ1Z3xlbnwwfHx8fDE3NzEyNjY0MDV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "bohemian rug"
+    },
+    {
+      "id": "rug-modern",
+      "description": "A modern geometric pattern rug in neutral tones.",
+      "imageUrl": "https://images.unsplash.com/photo-1765802536365-e2267a489a2c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxtb2Rlcm4lMjBydWd8ZW58MHx8fHwxNzcxMjY2NDA1fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "modern rug"
+    },
+    {
+      "id": "crochet-kit-amigurumi",
+      "description": "A complete kit to crochet a cute amigurumi octopus.",
+      "imageUrl": "https://images.unsplash.com/photo-1753778367032-2ee16109a430?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxjcm9jaGV0JTIwb2N0b3B1c3xlbnwwfHx8fDE3NzEyNjY0MDV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "crochet octopus"
+    },
+    {
+      "id": "crochet-kit-blanket",
+      "description": "Everything you need to create a cozy chunky knit blanket.",
+      "imageUrl": "https://images.unsplash.com/photo-1675273316258-0519f62da0d0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxjcm9jaGV0JTIwYmxhbmtldHxlbnwwfHx8fDE3NzEyNjY0MDV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "crochet blanket"
+    },
+    {
+      "id": "rug-sage",
+      "description": "A plush round rug in a soft sage green color.",
+      "imageUrl": "https://images.unsplash.com/photo-1674544036861-53d915364130?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxncmVlbiUyMHJ1Z3xlbnwwfHx8fDE3NzEyNjY0MDV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "green rug"
+    },
+    {
+      "id": "crochet-kit-scarf",
+      "description": "A beginner-friendly kit for a stylish winter scarf.",
+      "imageUrl": "https://images.unsplash.com/photo-1732476342752-6870145d1f9c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw5fHxjcm9jaGV0JTIwc2NhcmZ8ZW58MHx8fHwxNzcxMjY2NDA1fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "crochet scarf"
+    }
+  ]
 }

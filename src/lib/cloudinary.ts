@@ -37,12 +37,17 @@ export async function getProducts(): Promise<Product[]> {
     const products: Product[] = resources.map((resource: any): Product | null => {
       if (!resource.context) return null;
 
+      // The folder structure is 'Home/CategoryName'
+      // The folder property from Cloudinary is 'Home/CategoryName'
+      const folderParts = resource.folder?.split('/') || [];
+      // The category will be the second part, e.g., 'Jogo-Banho'
+      const category = folderParts.length > 1 ? folderParts[1] : null;
+
       const { 
         id, 
         name, 
         price, 
         description, 
-        category, 
         readyMade, 
         sizes, 
         colors, 
@@ -50,9 +55,13 @@ export async function getProducts(): Promise<Product[]> {
         imageHint 
       } = resource.context as Record<string, string>;
 
-      // Essential fields
+      // Essential fields: id, name, and price from context, and category derived from folder.
       if (!id || !name || !price || !category) {
-          console.warn('Skipping resource due to missing essential context:', resource.public_id, resource.context);
+          // This check helps debug why a product might not be appearing.
+          // If it has an ID, it's likely intended to be a product.
+          if (id && !category) { 
+              console.warn(`Product with id '${id}' in folder '${resource.folder}' will be skipped because it's not in a valid category subfolder inside 'Home/'.`);
+          }
           return null;
       }
 
@@ -63,7 +72,7 @@ export async function getProducts(): Promise<Product[]> {
         price: parseFloat(price) || 0,
         imageUrl: resource.secure_url,
         imageHint: imageHint || 'handmade product',
-        category,
+        category, // Use derived category
         readyMade: readyMade === 'true',
         options: {
           sizes: sizes ? sizes.split(',').map(s => s.trim()) : ['Padrão'],

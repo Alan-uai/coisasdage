@@ -2,8 +2,14 @@
 
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { SidebarMenu, SidebarMenuItem, SidebarMenuButton } from '@/components/ui/sidebar';
 import { LayoutGrid, Package, Palette, ShoppingBag } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from '@/lib/utils';
+import { buttonVariants } from '@/components/ui/button';
 
 const links = [
   { href: '/', label: 'Catálogo', icon: LayoutGrid },
@@ -16,21 +22,28 @@ export function Nav() {
   const pathname = usePathname();
 
   return (
-    <SidebarMenu>
+    <nav className="flex items-center gap-1">
       {links.map((link) => (
-        <SidebarMenuItem key={link.href}>
-          <SidebarMenuButton
-            asChild
-            isActive={pathname === link.href}
-            className="w-full"
-          >
-            <Link href={link.href}>
-              <link.icon className="size-4" />
-              <span>{link.label}</span>
+        <Tooltip key={link.href} delayDuration={0}>
+          <TooltipTrigger asChild>
+            <Link
+              href={link.href}
+              className={cn(
+                buttonVariants({ 
+                  variant: pathname === link.href ? "secondary" : "ghost", 
+                  size: "icon" 
+                }),
+              )}
+              aria-label={link.label}
+            >
+              <link.icon className="h-5 w-5" />
             </Link>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{link.label}</p>
+          </TooltipContent>
+        </Tooltip>
       ))}
-    </SidebarMenu>
+    </nav>
   );
 }

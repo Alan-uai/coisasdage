@@ -79,8 +79,8 @@ export async function getProducts(): Promise<Product[]> {
       const context = resource.context?.custom;
       if (!context) return null;
       
-      // FIX: More robustly exclude the Logotipo folder
-      if (resource.folder.includes('Logotipo')) {
+      // FIX: More robustly exclude the Logotipo folder and check for folder existence
+      if (resource.folder && resource.folder.includes('Logotipo')) {
         return null;
       }
 

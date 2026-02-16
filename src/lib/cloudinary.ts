@@ -77,10 +77,9 @@ export async function getProducts(): Promise<Product[]> {
     const products: Product[] = resources.map((resource: any): Product | null => {
       // FIX: Custom metadata is under context.custom
       const context = resource.context?.custom;
-      if (!context) return null;
       
       // FIX: More robustly exclude the Logotipo folder and check for folder existence
-      if (resource.folder && resource.folder.includes('Logotipo')) {
+      if (!resource.folder || resource.folder.includes('Logotipo')) {
         return null;
       }
 
@@ -91,6 +90,8 @@ export async function getProducts(): Promise<Product[]> {
         return null;
       }
       
+      if (!context) return null;
+
       const { 
         id, 
         name, 

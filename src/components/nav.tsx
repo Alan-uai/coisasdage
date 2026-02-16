@@ -22,7 +22,7 @@ export function Nav() {
   const pathname = usePathname();
 
   return (
-    <nav className="flex items-center gap-1">
+    <nav className="flex flex-1 items-center justify-around">
       {links.map((link) => (
         <Tooltip key={link.href} delayDuration={0}>
           <TooltipTrigger asChild>

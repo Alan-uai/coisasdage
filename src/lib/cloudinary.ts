@@ -33,7 +33,7 @@ export async function getLogoUrl(): Promise<string | null> {
   try {
     const { resources } = await cloudinary.api.resources({
       type: 'upload',
-      prefix: 'Home/Logotipo/',
+      prefix: 'Logotipo/', // Search in the root "Logotipo" folder
       max_results: 10,
       context: true,
     });
@@ -46,7 +46,7 @@ export async function getLogoUrl(): Promise<string | null> {
       return activeLogo.secure_url;
     }
 
-    console.warn('No active logo found in Cloudinary under Home/Logotipo/.');
+    console.warn('No active logo found in Cloudinary under Logotipo/.');
     return null;
 
   } catch (error) {
@@ -67,24 +67,21 @@ export async function getProducts(): Promise<Product[]> {
   }
 
   try {
+    // Search all uploaded resources without a specific prefix to find all product folders.
     const { resources } = await cloudinary.api.resources({
       type: 'upload',
-      prefix: 'Home/', // Fetch all products under Home
-      max_results: 500, // Increased limit
+      max_results: 500,
       context: true,
     });
 
     const products: Product[] = resources.map((resource: any): Product | null => {
       if (!resource.context) return null;
 
-      // The folder structure is 'Home/CategoryName'
-      // The folder property from Cloudinary is 'Home/CategoryName'
-      const folderParts = resource.folder?.split('/') || [];
-      // The category will be the second part, e.g., 'Jogo-Banho'
-      const category = folderParts.length > 1 ? folderParts[1] : null;
+      // The category is the name of the folder the image is in.
+      const category = resource.folder;
 
-      // Exclude Logotipo from products
-      if (category === 'Logotipo') {
+      // Exclude Logotipo from products and ensure there is a category
+      if (!category || category === 'Logotipo') {
         return null;
       }
 
@@ -100,13 +97,8 @@ export async function getProducts(): Promise<Product[]> {
         imageHint 
       } = resource.context as Record<string, string>;
 
-      // Essential fields: id, name, and price from context, and category derived from folder.
-      if (!id || !name || !price || !category) {
-          // This check helps debug why a product might not be appearing.
-          // If it has an ID, it's likely intended to be a product.
-          if (id && !category) { 
-              console.warn(`Product with id '${id}' in folder '${resource.folder}' will be skipped because it's not in a valid category subfolder inside 'Home/'.`);
-          }
+      // Essential fields: id, name, and price from context. Category is from the folder.
+      if (!id || !name || !price) {
           return null;
       }
 
@@ -117,7 +109,7 @@ export async function getProducts(): Promise<Product[]> {
         price: parseFloat(price) || 0,
         imageUrl: resource.secure_url,
         imageHint: imageHint || 'handmade product',
-        category, // Use derived category
+        category, // Use derived category from folder name
         readyMade: readyMade === 'true',
         options: {
           sizes: sizes ? sizes.split(',').map(s => s.trim()) : ['Padrão'],

@@ -74,6 +74,21 @@ export default async function ProductsPage() {
         </header>
         
         <main className="flex-1 space-y-12">
+          {products.length === 0 && (
+            <div className="text-center text-muted-foreground p-8 border-2 border-dashed rounded-lg">
+                <h2 className="text-2xl font-bold font-headline mb-2 text-foreground">Nenhum produto encontrado!</h2>
+                <p className="max-w-2xl mx-auto">
+                    Isso pode acontecer por alguns motivos:
+                </p>
+                <ul className="list-disc list-inside text-left max-w-md mx-auto mt-4 space-y-1">
+                    <li>Verifique se suas credenciais <code className="font-semibold bg-muted px-1 py-0.5 rounded">CLOUDINARY_API_KEY</code> e <code className="font-semibold bg-muted px-1 py-0.5 rounded">CLOUDINARY_API_SECRET</code> estão configuradas no arquivo <code className="font-semibold bg-muted px-1 py-0.5 rounded">.env</code>.</li>
+                    <li>Certifique-se de que suas imagens estão em pastas no Cloudinary (ex: "Jogo-Banho").</li>
+                    <li>Confirme que cada imagem de produto tem os metadados de contexto obrigatórios salvos: <code className="font-semibold bg-muted px-1 py-0.5 rounded">id</code>, <code className="font-semibold bg-muted px-1 py-0.5 rounded">name</code>, e <code className="font-semibold bg-muted px-1 py-0.5 rounded">price</code>.</li>
+                </ul>
+                <p className="mt-4">Após verificar, pode levar até 1 minuto para as alterações aparecerem.</p>
+            </div>
+          )}
+
           {readyMadeProducts.length > 0 && (
             <section>
               <h2 className="text-3xl font-bold tracking-tight font-headline mb-4">A Pronta Entrega</h2>

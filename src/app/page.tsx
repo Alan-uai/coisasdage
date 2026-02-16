@@ -53,7 +53,7 @@ export default function ProductsPage() {
     <div className="flex flex-col min-h-screen">
       <div className="p-4 sm:p-6 lg:p-8 space-y-12">
         <header className="text-center">
-          <h1 className="text-4xl font-bold tracking-tight font-headline">Nosso Catálogo</h1>
+          <h1 className="text-4xl font-bold tracking-tight font-headline">Coisas da Gê</h1>
           <p className="text-muted-foreground mt-2">Explore nossas criações feitas à mão com amor.</p>
         </header>
         

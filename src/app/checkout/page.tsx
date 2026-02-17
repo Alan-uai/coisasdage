@@ -13,7 +13,7 @@ function CheckoutSkeleton() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
       <Skeleton className="h-64 w-full rounded-lg" />
-      <Skeleton className="h-80 w-full rounded-lg" />
+      <Skeleton className="h-96 w-full rounded-lg" />
     </div>
   );
 }
@@ -66,7 +66,7 @@ export default function CheckoutPage() {
     }
 
     if (cartItems) {
-        return <CheckoutForm cartItems={cartItems} subtotal={subtotal} />;
+        return <CheckoutForm user={user} cartItems={cartItems} subtotal={subtotal} />;
     }
 
     return null;
@@ -76,7 +76,7 @@ export default function CheckoutPage() {
     <div className="p-4 sm:p-6 lg:p-8">
       <header className="mb-8">
         <h1 className="text-4xl font-bold tracking-tight font-headline">Finalizar Compra</h1>
-        <p className="text-muted-foreground mt-2">Revise seu pedido e realize o pagamento.</p>
+        <p className="text-muted-foreground mt-2">Revise seu pedido e informe seus dados para o pagamento.</p>
       </header>
       <main className="max-w-6xl mx-auto">
         {renderContent()}

@@ -49,6 +49,15 @@ export type OrderItemSummary = {
   selectedMaterial: string;
 };
 
+export type Address = {
+    cpf: string;
+    streetName: string;
+    streetNumber: string;
+    zipCode: string;
+    city: string;
+    state: string;
+};
+
 export type Order = {
   id: string;
   userId: string;
@@ -56,10 +65,10 @@ export type Order = {
   totalAmount: number;
   status: 'Processing' | 'Crafting' | 'Shipped' | 'Delivered';
   items: OrderItemSummary[];
-  shippingAddressId: string;
-  billingAddressId: string;
+  shippingAddress: Address;
+  billingAddressId?: string; // Optional for now
   trackingNumber?: string;
-  estimatedDeliveryDate: Timestamp;
+  estimatedDeliveryDate?: Timestamp;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 };
@@ -79,5 +88,3 @@ export type CartItem = {
   createdAt: Timestamp;
   updatedAt: Timestamp;
 };
-
-    

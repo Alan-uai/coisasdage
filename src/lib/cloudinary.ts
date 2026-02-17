@@ -188,17 +188,24 @@ export async function getProducts(): Promise<Product[]> {
         
         let sizeRangeText: string | undefined = undefined;
         if (mainOptions.sizes.length > 1) {
-            // Regex to check if a string is a number, optionally followed by "peça" or "peças"
-            const isPieceCount = (s: string) => /^\d+\s*(peças?)?$/.test(s.trim().toLowerCase());
-            
-            const allArePieceCounts = mainOptions.sizes.every(isPieceCount);
+            const mainProductSize = mainProductForGroup.size?.toLowerCase();
+            // Check if the main product's specific size indicates it's a piece-based unit.
+            const isPieceUnit = mainProductSize?.includes('peça');
 
-            if (allArePieceCounts) {
-                const pieceNumbers = mainOptions.sizes.map(s => parseInt(s, 10));
-                const maxPieces = Math.max(...pieceNumbers);
-                sizeRangeText = `até ${maxPieces} peças`;
+            if (isPieceUnit) {
+                const pieceNumbers = mainOptions.sizes
+                    .map(s => parseInt(s, 10))
+                    .filter(n => !isNaN(n));
+                
+                if (pieceNumbers.length > 0) {
+                    const maxPieces = Math.max(...pieceNumbers);
+                    sizeRangeText = `até ${maxPieces} peças`;
+                } else {
+                     // Fallback in case no numbers could be parsed from the options
+                    sizeRangeText = `até ${mainOptions.sizes.length} tamanhos`;
+                }
             } else {
-                // For non-numeric sizes like P, M, G, or lengths like 2m, 50cm
+                // If it's not piece-based (e.g., P/M/G, 2m, etc.)
                 sizeRangeText = `até ${mainOptions.sizes.length} tamanhos`;
             }
         } else if (mainOptions.sizes.length === 1 && mainOptions.sizes[0].toLowerCase() !== 'padrão') {
@@ -273,5 +280,5 @@ export async function getProducts(): Promise<Product[]> {
 export async function getProductByGroupId(groupId: string): Promise<Product | null> {
     const products = await getProducts();
     // Return the consolidated product, not a simple ready-made variant that might share the groupId
-    return products.find(p => p.groupId === groupId && p.variants.length > 1) || products.find(p => p.groupId === groupId) || null;
+    return products.find(p => p.groupId === groupId && p.isMain) || products.find(p => p.groupId === groupId) || null;
 }

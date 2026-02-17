@@ -157,7 +157,7 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
     const productLink = activeColor ? `${productUrl}?color=${encodeURIComponent(activeColor)}` : productUrl;
 
     let priceText;
-    if (activeSizeIndex !== -1) {
+    if (activeSizeIndex > -1) {
         priceText = `R$ ${activePrice.toFixed(2).replace('.', ',')}`;
     } else if (!isReadyMadeCarousel && product.minPrice !== product.maxPrice) {
         priceText = `R$ ${product.minPrice.toFixed(2).replace('.', ',')} - R$ ${product.maxPrice.toFixed(2).replace('.', ',')}`;

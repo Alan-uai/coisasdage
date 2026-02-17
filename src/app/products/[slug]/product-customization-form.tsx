@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import type { Product } from '@/lib/types';
+import type { Product, ProductVariant } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
@@ -16,36 +16,56 @@ import { cn } from '@/lib/utils';
 function ProductCustomizationFormComponent({ 
   product, 
   setSelectedImageUrl,
-  setSelectedPrice
+  setSelectedPrice,
+  selectedMaterial,
+  setSelectedMaterial,
 }: { 
   product: Product, 
   setSelectedImageUrl: (url: string) => void,
   setSelectedPrice: (price: number) => void,
+  selectedMaterial: string,
+  setSelectedMaterial: (material: string) => void,
 }) {
   const { toast } = useToast();
 
   const [selectedColor, setSelectedColor] = useState<string>(product.options.colors[0]);
   const [selectedSize, setSelectedSize] = useState<string>(product.options.sizes[0]);
-  const [selectedMaterial, setSelectedMaterial] = useState<string>(product.options.materials[0]);
   
   useEffect(() => {
-    // Find the variant that matches the selected options.
-    const variant = product.variants.find(v => v.color === selectedColor && v.size === selectedSize);
+    // Find the best variant that matches the selected options, prioritizing more specific matches.
+    const findBestVariant = (): ProductVariant | null => {
+      const candidates = product.variants.filter(v => {
+        const colorMatch = !v.color || v.color === selectedColor;
+        const sizeMatch = !v.size || v.size === selectedSize;
+        const materialMatch = !v.material || v.material === selectedMaterial;
+        return colorMatch && sizeMatch && materialMatch;
+      });
+
+      if (candidates.length === 0) {
+        return null;
+      }
+
+      // Sort candidates by specificity (more defined properties = higher score)
+      candidates.sort((a, b) => {
+        const scoreA = (a.color ? 1 : 0) + (a.size ? 1 : 0) + (a.material ? 1 : 0);
+        const scoreB = (b.color ? 1 : 0) + (b.size ? 1 : 0) + (b.material ? 1 : 0);
+        return scoreB - scoreA;
+      });
+
+      return candidates[0];
+    };
+
+    const variant = findBestVariant();
+
     if (variant) {
       setSelectedImageUrl(variant.imageUrl);
       setSelectedPrice(variant.price ?? product.price);
     } else {
-      // Fallback to main product if no specific variant is found
-      const colorVariant = product.variants.find(v => v.color === selectedColor);
-      if (colorVariant) {
-        setSelectedImageUrl(colorVariant.imageUrl);
-        setSelectedPrice(colorVariant.price ?? product.price);
-      } else {
-        setSelectedImageUrl(product.imageUrl);
-        setSelectedPrice(product.price);
-      }
+      // Fallback to the main product's image if no suitable variant is found
+      setSelectedImageUrl(product.imageUrl);
+      setSelectedPrice(product.price);
     }
-  }, [selectedColor, selectedSize, product.variants, product.imageUrl, product.price, setSelectedImageUrl, setSelectedPrice]);
+  }, [selectedColor, selectedSize, selectedMaterial, product, setSelectedImageUrl, setSelectedPrice]);
 
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -150,6 +170,7 @@ function ProductCustomizationFormComponent({
 export function ProductClientPage({ product }: { product: Product }) {
   const [selectedImageUrl, setSelectedImageUrl] = useState(product.imageUrl);
   const [currentPrice, setCurrentPrice] = useState(product.price);
+  const [selectedMaterial, setSelectedMaterial] = useState<string>(product.options.materials[0]);
 
   return (
     <div className="flex flex-col min-h-screen p-4 sm:p-6 lg:p-8">
@@ -174,7 +195,13 @@ export function ProductClientPage({ product }: { product: Product }) {
             <Separator className="my-6" />
             <p className="text-base leading-relaxed">{product.description}</p>
             <Separator className="my-6" />
-            <ProductCustomizationFormComponent product={product} setSelectedImageUrl={setSelectedImageUrl} setSelectedPrice={setCurrentPrice} />
+            <ProductCustomizationFormComponent 
+              product={product} 
+              setSelectedImageUrl={setSelectedImageUrl} 
+              setSelectedPrice={setCurrentPrice}
+              selectedMaterial={selectedMaterial}
+              setSelectedMaterial={setSelectedMaterial}
+            />
           </div>
         </div>
       </main>
@@ -183,4 +210,4 @@ export function ProductClientPage({ product }: { product: Product }) {
 }
 
 // Default export for backward compatibility if something still imports it directly
-export default ProductCustomizationFormComponent;
+export default ProductClientPage;

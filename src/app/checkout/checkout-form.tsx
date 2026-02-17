@@ -38,8 +38,8 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
     });
 
     async function onSubmit(values: z.infer<typeof addressSchema>) {
-        if (!user || cartItems.length === 0) {
-            setError('Usuário não autenticado ou carrinho vazio.');
+        if (!user || cartItems.length === 0 || !user.email) {
+            setError('Usuário não autenticado, sem e-mail ou carrinho vazio.');
             return;
         }
         
@@ -54,9 +54,17 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
             selectedMaterial: item.selectedMaterial,
             quantity: item.quantity,
             unitPriceAtAddition: item.unitPriceAtAddition,
+            imageUrl: item.imageUrl,
         }));
         
-        const result = await createPreference(user.uid, serializableCartItems, values, subtotal);
+        const result = await createPreference(
+            user.uid, 
+            user.email, 
+            user.displayName, 
+            serializableCartItems, 
+            values, 
+            subtotal
+        );
 
         if (result.preferenceId) {
             setPreferenceId(result.preferenceId);

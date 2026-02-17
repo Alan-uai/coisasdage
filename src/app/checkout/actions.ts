@@ -15,6 +15,7 @@ export type PreferenceCartItem = {
     selectedMaterial: string;
     quantity: number;
     unitPriceAtAddition: number;
+    imageUrl: string;
 };
 
 type AddressData = z.infer<typeof addressSchema>;
@@ -31,6 +32,8 @@ const { firestore } = initializeFirebase();
 
 export async function createPreference(
     userId: string,
+    userEmail: string,
+    userName: string | null,
     cartItems: PreferenceCartItem[],
     addressData: AddressData,
     totalAmount: number
@@ -56,7 +59,7 @@ export async function createPreference(
             items: cartItems.map(item => ({ // Denormalize cart items into the order
                 productId: item.id,
                 productName: item.productName,
-                imageUrl: '', // This should ideally be passed from the client
+                imageUrl: item.imageUrl,
                 quantity: item.quantity,
                 unitPriceAtOrder: item.unitPriceAtAddition,
                 selectedSize: item.selectedSize,
@@ -81,10 +84,15 @@ export async function createPreference(
             currency_id: 'BRL',
             unit_price: item.unitPriceAtAddition,
         }));
+        
+        const nameParts = (userName || 'Comprador Anônimo').split(' ');
+        const firstName = nameParts[0];
+        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : ' ';
 
-        // TODO: Get payer name/surname from user profile in a real app
         const payer = {
-            email: 'test_user_123@testuser.com', // This should be the user's email
+            email: userEmail,
+            name: firstName,
+            surname: lastName,
             identification: {
                 type: 'CPF',
                 number: addressData.cpf,

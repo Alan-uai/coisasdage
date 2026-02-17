@@ -20,7 +20,7 @@ let logoUrlCache: string | null = null;
 let logoCacheTimestamp: number | null = null;
 
 // An internal type for processing
-type RawProduct = Omit<Product, 'variants' | 'options' | 'minPrice' | 'maxPrice'> & {
+type RawProduct = Omit<Product, 'variants' | 'options' | 'minPrice' | 'maxPrice' | 'availability'> & {
   color?: string; // Singular color for this specific variant
   size?: string;
   material?: string;
@@ -29,6 +29,9 @@ type RawProduct = Omit<Product, 'variants' | 'options' | 'minPrice' | 'maxPrice'
     sizes?: string;
     colors?: string;
     materials?: string;
+    availableSizes?: string;
+    availableColors?: string;
+    availableMaterials?: string;
   }
 };
 
@@ -105,6 +108,9 @@ export async function getProducts(): Promise<Product[]> {
         sizes, 
         colors, 
         materials,
+        availableSizes,
+        availableColors,
+        availableMaterials,
         primaryColor,
         color,
         size,
@@ -136,6 +142,9 @@ export async function getProducts(): Promise<Product[]> {
             sizes,
             colors,
             materials,
+            availableSizes,
+            availableColors,
+            availableMaterials,
         },
         color,
         size,
@@ -175,6 +184,17 @@ export async function getProducts(): Promise<Product[]> {
             colors: mainProduct.rawOptions.colors ? mainProduct.rawOptions.colors.split(',').map(c => c.trim()) : [],
             materials: mainProduct.rawOptions.materials ? mainProduct.rawOptions.materials.split(',').map(m => m.trim()) : [],
         };
+        
+        const availability: Product['availability'] = {};
+        if (mainProduct.rawOptions.availableColors) {
+            availability.colors = mainProduct.rawOptions.availableColors.split(',').map(s => s.trim());
+        }
+         if (mainProduct.rawOptions.availableSizes) {
+            availability.sizes = mainProduct.rawOptions.availableSizes.split(',').map(s => s.trim());
+        }
+         if (mainProduct.rawOptions.availableMaterials) {
+            availability.materials = mainProduct.rawOptions.availableMaterials.split(',').map(s => s.trim());
+        }
 
         const finalProduct: Product = {
             ...mainProduct,
@@ -186,6 +206,7 @@ export async function getProducts(): Promise<Product[]> {
             description: mainProduct.description,
             imageUrl: mainProduct.imageUrl,
             options: mainOptions,
+            availability: Object.keys(availability).length > 0 ? availability : undefined,
             variants: variants,
             primaryColor: mainProduct.primaryColor,
         };

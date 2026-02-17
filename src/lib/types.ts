@@ -21,7 +21,12 @@ export type Product = {
   category: string;
   readyMade?: boolean;
   primaryColor?: string;
-  options: { // All available options for the group
+  options: { // All possible options for the group
+    sizes: string[];
+    colors: string[];
+    materials: string[];
+  };
+  availability?: { // Which options are currently available
     sizes: string[];
     colors: string[];
     materials: string[];

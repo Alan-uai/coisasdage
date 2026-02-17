@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { ShoppingBag } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 // The actual form component
 function ProductCustomizationFormComponent({ 
@@ -29,17 +30,22 @@ function ProductCustomizationFormComponent({
   
   useEffect(() => {
     // Find the variant that matches the selected options.
-    // This logic can be improved to handle multiple simultaneous selections.
-    const variant = product.variants.find(v => v.color === selectedColor);
+    const variant = product.variants.find(v => v.color === selectedColor && v.size === selectedSize);
     if (variant) {
       setSelectedImageUrl(variant.imageUrl);
       setSelectedPrice(variant.price ?? product.price);
     } else {
-      // Fallback to main product if no specific variant is found for the color
-      setSelectedImageUrl(product.imageUrl);
-      setSelectedPrice(product.price);
+      // Fallback to main product if no specific variant is found
+      const colorVariant = product.variants.find(v => v.color === selectedColor);
+      if (colorVariant) {
+        setSelectedImageUrl(colorVariant.imageUrl);
+        setSelectedPrice(colorVariant.price ?? product.price);
+      } else {
+        setSelectedImageUrl(product.imageUrl);
+        setSelectedPrice(product.price);
+      }
     }
-  }, [selectedColor, product.variants, product.imageUrl, product.price, setSelectedImageUrl, setSelectedPrice]);
+  }, [selectedColor, selectedSize, product.variants, product.imageUrl, product.price, setSelectedImageUrl, setSelectedPrice]);
 
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -54,18 +60,33 @@ function ProductCustomizationFormComponent({
   const hasSizeOptions = product.options.sizes.length > 1 || (product.options.sizes.length === 1 && product.options.sizes[0] !== 'Padrão');
   const hasMaterialOptions = product.options.materials.length > 1 || (product.options.materials.length === 1 && product.options.materials[0] !== 'Padrão');
 
+  const availableColors = product.availability?.colors;
+  const availableSizes = product.availability?.sizes;
+  const availableMaterials = product.availability?.materials;
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {hasSizeOptions && (
         <div className="space-y-3">
           <Label className="text-base font-semibold">Tamanho</Label>
           <RadioGroup value={selectedSize} onValueChange={setSelectedSize} className="flex flex-wrap gap-x-4 gap-y-2">
-            {product.options.sizes.map((size) => (
-              <div key={size} className="flex items-center">
-                <RadioGroupItem value={size} id={`size-${size}`} />
-                <Label htmlFor={`size-${size}`} className="ml-2 cursor-pointer text-sm">{size}</Label>
-              </div>
-            ))}
+            {product.options.sizes.map((size) => {
+              const isAvailable = availableSizes ? availableSizes.includes(size) : true;
+              return (
+                <div key={size} className="flex items-center">
+                  <RadioGroupItem value={size} id={`size-${size}`} disabled={!isAvailable} />
+                  <Label 
+                    htmlFor={`size-${size}`} 
+                    className={cn(
+                      "ml-2 cursor-pointer text-sm",
+                      !isAvailable && "text-muted-foreground line-through cursor-not-allowed"
+                    )}
+                  >
+                    {size}
+                  </Label>
+                </div>
+              )
+            })}
           </RadioGroup>
         </div>
       )}
@@ -74,12 +95,23 @@ function ProductCustomizationFormComponent({
         <div className="space-y-3">
           <Label className="text-base font-semibold">Cor</Label>
            <RadioGroup value={selectedColor} onValueChange={setSelectedColor} className="flex flex-wrap gap-x-4 gap-y-2">
-            {product.options.colors.map((color) => (
-              <div key={color} className="flex items-center">
-                <RadioGroupItem value={color} id={`color-${color}`} />
-                <Label htmlFor={`color-${color}`} className="ml-2 cursor-pointer text-sm">{color}</Label>
-              </div>
-            ))}
+            {product.options.colors.map((color) => {
+              const isAvailable = availableColors ? availableColors.includes(color) : true;
+              return (
+                <div key={color} className="flex items-center">
+                  <RadioGroupItem value={color} id={`color-${color}`} disabled={!isAvailable} />
+                  <Label 
+                    htmlFor={`color-${color}`} 
+                    className={cn(
+                      "ml-2 cursor-pointer text-sm",
+                      !isAvailable && "text-muted-foreground line-through cursor-not-allowed"
+                    )}
+                  >
+                    {color}
+                  </Label>
+                </div>
+              )
+            })}
           </RadioGroup>
         </div>
       )}
@@ -92,9 +124,14 @@ function ProductCustomizationFormComponent({
               <SelectValue placeholder="Selecione um material" />
             </SelectTrigger>
             <SelectContent>
-              {product.options.materials.map((material) => (
-                <SelectItem key={material} value={material}>{material}</SelectItem>
-              ))}
+              {product.options.materials.map((material) => {
+                 const isAvailable = availableMaterials ? availableMaterials.includes(material) : true;
+                 return (
+                  <SelectItem key={material} value={material} disabled={!isAvailable}>
+                    {material}
+                  </SelectItem>
+                 )
+              })}
             </SelectContent>
           </Select>
         </div>

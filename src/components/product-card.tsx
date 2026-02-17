@@ -12,21 +12,21 @@ import { cn } from '@/lib/utils';
 // Renders a color swatch, handling single colors and various two-color combinations.
 const renderColorSwatch = (color: string, primaryColor?: string): JSX.Element => {
     const colorHexMap: { [key: string]: string } = {
-        'preto': '#000',
-        'branco': '#fff',
-        'cinza': '#6b7280',
-        'vermelho': '#ef4444',
-        'verde sálvia': '#8F9779',
-        'verde': '#16a34a',
-        'azul marinho': '#1e3a8a',
-        'azul': '#3b82f6',
-        'amarelo': '#facc15',
-        'rosa': '#f472b6',
-        'roxo': '#a855f7',
-        'laranja': '#f97316',
-        'marrom': '#78350f',
-        'terracota': '#78350f',
-        'cru': '#f5f5f4',
+        'preto': '#262626',
+        'branco': '#f8f8f8',
+        'cinza': '#8a8a8a',
+        'vermelho': '#c85c5c',
+        'verde sálvia': '#a8b898',
+        'verde': '#6a9c89',
+        'azul marinho': '#384d70',
+        'azul': '#6c8dae',
+        'amarelo': '#e3b448',
+        'rosa': '#d4a5a5',
+        'roxo': '#9b7e9b',
+        'laranja': '#d88c6c',
+        'marrom': '#8c6c5c',
+        'terracota': '#c27d60',
+        'cru': '#e8e2d9',
     };
 
     const lowerColor = color.toLowerCase();
@@ -58,26 +58,15 @@ const renderColorSwatch = (color: string, primaryColor?: string): JSX.Element =>
         return <div className={className} style={style} />;
     }
 
-    // Case 3: Single solid color
-    const singleColorClassName = ((): string => {
-        if (lowerColor.includes('preto')) return 'bg-black';
-        if (lowerColor.includes('branco')) return 'bg-white border border-gray-300';
-        if (lowerColor.includes('cinza')) return 'bg-gray-500';
-        if (lowerColor.includes('vermelho')) return 'bg-red-500';
-        if (lowerColor.includes('verde sálvia')) return 'bg-[#8F9779]';
-        if (lowerColor.includes('verde')) return 'bg-green-600';
-        if (lowerColor.includes('azul marinho')) return 'bg-blue-900';
-        if (lowerColor.includes('azul')) return 'bg-blue-500';
-        if (lowerColor.includes('amarelo')) return 'bg-yellow-400';
-        if (lowerColor.includes('rosa')) return 'bg-pink-400';
-        if (lowerColor.includes('roxo')) return 'bg-purple-500';
-        if (lowerColor.includes('laranja')) return 'bg-orange-500';
-        if (lowerColor.includes('marrom') || lowerColor.includes('terracota')) return 'bg-amber-800';
-        if (lowerColor.includes('cru')) return 'bg-stone-200';
-        return 'bg-gray-300'; // Default fallback color
-    })();
+    // Case 3: Single solid color, using the hex map for consistency
+    const hex = colorHexMap[lowerColor];
+    const style: React.CSSProperties = hex ? { backgroundColor: hex } : { backgroundColor: '#e0e0e0' };
+    let className = "w-full h-full rounded-full";
+    if (lowerColor === 'branco' || lowerColor === 'cru') {
+      className = cn(className, "border border-gray-300");
+    }
     
-    return <div className={cn("w-full h-full rounded-full", singleColorClassName)} />;
+    return <div className={className} style={style} />;
 }
 
 export const ProductCard = ({ product }: { product: Product }) => {
@@ -101,9 +90,18 @@ export const ProductCard = ({ product }: { product: Product }) => {
 
     const colors = product.options.colors.filter(c => c !== 'Padrão');
     const hasColorVariants = colors.length > 0;
+    
+    const availableColors = product.availability?.colors;
+    const sortedColors = [...colors].sort((a, b) => {
+        const aIsAvailable = availableColors ? availableColors.includes(a) : true;
+        const bIsAvailable = availableColors ? availableColors.includes(b) : true;
+        if (aIsAvailable === bIsAvailable) return 0;
+        return aIsAvailable ? -1 : 1;
+    });
+
     const MAX_SWATCHES = 5;
-    const visibleColors = colors.slice(0, MAX_SWATCHES);
-    const remainingColorsCount = colors.length - MAX_SWATCHES;
+    const visibleColors = sortedColors.slice(0, MAX_SWATCHES);
+    const remainingColorsCount = sortedColors.length - MAX_SWATCHES;
 
     return (
         <Card className="overflow-hidden flex flex-col group h-full">
@@ -124,25 +122,30 @@ export const ProductCard = ({ product }: { product: Product }) => {
                 {hasColorVariants && (
                     <TooltipProvider delayDuration={100}>
                     <div className="flex items-center gap-2 mb-3">
-                        {visibleColors.map(color => (
-                            <Tooltip key={color}>
-                                <TooltipTrigger asChild>
-                                    <button
-                                        onClick={() => handleColorChange(color)}
-                                        className={cn(
-                                            "w-5 h-5 rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-all",
-                                            activeColor === color ? 'ring-2 ring-primary ring-offset-1' : 'hover:ring-1 hover:ring-muted-foreground'
-                                        )}
-                                        aria-label={`Mudar para cor ${color}`}
-                                    >
-                                        {renderColorSwatch(color, product.primaryColor)}
-                                    </button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    <p>{product.primaryColor && product.primaryColor.toLowerCase() !== color.toLowerCase() ? `${product.primaryColor} e ${color}` : color}</p>
-                                </TooltipContent>
-                            </Tooltip>
-                        ))}
+                        {visibleColors.map(color => {
+                             const isAvailable = availableColors ? availableColors.includes(color) : true;
+                             return (
+                                <Tooltip key={color}>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            onClick={() => isAvailable && handleColorChange(color)}
+                                            className={cn(
+                                                "w-5 h-5 rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-all",
+                                                activeColor === color ? 'ring-2 ring-primary ring-offset-1' : 'hover:ring-1 hover:ring-muted-foreground',
+                                                !isAvailable && 'opacity-40 cursor-not-allowed'
+                                            )}
+                                            aria-label={`Mudar para cor ${color}`}
+                                            disabled={!isAvailable}
+                                        >
+                                            {renderColorSwatch(color, product.primaryColor)}
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p>{product.primaryColor && product.primaryColor.toLowerCase() !== color.toLowerCase() ? `${product.primaryColor} e ${color}` : color}</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                             )
+                        })}
                         {remainingColorsCount > 0 && (
                             <Tooltip>
                                 <TooltipTrigger asChild>

@@ -21,6 +21,7 @@ export type Product = {
   category: string;
   readyMade?: boolean;
   primaryColor?: string;
+  size?: string; // The specific size of the main product variant
   sizeRangeText?: string;
   options: { // All possible options for the group
     sizes: string[];

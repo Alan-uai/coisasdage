@@ -1,8 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, Timestamp } from 'firebase/firestore';
+import { collection, query, orderBy, limit } from 'firebase/firestore';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -58,15 +57,11 @@ export default function OrdersPage() {
   const firestore = useFirestore();
 
   const ordersQuery = useMemoFirebase(
-    () => (user && firestore ? collection(firestore, 'users', user.uid, 'orders') : null),
+    () => (user && firestore ? query(collection(firestore, 'users', user.uid, 'orders'), orderBy('orderDate', 'desc'), limit(20)) : null),
     [user, firestore]
   );
 
   const { data: orders, isLoading: isOrdersLoading } = useCollection<Order>(ordersQuery);
-
-  const sortedOrders = useMemo(() => {
-    return orders?.sort((a, b) => b.orderDate.toMillis() - a.orderDate.toMillis()) || [];
-  }, [orders]);
 
   if (isUserLoading) {
     return (
@@ -121,7 +116,7 @@ export default function OrdersPage() {
                 <OrderCardSkeleton />
             </>
         ) : (
-          sortedOrders.map((order) => {
+          (orders || []).map((order) => {
             const statusInfo = statusMap[order.status];
             return (
               <Card key={order.id}>

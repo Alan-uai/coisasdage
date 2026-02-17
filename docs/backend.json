@@ -172,10 +172,6 @@
       "type": "object",
       "description": "Represents a user's current shopping cart in the Artesã Aconchegante application.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Cart entity."
-        },
         "userId": {
           "type": "string",
           "description": "Reference to UserProfile. (Relationship: UserProfile 1:1 Cart)"
@@ -192,7 +188,6 @@
         }
       },
       "required": [
-        "id",
         "userId",
         "createdAt",
         "updatedAt"
@@ -204,10 +199,6 @@
       "type": "object",
       "description": "Represents a single product item, with its customizations and quantity, within a user's shopping cart.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the CartItem entity."
-        },
         "cartId": {
           "type": "string",
           "description": "Reference to Cart. (Relationship: Cart 1:N CartItem)"
@@ -215,6 +206,19 @@
         "productId": {
           "type": "string",
           "description": "Reference to Product. (Relationship: Product 1:N CartItem)"
+        },
+        "productGroupId": {
+          "type": "string",
+          "description": "The group ID of the product for linking back to the product page."
+        },
+        "productName": {
+          "type": "string",
+          "description": "Denormalized product name for easy display in the cart."
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "Denormalized image URL of the variant for easy display in the cart.",
+          "format": "uri"
         },
         "quantity": {
           "type": "number",
@@ -248,9 +252,11 @@
         }
       },
       "required": [
-        "id",
         "cartId",
         "productId",
+        "productGroupId",
+        "productName",
+        "imageUrl",
         "quantity",
         "selectedSize",
         "selectedColor",
@@ -303,10 +309,6 @@
       "type": "object",
       "description": "Represents a customer's placed order, including its status and shipping information, in the Artesã Aconchegante application.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Order entity."
-        },
         "userId": {
           "type": "string",
           "description": "Reference to UserProfile. (Relationship: UserProfile 1:N Order)"
@@ -360,7 +362,6 @@
         }
       },
       "required": [
-        "id",
         "userId",
         "orderDate",
         "totalAmount",
@@ -378,10 +379,6 @@
       "type": "object",
       "description": "Represents a single product item, with its customizations and quantity, within a placed order.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the OrderItem entity."
-        },
         "orderId": {
           "type": "string",
           "description": "Reference to Order. (Relationship: Order 1:N OrderItem)"
@@ -422,7 +419,6 @@
         }
       },
       "required": [
-        "id",
         "orderId",
         "productId",
         "quantity",
@@ -629,3 +625,5 @@
     "reasoning": "The Firestore structure for Artesã Aconchegante is meticulously designed for security, scalability, and debuggability, with a strong emphasis on authorization independence and clear access patterns. The chosen strategy minimizes complexity and enforces robust security rules.\n\nAuthorization Independence (CRITICAL):\nThe cornerstone of authorization independence in this design is path-based ownership. All user-specific data, including UserProfile, Address, Cart, and Order, are organized under a `/users/{userId}` root path. This hierarchical nesting allows Firebase Security Rules to directly match `request.auth.uid` against the `{userId}` wildcard in the path. This crucial design choice eliminates the necessity for `get()` operations to fetch parent documents for authorization checks. For instance, accessing an address at `/users/{userId}/addresses/{addressId}` only requires a rule to verify `request.auth.uid == userId` from the request path, making the authorization decision atomic and independent of any data retrieval. Furthermore, existing fields like `userId` (in UserProfile, Address, Cart, Order) within documents, or `cartId`/`orderId` (in CartItem, OrderItem), serve to bolster data integrity and provide explicit consistency checks, though their primary role for authorization is superseded by the path variables.\n\nQAPs (Rules are not Filters):\nThis structure inherently supports Query-As-Permissions (QAPs) through rigorous structural segregation. User-specific collections such as `/users/{userId}/addresses`, `/users/{userId}/carts`, and `/users/{userId}/orders` are logically and physically confined to a single user, as identified by the `{userId}` in their path. Consequently, security rules can precisely grant access solely when `request.auth.uid` aligns with this path's `userId`. This ensures that any `list` operation performed by an authenticated user on these collections will, by design, return only their permissible data, obviating the need for complex filtering within security rules or application logic. Conversely, the `/products` collection is designed for global, public read access, allowing any `list` query to retrieve the entire catalog without authorization-based filtering. This architectural approach guarantees that security rules act as definitive gates for data access, rather than inefficient post-query filters.\n\nOverall, this design strategy results in security rules that are concise, unambiguous, highly robust, and easy to audit, while simultaneously ensuring optimal scalability and performance for the Artesã Aconchegante application."
   }
 }
+
+    

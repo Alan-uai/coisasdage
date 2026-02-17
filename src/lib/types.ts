@@ -63,3 +63,21 @@ export type Order = {
   createdAt: Timestamp;
   updatedAt: Timestamp;
 };
+
+export type CartItem = {
+  id: string; // The firestore document ID
+  cartId: string;
+  productId: string;
+  productGroupId: string;
+  productName: string;
+  imageUrl: string;
+  quantity: number;
+  selectedSize: string;
+  selectedColor: string;
+  selectedMaterial: string;
+  unitPriceAtAddition: number;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+};
+
+    

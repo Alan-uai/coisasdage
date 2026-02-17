@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import type { Product, ProductVariant } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -12,6 +12,9 @@ import { Separator } from '@/components/ui/separator';
 import { ShoppingBag } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { useUser, useFirestore, addDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
+import { collection, doc, serverTimestamp } from 'firebase/firestore';
+
 
 // Helper to get the first available option from a list
 const getFirstAvailable = (
@@ -42,6 +45,8 @@ function ProductCustomizationFormComponent({
   setSelectedMaterial,
   availableColorsForCurrentSize,
   availableMaterialsForCurrentSelection,
+  currentPrice,
+  selectedImageUrl,
 }: { 
   product: Product, 
   selectedColor: string,
@@ -52,14 +57,56 @@ function ProductCustomizationFormComponent({
   setSelectedMaterial: (material: string) => void,
   availableColorsForCurrentSize: string[],
   availableMaterialsForCurrentSelection: string[],
+  currentPrice: number,
+  selectedImageUrl: string,
 }) {
   const { toast } = useToast();
+  const { user } = useUser();
+  const firestore = useFirestore();
+  const router = useRouter();
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (!user || !firestore) {
+      toast({
+        variant: "destructive",
+        title: "Login Necessário",
+        description: "Você precisa fazer login para adicionar itens ao carrinho.",
+      });
+      router.push('/login');
+      return;
+    }
+    
+    // Ensure the main cart document exists
+    const cartRef = doc(firestore, 'users', user.uid, 'carts', 'main');
+    setDocumentNonBlocking(cartRef, {
+      userId: user.uid,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    
+    // Add the item to the cart subcollection
+    const cartItemData = {
+      cartId: 'main',
+      productId: product.id,
+      productGroupId: product.groupId,
+      productName: product.name,
+      imageUrl: selectedImageUrl,
+      quantity: 1, // Default quantity to 1
+      selectedSize,
+      selectedColor,
+      selectedMaterial,
+      unitPriceAtAddition: currentPrice,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    const cartItemsRef = collection(firestore, 'users', user.uid, 'carts', 'main', 'items');
+    addDocumentNonBlocking(cartItemsRef, cartItemData);
+
     toast({
       title: "Adicionado ao Carrinho!",
-      description: `${product.name} (${selectedColor}, ${selectedSize}) foi adicionado ao seu carrinho de compras.`,
+      description: `${product.name} foi adicionado ao seu carrinho.`,
     });
   };
 
@@ -309,6 +356,8 @@ export function ProductClientPage({ product }: { product: Product }) {
               setSelectedMaterial={setSelectedMaterial}
               availableColorsForCurrentSize={availableColorsForCurrentSize}
               availableMaterialsForCurrentSelection={availableMaterialsForCurrentSelection}
+              currentPrice={currentPrice}
+              selectedImageUrl={selectedImageUrl}
             />
           </div>
         </div>
@@ -319,3 +368,5 @@ export function ProductClientPage({ product }: { product: Product }) {
 
 // Default export for backward compatibility if something still imports it directly
 export default ProductClientPage;
+
+    

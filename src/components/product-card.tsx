@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
-// Renders a color swatch, handling single colors and various two-color combinations.
+// Renders a color swatch, handling single colors and various multi-color combinations.
 const renderColorSwatch = (color: string, primaryColor?: string): JSX.Element => {
     const colorHexMap: { [key: string]: string } = {
         'preto': '#262626',
@@ -29,45 +29,55 @@ const renderColorSwatch = (color: string, primaryColor?: string): JSX.Element =>
         'cru': '#e8e2d9',
     };
 
-    const lowerColor = color.toLowerCase();
-    const colorParts = lowerColor.split(' e ').map(p => p.trim());
+    const getHex = (c: string) => colorHexMap[c.toLowerCase().trim()];
+    const explicitParts = color.split(' e ').map(getHex);
 
-    // Case 1: Explicit two-part color like "Preto e Branco"
-    if (colorParts.length > 1 && colorHexMap[colorParts[0]] && colorHexMap[colorParts[1]]) {
-        const style: React.CSSProperties = {
-            background: `linear-gradient(135deg, ${colorHexMap[colorParts[0]]} 50%, ${colorHexMap[colorParts[1]]} 50%)`
-        };
-        let className = "w-full h-full rounded-full";
-        if (colorParts.includes('branco')) {
-            className = cn(className, "border border-gray-300");
+    let finalHexParts: (string | undefined)[] = [];
+
+    // Case 1: The color name itself is "A e B e C", and all parts are valid colors.
+    if (explicitParts.every(p => p)) {
+        finalHexParts = explicitParts;
+    } else {
+        // Case 2: It's a single color, which might be combined with a product's primary color.
+        const mainColorHex = getHex(color);
+        const primaryColorHex = primaryColor ? getHex(primaryColor) : undefined;
+        
+        // Form a two-tone swatch if a primary color is defined and is different from the option color
+        if (primaryColorHex && mainColorHex && primaryColorHex !== mainColorHex) {
+            finalHexParts = [primaryColorHex, mainColorHex];
+        } else if (mainColorHex) { // Otherwise, it's just a single solid color
+            finalHexParts = [mainColorHex];
         }
-        return <div className={className} style={style} />;
     }
     
-    const lowerPrimaryColor = primaryColor?.toLowerCase();
-
-    // Case 2: Combination of a primaryColor and the current color from options
-    if (lowerPrimaryColor && lowerColor !== lowerPrimaryColor && colorHexMap[lowerColor] && colorHexMap[lowerPrimaryColor]) {
-       const style: React.CSSProperties = {
-            background: `linear-gradient(135deg, ${colorHexMap[lowerPrimaryColor]} 50%, ${colorHexMap[lowerColor]} 50%)`
-        };
-        let className = "w-full h-full rounded-full";
-        if (lowerColor === 'branco' || lowerPrimaryColor === 'branco') {
-             className = cn(className, "border border-gray-300");
-        }
-        return <div className={className} style={style} />;
+    if (finalHexParts.length === 0) {
+        // Fallback for unknown colors to prevent errors
+        return <div className="w-full h-full rounded-full bg-gray-200" />;
     }
 
-    // Case 3: Single solid color, using the hex map for consistency
-    const hex = colorHexMap[lowerColor];
-    const style: React.CSSProperties = hex ? { backgroundColor: hex } : { backgroundColor: '#e0e0e0' };
-    let className = "w-full h-full rounded-full";
-    if (lowerColor === 'branco' || lowerColor === 'cru') {
-      className = cn(className, "border border-gray-300");
+    let style: React.CSSProperties;
+    switch (finalHexParts.length) {
+        case 3:
+            style = { background: `linear-gradient(135deg, ${finalHexParts[0]} 33%, ${finalHexParts[1]} 33%, ${finalHexParts[1]} 66%, ${finalHexParts[2]} 66%)` };
+            break;
+        case 2:
+            style = { background: `linear-gradient(135deg, ${finalHexParts[0]} 50%, ${finalHexParts[1]} 50%)` };
+            break;
+        default: // case 1
+            style = { backgroundColor: finalHexParts[0] };
+            break;
     }
+    
+    // Add a border for light colors (like white or off-white) to make them visible on light backgrounds
+    const hasLightColor = color.toLowerCase().includes('branco') || color.toLowerCase().includes('cru') || primaryColor?.toLowerCase().includes('branco') || primaryColor?.toLowerCase().includes('cru');
+    const className = cn(
+        "w-full h-full rounded-full",
+        hasLightColor && "border border-gray-300"
+    );
     
     return <div className={className} style={style} />;
 }
+
 
 export const ProductCard = ({ product }: { product: Product }) => {
     // Find the main variant to determine the initial active color.
@@ -175,7 +185,7 @@ export const ProductCard = ({ product }: { product: Product }) => {
                 )}
                 <div className="flex-1">
                     <h2 className="text-xl font-bold font-headline">{product.name}</h2>
-                    <p className="text-muted-foreground mt-1 text-sm line-clamp-2 whitespace-pre-wrap">{product.description}</p>
+                    <p className="text-muted-foreground mt-1 text-sm line-clamp-2">{product.description}</p>
                 </div>
                 <div className="flex justify-between items-center mt-4">
                     <p className="text-lg font-semibold">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import type { Product } from '@/lib/types';
@@ -91,17 +91,52 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
 
     const [activeImageUrl, setActiveImageUrl] = useState(product.imageUrl);
     const [activeColor, setActiveColor] = useState<string | undefined>(initialActiveColor);
+    const [activePrice, setActivePrice] = useState(product.price);
+    const [activeSizeIndex, setActiveSizeIndex] = useState(-1); // -1 is the default/main product
+
 
     const handleColorChange = (color: string) => {
-        const variant = product.variants.find(v => v.color === color);
-        if (variant?.imageUrl) {
-            setActiveImageUrl(variant.imageUrl);
-        } else {
-            // Fallback to the main product image if a specific variant image is not found.
-            setActiveImageUrl(product.imageUrl);
-        }
+        const variant = product.variants.find(v => v.color === color) || product;
+        
+        setActiveImageUrl(variant.imageUrl);
+        setActivePrice(variant.price || product.price);
         setActiveColor(color);
+        setActiveSizeIndex(-1); // Reset size cycle when color changes
     };
+
+    const cycleableSizes = useMemo(() => {
+        const sizes = product.options.sizes.filter(s => s.toLowerCase() !== 'padrão');
+        const sizeValues = sizes.map(s => parseInt(s, 10)).filter(n => !isNaN(n));
+        if (sizeValues.length === sizes.length && sizeValues.length > 0) {
+            return sizes.sort((a,b) => parseInt(a, 10) - parseInt(b, 10));
+        }
+        return sizes;
+    }, [product.options.sizes]);
+
+    const handleSizeCycle = () => {
+        if (cycleableSizes.length === 0) return;
+        
+        const nextSizeIndex = activeSizeIndex + 1;
+
+        if (nextSizeIndex >= cycleableSizes.length) {
+            // Reset to default main product view
+            setActiveSizeIndex(-1);
+            setActiveImageUrl(product.imageUrl);
+            setActivePrice(product.price);
+            setActiveColor(initialActiveColor);
+        } else {
+            setActiveSizeIndex(nextSizeIndex);
+            const size = cycleableSizes[nextSizeIndex];
+            // Find first available variant for this size
+            const variant = product.variants.find(v => v.size === size);
+            if (variant) {
+                setActiveImageUrl(variant.imageUrl);
+                setActivePrice(variant.price || product.price);
+                setActiveColor(variant.color || initialActiveColor);
+            }
+        }
+    };
+
 
     const colors = product.options.colors.filter(c => c !== 'Padrão');
     const hasColorVariants = colors.length > 0;
@@ -121,6 +156,15 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
     const productUrl = `/products/${product.groupId}`;
     const productLink = activeColor ? `${productUrl}?color=${encodeURIComponent(activeColor)}` : productUrl;
 
+    let priceText;
+    if (activeSizeIndex !== -1) {
+        priceText = `R$ ${activePrice.toFixed(2).replace('.', ',')}`;
+    } else if (!isReadyMadeCarousel && product.minPrice !== product.maxPrice) {
+        priceText = `R$ ${product.minPrice.toFixed(2).replace('.', ',')} - R$ ${product.maxPrice.toFixed(2).replace('.', ',')}`;
+    } else {
+        priceText = `R$ ${activePrice.toFixed(2).replace('.', ',')}`;
+    }
+
 
     return (
         <Card className="overflow-hidden flex flex-col group h-full">
@@ -138,66 +182,79 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
                 </Link>
             </CardHeader>
             <CardContent className="p-4 flex flex-col flex-1">
-                {!isReadyMadeCarousel && (hasColorVariants || product.sizeRangeText) && (
-                  <div className="flex justify-between items-center mb-3 min-h-[20px]">
-                      {hasColorVariants ? (
-                          <TooltipProvider delayDuration={100}>
-                              <div className="flex items-center gap-2">
-                                  {visibleColors.map(color => {
-                                       const isAvailable = availableColors ? availableColors.includes(color) : true;
-                                       return (
-                                          <Tooltip key={color}>
-                                              <TooltipTrigger asChild>
-                                                  <button
-                                                      onClick={() => isAvailable && handleColorChange(color)}
-                                                      className={cn(
-                                                          "w-5 h-5 rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-all",
-                                                          activeColor === color ? 'ring-2 ring-primary ring-offset-1' : 'hover:ring-1 hover:ring-muted-foreground',
-                                                          !isAvailable && 'opacity-40 cursor-not-allowed'
-                                                      )}
-                                                      aria-label={`Mudar para cor ${color}`}
-                                                      disabled={!isAvailable}
-                                                  >
-                                                      {renderColorSwatch(color, product.primaryColor)}
-                                                  </button>
-                                              </TooltipTrigger>
-                                              <TooltipContent>
-                                                  <p>{product.primaryColor && product.primaryColor.toLowerCase() !== color.toLowerCase() ? `${product.primaryColor} e ${color}` : color}</p>
-                                              </TooltipContent>
-                                          </Tooltip>
-                                       )
-                                  })}
-                                  {remainingColorsCount > 0 && (
-                                      <Tooltip>
-                                          <TooltipTrigger asChild>
-                                              <Link href={`/products/${product.groupId}`} className="flex items-center justify-center w-6 h-6 rounded-full bg-muted text-muted-foreground text-xs font-bold border hover:bg-accent">
-                                                  +{remainingColorsCount}
-                                              </Link>
-                                          </TooltipTrigger>
-                                          <TooltipContent>
-                                              <p>{remainingColorsCount} mais cores</p>
-                                          </TooltipContent>
-                                      </Tooltip>
-                                  )}
-                              </div>
-                          </TooltipProvider>
-                      ) : <div />}
-                      
-                      {product.sizeRangeText && (
-                           <p className="text-xs text-muted-foreground font-semibold">{product.sizeRangeText}</p>
-                      )}
-                  </div>
-                )}
+                <div className="flex justify-between items-center mb-3 min-h-[20px]">
+                    {isReadyMadeCarousel ? (
+                         (product.color && product.color !== 'Padrão' || product.size && product.size !== 'Padrão') ? (
+                            <div className="flex w-full justify-end items-center gap-2 text-xs text-muted-foreground font-semibold">
+                                {product.color && product.color !== 'Padrão' && <span>{product.color}</span>}
+                                {product.color && product.color !== 'Padrão' && product.size && product.size !== 'Padrão' && <span className="text-xs">&bull;</span>}
+                                {product.size && product.size !== 'Padrão' && <span>{product.size}</span>}
+                            </div>
+                        ) : <div />
+                    ) : (
+                        <>
+                            {hasColorVariants ? (
+                                <TooltipProvider delayDuration={100}>
+                                    <div className="flex items-center gap-2">
+                                        {visibleColors.map(color => {
+                                            const isAvailable = availableColors ? availableColors.includes(color) : true;
+                                            return (
+                                                <Tooltip key={color}>
+                                                    <TooltipTrigger asChild>
+                                                        <button
+                                                            onClick={() => isAvailable && handleColorChange(color)}
+                                                            className={cn(
+                                                                "w-5 h-5 rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-all",
+                                                                activeColor === color ? 'ring-2 ring-primary ring-offset-1' : 'hover:ring-1 hover:ring-muted-foreground',
+                                                                !isAvailable && 'opacity-40 cursor-not-allowed'
+                                                            )}
+                                                            aria-label={`Mudar para cor ${color}`}
+                                                            disabled={!isAvailable}
+                                                        >
+                                                            {renderColorSwatch(color, product.primaryColor)}
+                                                        </button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p>{product.primaryColor && product.primaryColor.toLowerCase() !== color.toLowerCase() ? `${product.primaryColor} e ${color}` : color}</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            )
+                                        })}
+                                        {remainingColorsCount > 0 && (
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Link href={`/products/${product.groupId}`} className="flex items-center justify-center w-6 h-6 rounded-full bg-muted text-muted-foreground text-xs font-bold border hover:bg-accent">
+                                                        +{remainingColorsCount}
+                                                    </Link>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                    <p>{remainingColorsCount} mais cores</p>
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        )}
+                                    </div>
+                                </TooltipProvider>
+                            ) : <div />}
+                            
+                            {product.sizeRangeText && (
+                                <button 
+                                    onClick={handleSizeCycle}
+                                    disabled={cycleableSizes.length === 0}
+                                    className="text-xs text-muted-foreground font-semibold hover:text-foreground transition-colors text-right disabled:pointer-events-none disabled:opacity-50"
+                                >
+                                    {activeSizeIndex > -1 ? cycleableSizes[activeSizeIndex] : product.sizeRangeText}
+                                </button>
+                            )}
+                        </>
+                    )}
+                </div>
+
                 <div className="flex-1">
                     <h2 className="text-xl font-bold font-headline">{product.name}</h2>
                     <p className="text-muted-foreground mt-1 text-sm line-clamp-2 whitespace-pre-wrap">{product.description}</p>
                 </div>
                 <div className="flex justify-between items-center mt-4">
-                    <p className="text-lg font-semibold">
-                        {product.minPrice !== product.maxPrice 
-                            ? `R$ ${product.minPrice.toFixed(2).replace('.', ',')} - R$ ${product.maxPrice.toFixed(2).replace('.', ',')}`
-                            : `R$ ${product.price.toFixed(2).replace('.', ',')}`}
-                    </p>
+                    <p className="text-lg font-semibold">{priceText}</p>
                     <Button asChild>
                         <Link href={productLink}>Ver Detalhes</Link>
                     </Button>

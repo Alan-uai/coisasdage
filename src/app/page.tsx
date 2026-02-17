@@ -74,7 +74,7 @@ export default async function ProductsPage() {
                   {readyMadeProducts.map((product) => (
                     <CarouselItem key={product.id} className="pl-4 sm:basis-1/2 lg:basis-1/3">
                       <div className="h-full">
-                        <ProductCard product={product} />
+                        <ProductCard product={product} isReadyMadeCarousel={true} />
                       </div>
                     </CarouselItem>
                   ))}

@@ -27,6 +27,11 @@ const renderColorSwatch = (color: string, primaryColor?: string): JSX.Element =>
         'marrom': '#8c6c5c',
         'terracota': '#c27d60',
         'cru': '#e8e2d9',
+        'salmão': '#FFA07A',
+        'bordô': '#6D2E46',
+        'lima': '#C0D904',
+        'esmeralda': '#50C878',
+        'dourado': '#FFD700',
     };
 
     const getHex = (c: string) => colorHexMap[c.toLowerCase().trim()];
@@ -79,7 +84,7 @@ const renderColorSwatch = (color: string, primaryColor?: string): JSX.Element =>
 }
 
 
-export const ProductCard = ({ product }: { product: Product }) => {
+export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product: Product, isReadyMadeCarousel?: boolean }) => {
     // Find the main variant to determine the initial active color.
     const mainVariant = product.variants.find(v => v.id === product.id);
     const initialActiveColor = mainVariant?.color;
@@ -133,7 +138,7 @@ export const ProductCard = ({ product }: { product: Product }) => {
                 </Link>
             </CardHeader>
             <CardContent className="p-4 flex flex-col flex-1">
-                {(hasColorVariants || product.sizeRangeText) && (
+                {!isReadyMadeCarousel && (hasColorVariants || product.sizeRangeText) && (
                   <div className="flex justify-between items-center mb-3 min-h-[20px]">
                       {hasColorVariants ? (
                           <TooltipProvider delayDuration={100}>

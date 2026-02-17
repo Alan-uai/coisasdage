@@ -1,3 +1,5 @@
+import type { Timestamp } from 'firebase/firestore';
+
 export type ProductVariant = {
   id: string;
   color?: string;
@@ -36,12 +38,28 @@ export type Product = {
   variants: ProductVariant[]; // All variants in the group
 };
 
+export type OrderItemSummary = {
+  productId: string;
+  productName: string;
+  imageUrl: string;
+  quantity: number;
+  unitPriceAtOrder: number;
+  selectedSize: string;
+  selectedColor: string;
+  selectedMaterial: string;
+};
+
 export type Order = {
   id: string;
-  productName: string;
-  productId: string;
-  date: string;
+  userId: string;
+  orderDate: Timestamp;
+  totalAmount: number;
   status: 'Processing' | 'Crafting' | 'Shipped' | 'Delivered';
+  items: OrderItemSummary[];
+  shippingAddressId: string;
+  billingAddressId: string;
   trackingNumber?: string;
-  estimatedDelivery: string;
+  estimatedDeliveryDate: Timestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 };

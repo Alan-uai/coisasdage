@@ -166,54 +166,41 @@ export function ProductClientPage({ product }: { product: Product }) {
   
   // Memoize the calculation of available colors based on the selected size.
   const availableColorsForCurrentSize = useMemo(() => {
-    // 1. Get the real size we're filtering for. 'Padrão' maps to the main product's size.
     const sizeToMatch = selectedSize === 'Padrão' ? (product.size || 'Padrão') : selectedSize;
     
-    // 2. Get variants that match this size. A variant without a size is also considered 'Padrão'.
+    // A variant is considered for this size if its own size matches, OR if it has no size (inherits 'Padrão').
     const variantsForSize = product.variants.filter(v => (v.size || product.size || 'Padrão') === sizeToMatch);
     
-    // 3. From these variants, find all unique, defined colors.
     const specificColorsForSize = [...new Set(variantsForSize.map(v => v.color).filter((c): c is string => !!c))];
 
     let candidateColors: string[];
     
-    // 4. If there are colors specified for variants of this size, those are our candidates.
     if (specificColorsForSize.length > 0) {
       candidateColors = specificColorsForSize;
     } else {
-    // 5. If no variants for this size specify a color, it implies any color is compatible (as long as it's globally available).
       candidateColors = product.options.colors;
     }
     
-    // 6. Finally, filter the candidates against what's globally marked as available for the whole product group.
     const globallyAvailableColors = product.availability?.colors || product.options.colors;
     const finalColors = candidateColors.filter(c => globallyAvailableColors.includes(c));
     
-    // Fallback to all globally available colors if filtering results in an empty list
     return finalColors.length > 0 ? finalColors : globallyAvailableColors;
 
   }, [selectedSize, product]);
   
   const [selectedColor, setSelectedColor] = useState<string>(() => {
-    // If colorFromUrl is valid and available for the default size, use it.
     if (colorFromUrl && availableColorsForCurrentSize.includes(colorFromUrl)) {
       return colorFromUrl;
     }
-    // Otherwise, fall back to the first available color.
     return getFirstAvailable(product.options.colors, availableColorsForCurrentSize);
   });
 
-  // Calculate available materials based on size AND color
   const availableMaterialsForCurrentSelection = useMemo(() => {
     const sizeToMatch = selectedSize === 'Padrão' ? (product.size || 'Padrão') : selectedSize;
     
-    // Find variants matching the selected size
     const variantsForSize = product.variants.filter(v => (v.size || product.size || 'Padrão') === sizeToMatch);
-
-    // A variant matches the color if it has the exact same color OR has NO color defined
     const variantsForSizeAndColor = variantsForSize.filter(v => v.color === selectedColor || !v.color);
     
-    // Get all unique materials from these variants.
     const specificMaterials = [...new Set(variantsForSizeAndColor.map(v => v.material).filter((m): m is string => !!m))];
     
     let candidateMaterials: string[];
@@ -221,7 +208,6 @@ export function ProductClientPage({ product }: { product: Product }) {
     if (specificMaterials.length > 0) {
         candidateMaterials = specificMaterials;
     } else {
-        // If no variants for this combo specify a material, it means any globally available material is compatible.
         candidateMaterials = product.options.materials;
     }
 
@@ -233,25 +219,21 @@ export function ProductClientPage({ product }: { product: Product }) {
   }, [selectedSize, selectedColor, product]);
 
   const [selectedMaterial, setSelectedMaterial] = useState<string>(() => 
-    getFirstAvailable(product.options.materials, product.availability?.materials)
+    getFirstAvailable(product.options.materials, availableMaterialsForCurrentSelection)
   );
 
-  // Effect to update the selected color if it becomes unavailable after a size change.
   useEffect(() => {
     if (!availableColorsForCurrentSize.includes(selectedColor)) {
       setSelectedColor(availableColorsForCurrentSize[0] || product.options.colors[0]);
     }
   }, [availableColorsForCurrentSize, selectedColor, product.options.colors]);
   
-  // Effect to update the selected material if it becomes unavailable after a size/color change.
   useEffect(() => {
     if (!availableMaterialsForCurrentSelection.includes(selectedMaterial)) {
       setSelectedMaterial(availableMaterialsForCurrentSelection[0] || product.options.materials[0]);
     }
   }, [availableMaterialsForCurrentSelection, selectedMaterial, product.options.materials]);
 
-
-  // Effect to find the best variant and update image/price
   useEffect(() => {
     const findBestVariant = (): ProductVariant | null => {
       if (!product.variants || product.variants.length === 0) return null;
@@ -259,24 +241,18 @@ export function ProductClientPage({ product }: { product: Product }) {
       let bestScore = -1;
       let bestVariant: ProductVariant | null = null;
       
-      // The target size based on user's selection. "Padrão" maps to the main product's specific size.
       const sizeToMatch = selectedSize === 'Padrão' ? (product.size || 'Padrão') : selectedSize;
 
       for (const variant of product.variants) {
-        // A variant is a candidate if it does not contradict the user's selection.
-        if (variant.color && variant.color !== selectedColor) continue;
-        if (variant.material && variant.material !== selectedMaterial) continue;
-
-        // The variant's effective size. If not specified, it inherits from the main product.
         const variantEffectiveSize = variant.size || product.size || 'Padrão';
         
         if (variantEffectiveSize !== sizeToMatch) continue;
+        if (variant.color && variant.color !== selectedColor) continue;
+        if (variant.material && variant.material !== selectedMaterial) continue;
 
-        // If we're here, the variant is a valid candidate.
-        // We score it based on how specific it is. A more specific match is better.
         let currentScore = 0;
         if (variant.color === selectedColor) currentScore++;
-        if (variant.size) currentScore++; // Score higher if variant has its OWN explicit size
+        if (variant.size) currentScore++;
         if (variant.material === selectedMaterial) currentScore++;
 
         if (currentScore > bestScore) {
@@ -294,7 +270,6 @@ export function ProductClientPage({ product }: { product: Product }) {
       setSelectedImageUrl(variant.imageUrl);
       setCurrentPrice(variant.price ?? product.price);
     } else {
-      // Fallback to the main product's image and price if no suitable variant is found
       setSelectedImageUrl(product.imageUrl);
       setCurrentPrice(product.price);
     }
@@ -322,7 +297,7 @@ export function ProductClientPage({ product }: { product: Product }) {
             <p className="text-lg text-muted-foreground mt-2">{product.category}</p>
             <p className="text-3xl font-bold mt-4">R$ {currentPrice.toFixed(2).replace('.', ',')}</p>
             <Separator className="my-6" />
-            <p className="text-base leading-relaxed">{product.description}</p>
+            <p className="text-base leading-relaxed whitespace-pre-wrap">{product.description}</p>
             <Separator className="my-6" />
             <ProductCustomizationFormComponent 
               product={product}

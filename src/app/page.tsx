@@ -14,12 +14,11 @@ export default async function ProductsPage() {
   const readyMadeProducts = products.filter(product => product.readyMade);
   
   const productsByCategory = products.reduce((acc, product) => {
-    if (!product.readyMade) { // Do not include ready-made products in category carousels
-      if (!acc[product.category]) {
-        acc[product.category] = [];
-      }
-      acc[product.category].push(product);
+    // Products are grouped by their category. Ready-made products will also appear here.
+    if (!acc[product.category]) {
+      acc[product.category] = [];
     }
+    acc[product.category].push(product);
     return acc;
   }, {} as Record<string, Product[]>);
 

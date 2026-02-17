@@ -175,7 +175,7 @@ export const ProductCard = ({ product }: { product: Product }) => {
                 )}
                 <div className="flex-1">
                     <h2 className="text-xl font-bold font-headline">{product.name}</h2>
-                    <p className="text-muted-foreground mt-1 text-sm line-clamp-2">{product.description}</p>
+                    <p className="text-muted-foreground mt-1 text-sm line-clamp-2 whitespace-pre-wrap">{product.description}</p>
                 </div>
                 <div className="flex justify-between items-center mt-4">
                     <p className="text-lg font-semibold">

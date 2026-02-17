@@ -9,25 +9,60 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
-// Maps color names to Tailwind CSS background color classes for the swatches.
-const colorNameToTailwind = (colorName: string): string => {
-    const lowerColor = colorName.toLowerCase();
-    if (lowerColor.includes('preto')) return 'bg-black';
-    if (lowerColor.includes('branco')) return 'bg-white border border-gray-300';
-    if (lowerColor.includes('cinza')) return 'bg-gray-500';
-    if (lowerColor.includes('vermelho')) return 'bg-red-500';
-    if (lowerColor.includes('verde sálvia')) return 'bg-[#8F9779]';
-    if (lowerColor.includes('verde')) return 'bg-green-600';
-    if (lowerColor.includes('azul marinho')) return 'bg-blue-900';
-    if (lowerColor.includes('azul')) return 'bg-blue-500';
-    if (lowerColor.includes('amarelo')) return 'bg-yellow-400';
-    if (lowerColor.includes('rosa')) return 'bg-pink-400';
-    if (lowerColor.includes('roxo')) return 'bg-purple-500';
-    if (lowerColor.includes('laranja')) return 'bg-orange-500';
-    if (lowerColor.includes('marrom') || lowerColor.includes('terracota')) return 'bg-amber-800';
-    if (lowerColor.includes('cru')) return 'bg-stone-200';
-    return 'bg-gray-300'; // Default fallback color
-};
+// Renders a color swatch, handling single colors and two-color gradients.
+const renderColorSwatch = (color: string): JSX.Element => {
+    const colorHexMap: { [key: string]: string } = {
+        'preto': '#000',
+        'branco': '#fff',
+        'cinza': '#6b7280',
+        'vermelho': '#ef4444',
+        'verde sálvia': '#8F9779',
+        'verde': '#16a34a',
+        'azul marinho': '#1e3a8a',
+        'azul': '#3b82f6',
+        'amarelo': '#facc15',
+        'rosa': '#f472b6',
+        'roxo': '#a855f7',
+        'laranja': '#f97316',
+        'marrom': '#78350f',
+        'terracota': '#78350f',
+        'cru': '#f5f5f4',
+    };
+
+    const lowerColor = color.toLowerCase();
+    const colorParts = lowerColor.split(' e ').map(p => p.trim());
+
+    if (colorParts.length > 1 && colorHexMap[colorParts[0]] && colorHexMap[colorParts[1]]) {
+        const style: React.CSSProperties = {
+            background: `linear-gradient(135deg, ${colorHexMap[colorParts[0]]} 50%, ${colorHexMap[colorParts[1]]} 50%)`
+        };
+        let className = "w-full h-full rounded-full";
+        if (colorParts.includes('branco')) {
+            className = cn(className, "border border-gray-300");
+        }
+        return <div className={className} style={style} />;
+    }
+
+    const singleColorClassName = ((): string => {
+        if (lowerColor.includes('preto')) return 'bg-black';
+        if (lowerColor.includes('branco')) return 'bg-white border border-gray-300';
+        if (lowerColor.includes('cinza')) return 'bg-gray-500';
+        if (lowerColor.includes('vermelho')) return 'bg-red-500';
+        if (lowerColor.includes('verde sálvia')) return 'bg-[#8F9779]';
+        if (lowerColor.includes('verde')) return 'bg-green-600';
+        if (lowerColor.includes('azul marinho')) return 'bg-blue-900';
+        if (lowerColor.includes('azul')) return 'bg-blue-500';
+        if (lowerColor.includes('amarelo')) return 'bg-yellow-400';
+        if (lowerColor.includes('rosa')) return 'bg-pink-400';
+        if (lowerColor.includes('roxo')) return 'bg-purple-500';
+        if (lowerColor.includes('laranja')) return 'bg-orange-500';
+        if (lowerColor.includes('marrom') || lowerColor.includes('terracota')) return 'bg-amber-800';
+        if (lowerColor.includes('cru')) return 'bg-stone-200';
+        return 'bg-gray-300'; // Default fallback color
+    })();
+    
+    return <div className={cn("w-full h-full rounded-full", singleColorClassName)} />;
+}
 
 export const ProductCard = ({ product }: { product: Product }) => {
     // Find the main variant to determine the initial active color.
@@ -81,12 +116,12 @@ export const ProductCard = ({ product }: { product: Product }) => {
                                         <button
                                             onClick={() => handleColorChange(color)}
                                             className={cn(
-                                                "w-5 h-5 rounded-full border focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-all",
+                                                "w-5 h-5 rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-all",
                                                 activeColor === color ? 'ring-2 ring-primary ring-offset-1' : 'hover:ring-1 hover:ring-muted-foreground'
                                             )}
                                             aria-label={`Mudar para cor ${color}`}
                                         >
-                                            <div className={cn("w-full h-full rounded-full", colorNameToTailwind(color))} />
+                                            {renderColorSwatch(color)}
                                         </button>
                                     </TooltipTrigger>
                                     <TooltipContent>

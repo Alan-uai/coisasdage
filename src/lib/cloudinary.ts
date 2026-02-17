@@ -189,19 +189,26 @@ export async function getProducts(): Promise<Product[]> {
         let sizeRangeText: string | undefined = undefined;
         if (mainOptions.sizes.length > 1) {
             const mainProductSize = mainProductForGroup.size?.toLowerCase();
-            // Check if the main product's specific size indicates it's a piece-based unit.
             const isPieceUnit = mainProductSize?.includes('peça');
 
             if (isPieceUnit) {
-                const pieceNumbers = mainOptions.sizes
+                const pieceNumbersFromOptions = mainOptions.sizes
                     .map(s => parseInt(s, 10))
                     .filter(n => !isNaN(n));
                 
-                if (pieceNumbers.length > 0) {
-                    const maxPieces = Math.max(...pieceNumbers);
+                const pieceNumbersFromVariants = group
+                    .map(p => p.size)
+                    .filter((s): s is string => !!s)
+                    .map(s => parseInt(s, 10))
+                    .filter(n => !isNaN(n));
+
+                const allPieceNumbers = [...new Set([...pieceNumbersFromOptions, ...pieceNumbersFromVariants])];
+                
+                if (allPieceNumbers.length > 0) {
+                    const maxPieces = Math.max(...allPieceNumbers);
                     sizeRangeText = `até ${maxPieces} peças`;
                 } else {
-                     // Fallback in case no numbers could be parsed from the options
+                     // Fallback
                     sizeRangeText = `até ${mainOptions.sizes.length} tamanhos`;
                 }
             } else {

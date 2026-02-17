@@ -20,6 +20,7 @@ export type Product = {
   imageHint: string;
   category: string;
   readyMade?: boolean;
+  primaryColor?: string;
   options: { // All available options for the group
     sizes: string[];
     colors: string[];

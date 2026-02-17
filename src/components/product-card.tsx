@@ -9,8 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
-// Renders a color swatch, handling single colors and two-color gradients.
-const renderColorSwatch = (color: string): JSX.Element => {
+// Renders a color swatch, handling single colors and various two-color combinations.
+const renderColorSwatch = (color: string, primaryColor?: string): JSX.Element => {
     const colorHexMap: { [key: string]: string } = {
         'preto': '#000',
         'branco': '#fff',
@@ -32,6 +32,7 @@ const renderColorSwatch = (color: string): JSX.Element => {
     const lowerColor = color.toLowerCase();
     const colorParts = lowerColor.split(' e ').map(p => p.trim());
 
+    // Case 1: Explicit two-part color like "Preto e Branco"
     if (colorParts.length > 1 && colorHexMap[colorParts[0]] && colorHexMap[colorParts[1]]) {
         const style: React.CSSProperties = {
             background: `linear-gradient(135deg, ${colorHexMap[colorParts[0]]} 50%, ${colorHexMap[colorParts[1]]} 50%)`
@@ -42,7 +43,22 @@ const renderColorSwatch = (color: string): JSX.Element => {
         }
         return <div className={className} style={style} />;
     }
+    
+    const lowerPrimaryColor = primaryColor?.toLowerCase();
 
+    // Case 2: Combination of a primaryColor and the current color from options
+    if (lowerPrimaryColor && lowerColor !== lowerPrimaryColor && colorHexMap[lowerColor] && colorHexMap[lowerPrimaryColor]) {
+       const style: React.CSSProperties = {
+            background: `linear-gradient(135deg, ${colorHexMap[lowerPrimaryColor]} 50%, ${colorHexMap[lowerColor]} 50%)`
+        };
+        let className = "w-full h-full rounded-full";
+        if (lowerColor === 'branco' || lowerPrimaryColor === 'branco') {
+             className = cn(className, "border border-gray-300");
+        }
+        return <div className={className} style={style} />;
+    }
+
+    // Case 3: Single solid color
     const singleColorClassName = ((): string => {
         if (lowerColor.includes('preto')) return 'bg-black';
         if (lowerColor.includes('branco')) return 'bg-white border border-gray-300';
@@ -76,12 +92,15 @@ export const ProductCard = ({ product }: { product: Product }) => {
         const variant = product.variants.find(v => v.color === color);
         if (variant?.imageUrl) {
             setActiveImageUrl(variant.imageUrl);
-            setActiveColor(color);
+        } else {
+            // Fallback to the main product image if a specific variant image is not found.
+            setActiveImageUrl(product.imageUrl);
         }
+        setActiveColor(color);
     };
 
     const colors = product.options.colors.filter(c => c !== 'Padrão');
-    const hasColorVariants = colors.length > 1;
+    const hasColorVariants = colors.length > 0;
     const MAX_SWATCHES = 5;
     const visibleColors = colors.slice(0, MAX_SWATCHES);
     const remainingColorsCount = colors.length - MAX_SWATCHES;
@@ -105,31 +124,25 @@ export const ProductCard = ({ product }: { product: Product }) => {
                 {hasColorVariants && (
                     <TooltipProvider delayDuration={100}>
                     <div className="flex items-center gap-2 mb-3">
-                        {visibleColors.map(color => {
-                            // Ensure there is a variant for this color before rendering a swatch
-                            const variant = product.variants.find(v => v.color === color);
-                            if (!variant?.imageUrl) return null;
-
-                            return (
-                                <Tooltip key={color}>
-                                    <TooltipTrigger asChild>
-                                        <button
-                                            onClick={() => handleColorChange(color)}
-                                            className={cn(
-                                                "w-5 h-5 rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-all",
-                                                activeColor === color ? 'ring-2 ring-primary ring-offset-1' : 'hover:ring-1 hover:ring-muted-foreground'
-                                            )}
-                                            aria-label={`Mudar para cor ${color}`}
-                                        >
-                                            {renderColorSwatch(color)}
-                                        </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        <p>{color}</p>
-                                    </TooltipContent>
-                                </Tooltip>
-                            );
-                        })}
+                        {visibleColors.map(color => (
+                            <Tooltip key={color}>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        onClick={() => handleColorChange(color)}
+                                        className={cn(
+                                            "w-5 h-5 rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-all",
+                                            activeColor === color ? 'ring-2 ring-primary ring-offset-1' : 'hover:ring-1 hover:ring-muted-foreground'
+                                        )}
+                                        aria-label={`Mudar para cor ${color}`}
+                                    >
+                                        {renderColorSwatch(color, product.primaryColor)}
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>{product.primaryColor && product.primaryColor.toLowerCase() !== color.toLowerCase() ? `${product.primaryColor} e ${color}` : color}</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        ))}
                         {remainingColorsCount > 0 && (
                             <Tooltip>
                                 <TooltipTrigger asChild>

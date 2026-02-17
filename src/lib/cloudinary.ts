@@ -105,6 +105,7 @@ export async function getProducts(): Promise<Product[]> {
         sizes, 
         colors, 
         materials,
+        primaryColor,
         color,
         size,
         material,
@@ -130,6 +131,7 @@ export async function getProducts(): Promise<Product[]> {
         imageHint: imageHint || 'handmade product',
         category: category || 'Sem Categoria',
         readyMade: readyMade === 'true',
+        primaryColor,
         rawOptions: {
             sizes,
             colors,
@@ -185,6 +187,7 @@ export async function getProducts(): Promise<Product[]> {
             imageUrl: mainProduct.imageUrl,
             options: mainOptions,
             variants: variants,
+            primaryColor: mainProduct.primaryColor,
         };
 
         if (finalProduct.options.sizes.length === 0) finalProduct.options.sizes = ['Padrão'];

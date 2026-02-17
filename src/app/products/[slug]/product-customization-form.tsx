@@ -165,24 +165,26 @@ export function ProductClientPage({ product }: { product: Product }) {
 
   // Memoize the calculation of available colors based on the selected size.
   const availableColorsForCurrentSize = useMemo(() => {
-    // 1. Get variants that match the selected size. 'Padrão' selection maps to the main product's size.
+    // 1. Get the real size we're filtering for. 'Padrão' maps to the main product's size.
     const sizeToMatch = selectedSize === 'Padrão' ? (product.size || 'Padrão') : selectedSize;
-    const variantsForSize = product.variants.filter(v => (v.size || 'Padrão') === sizeToMatch);
     
-    // 2. From these variants, find all unique, defined colors.
+    // 2. Get variants that match this size. A variant without a size is also considered 'Padrão'.
+    const variantsForSize = product.variants.filter(v => (v.size || product.size || 'Padrão') === sizeToMatch);
+    
+    // 3. From these variants, find all unique, defined colors.
     const specificColorsForSize = [...new Set(variantsForSize.map(v => v.color).filter((c): c is string => !!c))];
 
     let candidateColors: string[];
     
-    // 3. If there are colors specified for variants of this size, those are our candidates.
+    // 4. If there are colors specified for variants of this size, those are our candidates.
     if (specificColorsForSize.length > 0) {
       candidateColors = specificColorsForSize;
     } else {
-    // 4. If no variants for this size specify a color, it implies any color is compatible.
+    // 5. If no variants for this size specify a color, it implies any color is compatible (as long as it's globally available).
       candidateColors = product.options.colors;
     }
     
-    // 5. Finally, filter the candidates against what's globally marked as available for the whole product group.
+    // 6. Finally, filter the candidates against what's globally marked as available for the whole product group.
     const globallyAvailableColors = product.availability?.colors || product.options.colors;
     const finalColors = candidateColors.filter(c => globallyAvailableColors.includes(c));
     
@@ -212,23 +214,25 @@ export function ProductClientPage({ product }: { product: Product }) {
       let bestScore = -1;
       let bestVariant: ProductVariant | null = null;
       
+      // The target size based on user's selection. "Padrão" maps to the main product's specific size.
+      const sizeToMatch = selectedSize === 'Padrão' ? (product.size || 'Padrão') : selectedSize;
+
       for (const variant of product.variants) {
         // A variant is a candidate if it does not contradict the user's selection.
         if (variant.color && variant.color !== selectedColor) continue;
         if (variant.material && variant.material !== selectedMaterial) continue;
 
-        // The user selection 'Padrão' should match the main product's actual size.
-        const sizeToMatch = selectedSize === 'Padrão' ? (product.size || 'Padrão') : selectedSize;
-        const variantEffectiveSize = variant.size || 'Padrão';
-
+        // The variant's effective size. If not specified, it inherits from the main product.
+        const variantEffectiveSize = variant.size || product.size || 'Padrão';
+        
         if (variantEffectiveSize !== sizeToMatch) continue;
 
         // If we're here, the variant is a valid candidate.
         // We score it based on how specific it is. A more specific match is better.
         let currentScore = 0;
-        if (variant.color) currentScore++;
-        if (variant.size) currentScore++;
-        if (variant.material) currentScore++;
+        if (variant.color === selectedColor) currentScore++;
+        if (variant.size) currentScore++; // Score higher if variant has its OWN explicit size
+        if (variant.material === selectedMaterial) currentScore++;
 
         if (currentScore > bestScore) {
           bestScore = currentScore;

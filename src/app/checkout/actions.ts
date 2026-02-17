@@ -1,11 +1,6 @@
 'use server';
 
-import mercadopago from 'mercadopago';
-
-// Configure Mercado Pago
-mercadopago.configure({
-  access_token: process.env.MP_ACCESS_TOKEN!,
-});
+import { MercadoPagoConfig, Preference } from 'mercadopago';
 
 // Define a serializable type for items passed from client to server action
 export type PreferenceCartItem = {
@@ -34,6 +29,9 @@ export async function createPreference(cartItems: PreferenceCartItem[]): Promise
     }
     
     try {
+        const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
+        const preference = new Preference(client);
+
         const items = cartItems.map(item => ({
             id: item.id,
             title: item.productName,
@@ -43,19 +41,19 @@ export async function createPreference(cartItems: PreferenceCartItem[]): Promise
             unit_price: item.unitPriceAtAddition,
         }));
 
-        const preference = {
-            items: items,
-            back_urls: {
-                success: `${process.env.NEXT_PUBLIC_APP_URL}/payment-status?status=success`,
-                failure: `${process.env.NEXT_PUBLIC_APP_URL}/payment-status?status=failure`,
-                pending: `${process.env.NEXT_PUBLIC_APP_URL}/payment-status?status=pending`,
-            },
-            auto_return: 'approved' as 'approved',
-        };
-
-        const response = await mercadopago.preferences.create(preference);
+        const response = await preference.create({
+            body: {
+                items: items,
+                back_urls: {
+                    success: `${process.env.NEXT_PUBLIC_APP_URL}/payment-status?status=success`,
+                    failure: `${process.env.NEXT_PUBLIC_APP_URL}/payment-status?status=failure`,
+                    pending: `${process.env.NEXT_PUBLIC_APP_URL}/payment-status?status=pending`,
+                },
+                auto_return: 'approved',
+            }
+        });
         
-        return { preferenceId: response.body.id };
+        return { preferenceId: response.id };
 
     } catch (error) {
         console.error('Error creating Mercado Pago preference:', error);

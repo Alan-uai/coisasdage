@@ -103,18 +103,6 @@ export const ProductCard = ({ product }: { product: Product }) => {
     const visibleColors = sortedColors.slice(0, MAX_SWATCHES);
     const remainingColorsCount = sortedColors.length - MAX_SWATCHES;
 
-    const sizeNumbers = product.options.sizes.map(s => parseInt(s, 10)).filter(n => !isNaN(n));
-        
-    let sizeRange: string | null = null;
-    if (sizeNumbers.length > 1) {
-        const minSize = Math.min(...sizeNumbers);
-        const maxSize = Math.max(...sizeNumbers);
-
-        if (minSize !== maxSize) {
-            sizeRange = `${minSize}-${maxSize} peças`;
-        }
-    }
-
     return (
         <Card className="overflow-hidden flex flex-col group h-full">
             <CardHeader className="p-0">
@@ -131,7 +119,7 @@ export const ProductCard = ({ product }: { product: Product }) => {
                 </Link>
             </CardHeader>
             <CardContent className="p-4 flex flex-col flex-1">
-                {(hasColorVariants || sizeRange) && (
+                {(hasColorVariants || product.sizeRangeText) && (
                   <div className="flex justify-between items-center mb-3 min-h-[20px]">
                       {hasColorVariants ? (
                           <TooltipProvider delayDuration={100}>
@@ -176,8 +164,8 @@ export const ProductCard = ({ product }: { product: Product }) => {
                           </TooltipProvider>
                       ) : <div />}
                       
-                      {sizeRange && (
-                           <p className="text-xs text-muted-foreground font-semibold">{sizeRange}</p>
+                      {product.sizeRangeText && (
+                           <p className="text-xs text-muted-foreground font-semibold">{product.sizeRangeText}</p>
                       )}
                   </div>
                 )}

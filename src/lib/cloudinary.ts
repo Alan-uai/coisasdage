@@ -20,7 +20,7 @@ let logoUrlCache: string | null = null;
 let logoCacheTimestamp: number | null = null;
 
 // An internal type for processing
-type RawProduct = Omit<Product, 'variants' | 'options' | 'minPrice' | 'maxPrice' | 'availability'> & {
+type RawProduct = Omit<Product, 'variants' | 'options' | 'minPrice' | 'maxPrice' | 'availability' | 'sizeRangeText'> & {
   color?: string; // Singular color for this specific variant
   size?: string;
   material?: string;
@@ -185,6 +185,25 @@ export async function getProducts(): Promise<Product[]> {
             materials: mainProduct.rawOptions.materials ? mainProduct.rawOptions.materials.split(',').map(m => m.trim()) : [],
         };
         
+        let sizeRangeText: string | undefined = undefined;
+        if (mainOptions.sizes.length > 1) {
+            const sizeNumbers = mainOptions.sizes.map(s => {
+                if (s.toLowerCase() === 'padrão') {
+                    // Use the main product's specific size if it's 'padrão'
+                    return parseInt(mainProduct.size || '', 10);
+                }
+                return parseInt(s, 10);
+            }).filter(n => !isNaN(n));
+
+            if (sizeNumbers.length > 1) {
+                const minSize = Math.min(...sizeNumbers);
+                const maxSize = Math.max(...sizeNumbers);
+                if (minSize !== maxSize) {
+                    sizeRangeText = `${minSize}-${maxSize} peças`;
+                }
+            }
+        }
+
         const availability: Product['availability'] = {};
         if (mainProduct.rawOptions.availableColors) {
             availability.colors = mainProduct.rawOptions.availableColors.split(',').map(s => s.trim());
@@ -209,6 +228,7 @@ export async function getProducts(): Promise<Product[]> {
             availability: Object.keys(availability).length > 0 ? availability : undefined,
             variants: variants,
             primaryColor: mainProduct.primaryColor,
+            sizeRangeText,
         };
 
         if (finalProduct.options.sizes.length === 0) finalProduct.options.sizes = ['Padrão'];

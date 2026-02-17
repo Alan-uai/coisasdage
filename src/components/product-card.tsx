@@ -103,6 +103,18 @@ export const ProductCard = ({ product }: { product: Product }) => {
     const visibleColors = sortedColors.slice(0, MAX_SWATCHES);
     const remainingColorsCount = sortedColors.length - MAX_SWATCHES;
 
+    const sizeNumbers = product.options.sizes.map(s => parseInt(s, 10)).filter(n => !isNaN(n));
+        
+    let sizeRange: string | null = null;
+    if (sizeNumbers.length > 1) {
+        const minSize = Math.min(...sizeNumbers);
+        const maxSize = Math.max(...sizeNumbers);
+
+        if (minSize !== maxSize) {
+            sizeRange = `${minSize}-${maxSize} peças`;
+        }
+    }
+
     return (
         <Card className="overflow-hidden flex flex-col group h-full">
             <CardHeader className="p-0">
@@ -119,47 +131,55 @@ export const ProductCard = ({ product }: { product: Product }) => {
                 </Link>
             </CardHeader>
             <CardContent className="p-4 flex flex-col flex-1">
-                {hasColorVariants && (
-                    <TooltipProvider delayDuration={100}>
-                    <div className="flex items-center gap-2 mb-3">
-                        {visibleColors.map(color => {
-                             const isAvailable = availableColors ? availableColors.includes(color) : true;
-                             return (
-                                <Tooltip key={color}>
-                                    <TooltipTrigger asChild>
-                                        <button
-                                            onClick={() => isAvailable && handleColorChange(color)}
-                                            className={cn(
-                                                "w-5 h-5 rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-all",
-                                                activeColor === color ? 'ring-2 ring-primary ring-offset-1' : 'hover:ring-1 hover:ring-muted-foreground',
-                                                !isAvailable && 'opacity-40 cursor-not-allowed'
-                                            )}
-                                            aria-label={`Mudar para cor ${color}`}
-                                            disabled={!isAvailable}
-                                        >
-                                            {renderColorSwatch(color, product.primaryColor)}
-                                        </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        <p>{product.primaryColor && product.primaryColor.toLowerCase() !== color.toLowerCase() ? `${product.primaryColor} e ${color}` : color}</p>
-                                    </TooltipContent>
-                                </Tooltip>
-                             )
-                        })}
-                        {remainingColorsCount > 0 && (
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Link href={`/products/${product.groupId}`} className="flex items-center justify-center w-6 h-6 rounded-full bg-muted text-muted-foreground text-xs font-bold border hover:bg-accent">
-                                        +{remainingColorsCount}
-                                    </Link>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    <p>{remainingColorsCount} mais cores</p>
-                                </TooltipContent>
-                            </Tooltip>
-                        )}
-                    </div>
-                    </TooltipProvider>
+                {(hasColorVariants || sizeRange) && (
+                  <div className="flex justify-between items-center mb-3 min-h-[20px]">
+                      {hasColorVariants ? (
+                          <TooltipProvider delayDuration={100}>
+                              <div className="flex items-center gap-2">
+                                  {visibleColors.map(color => {
+                                       const isAvailable = availableColors ? availableColors.includes(color) : true;
+                                       return (
+                                          <Tooltip key={color}>
+                                              <TooltipTrigger asChild>
+                                                  <button
+                                                      onClick={() => isAvailable && handleColorChange(color)}
+                                                      className={cn(
+                                                          "w-5 h-5 rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-all",
+                                                          activeColor === color ? 'ring-2 ring-primary ring-offset-1' : 'hover:ring-1 hover:ring-muted-foreground',
+                                                          !isAvailable && 'opacity-40 cursor-not-allowed'
+                                                      )}
+                                                      aria-label={`Mudar para cor ${color}`}
+                                                      disabled={!isAvailable}
+                                                  >
+                                                      {renderColorSwatch(color, product.primaryColor)}
+                                                  </button>
+                                              </TooltipTrigger>
+                                              <TooltipContent>
+                                                  <p>{product.primaryColor && product.primaryColor.toLowerCase() !== color.toLowerCase() ? `${product.primaryColor} e ${color}` : color}</p>
+                                              </TooltipContent>
+                                          </Tooltip>
+                                       )
+                                  })}
+                                  {remainingColorsCount > 0 && (
+                                      <Tooltip>
+                                          <TooltipTrigger asChild>
+                                              <Link href={`/products/${product.groupId}`} className="flex items-center justify-center w-6 h-6 rounded-full bg-muted text-muted-foreground text-xs font-bold border hover:bg-accent">
+                                                  +{remainingColorsCount}
+                                              </Link>
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                              <p>{remainingColorsCount} mais cores</p>
+                                          </TooltipContent>
+                                      </Tooltip>
+                                  )}
+                              </div>
+                          </TooltipProvider>
+                      ) : <div />}
+                      
+                      {sizeRange && (
+                           <p className="text-xs text-muted-foreground font-semibold">{sizeRange}</p>
+                      )}
+                  </div>
                 )}
                 <div className="flex-1">
                     <h2 className="text-xl font-bold font-headline">{product.name}</h2>

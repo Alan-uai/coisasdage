@@ -27,7 +27,11 @@ const ProductCard = ({ product }: { product: Product }) => (
         <p className="text-muted-foreground mt-1 text-sm line-clamp-2">{product.description}</p>
       </div>
       <div className="flex justify-between items-center mt-4">
-        <p className="text-lg font-semibold">R$ {product.price.toFixed(2).replace('.', ',')}</p>
+        <p className="text-lg font-semibold">
+          {product.minPrice !== product.maxPrice 
+            ? `R$ ${product.minPrice.toFixed(2).replace('.', ',')} - R$ ${product.maxPrice.toFixed(2).replace('.', ',')}`
+            : `R$ ${product.price.toFixed(2).replace('.', ',')}`}
+        </p>
         <Button asChild>
           <Link href={`/products/${product.groupId}`}>Ver Detalhes</Link>
         </Button>

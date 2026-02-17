@@ -12,7 +12,15 @@ import { ShoppingBag } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 // The actual form component
-function ProductCustomizationFormComponent({ product, setSelectedImageUrl }: { product: Product, setSelectedImageUrl: (url: string) => void }) {
+function ProductCustomizationFormComponent({ 
+  product, 
+  setSelectedImageUrl,
+  setSelectedPrice
+}: { 
+  product: Product, 
+  setSelectedImageUrl: (url: string) => void,
+  setSelectedPrice: (price: number) => void,
+}) {
   const { toast } = useToast();
 
   const [selectedColor, setSelectedColor] = useState<string>(product.options.colors[0]);
@@ -20,12 +28,19 @@ function ProductCustomizationFormComponent({ product, setSelectedImageUrl }: { p
   const [selectedMaterial, setSelectedMaterial] = useState<string>(product.options.materials[0]);
   
   useEffect(() => {
-    // Find the variant that matches the selected color
+    // Find the variant that matches the selected options.
+    // This logic can be improved to handle multiple simultaneous selections.
     const variant = product.variants.find(v => v.color === selectedColor);
     if (variant) {
       setSelectedImageUrl(variant.imageUrl);
+      setSelectedPrice(variant.price ?? product.price);
+    } else {
+      // Fallback to main product if no specific variant is found for the color
+      setSelectedImageUrl(product.imageUrl);
+      setSelectedPrice(product.price);
     }
-  }, [selectedColor, product.variants, setSelectedImageUrl]);
+  }, [selectedColor, product.variants, product.imageUrl, product.price, setSelectedImageUrl, setSelectedPrice]);
+
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -97,6 +112,7 @@ function ProductCustomizationFormComponent({ product, setSelectedImageUrl }: { p
 // The client page component that holds state and renders the layout
 export function ProductClientPage({ product }: { product: Product }) {
   const [selectedImageUrl, setSelectedImageUrl] = useState(product.imageUrl);
+  const [currentPrice, setCurrentPrice] = useState(product.price);
 
   return (
     <div className="flex flex-col min-h-screen p-4 sm:p-6 lg:p-8">
@@ -117,11 +133,11 @@ export function ProductClientPage({ product }: { product: Product }) {
           <div className="flex flex-col">
             <h1 className="text-3xl lg:text-4xl font-bold font-headline">{product.name}</h1>
             <p className="text-lg text-muted-foreground mt-2">{product.category}</p>
-            <p className="text-3xl font-bold mt-4">R$ {product.price.toFixed(2).replace('.', ',')}</p>
+            <p className="text-3xl font-bold mt-4">R$ {currentPrice.toFixed(2).replace('.', ',')}</p>
             <Separator className="my-6" />
             <p className="text-base leading-relaxed">{product.description}</p>
             <Separator className="my-6" />
-            <ProductCustomizationFormComponent product={product} setSelectedImageUrl={setSelectedImageUrl} />
+            <ProductCustomizationFormComponent product={product} setSelectedImageUrl={setSelectedImageUrl} setSelectedPrice={setCurrentPrice} />
           </div>
         </div>
       </main>

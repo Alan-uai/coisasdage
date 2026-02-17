@@ -4,6 +4,7 @@ export type ProductVariant = {
   size?: string;
   material?: string;
   imageUrl: string;
+  price?: number;
 };
 
 export type Product = {
@@ -13,6 +14,8 @@ export type Product = {
   name: string;
   description: string;
   price: number;
+  minPrice: number;
+  maxPrice: number;
   imageUrl: string; // The default/main image URL
   imageHint: string;
   category: string;

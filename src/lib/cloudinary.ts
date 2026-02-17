@@ -20,7 +20,7 @@ let logoUrlCache: string | null = null;
 let logoCacheTimestamp: number | null = null;
 
 // An internal type for processing
-type RawProduct = Omit<Product, 'variants' | 'options'> & {
+type RawProduct = Omit<Product, 'variants' | 'options' | 'minPrice' | 'maxPrice'> & {
   color?: string; // Singular color for this specific variant
   size?: string;
   material?: string;
@@ -139,7 +139,7 @@ export async function getProducts(): Promise<Product[]> {
         size,
         material,
       };
-    }).filter((p): p is RawProduct => p !== null);
+    }).filter((p): p is RawProduct => p !== null && !!p.name && p.price > 0);
 
     const groupedByGroupId = rawProducts.reduce((acc, product) => {
         if (!acc[product.groupId]) {
@@ -152,7 +152,7 @@ export async function getProducts(): Promise<Product[]> {
     const consolidatedProducts: Product[] = Object.values(groupedByGroupId).map(group => {
         let mainProduct = group.find(p => p.isMain);
         if (!mainProduct) {
-             mainProduct = group.find(p => p.name && p.price) || group[0];
+             mainProduct = group[0];
         }
 
         const variants: ProductVariant[] = group.map(p => ({
@@ -161,7 +161,12 @@ export async function getProducts(): Promise<Product[]> {
             size: p.size,
             material: p.material,
             imageUrl: p.imageUrl,
+            price: p.price,
         }));
+        
+        const allPrices = group.map(p => p.price).filter(p => p !== undefined && p > 0);
+        const minPrice = allPrices.length > 0 ? Math.min(...allPrices) : mainProduct.price;
+        const maxPrice = allPrices.length > 0 ? Math.max(...allPrices) : mainProduct.price;
         
         const mainOptions = {
             sizes: mainProduct.rawOptions.sizes ? mainProduct.rawOptions.sizes.split(',').map(s => s.trim()) : [],
@@ -174,6 +179,8 @@ export async function getProducts(): Promise<Product[]> {
             id: mainProduct.id,
             name: mainProduct.name,
             price: mainProduct.price,
+            minPrice,
+            maxPrice,
             description: mainProduct.description,
             imageUrl: mainProduct.imageUrl,
             options: mainOptions,

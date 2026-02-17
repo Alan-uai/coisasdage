@@ -1,0 +1,552 @@
+{
+  "entities": {
+    "UserProfile": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "UserProfile",
+      "type": "object",
+      "description": "Represents the profile information for a user in the Artesã Aconchegante e-commerce application, linked to an external authentication system.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the UserProfile entity, matching the external authentication system's user ID."
+        },
+        "firstName": {
+          "type": "string",
+          "description": "The user's first name."
+        },
+        "lastName": {
+          "type": "string",
+          "description": "The user's last name."
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's email address.",
+          "format": "email"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the user profile was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when the user profile was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "firstName",
+        "lastName",
+        "email",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Address": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Address",
+      "type": "object",
+      "description": "Represents a physical address for shipping or billing within the Artesã Aconchegante application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Address entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to UserProfile. (Relationship: UserProfile 1:N Address)"
+        },
+        "street": {
+          "type": "string",
+          "description": "Street address line."
+        },
+        "city": {
+          "type": "string",
+          "description": "City of the address."
+        },
+        "state": {
+          "type": "string",
+          "description": "State or province of the address."
+        },
+        "postalCode": {
+          "type": "string",
+          "description": "Postal code or ZIP code of the address."
+        },
+        "country": {
+          "type": "string",
+          "description": "Country of the address."
+        },
+        "addressType": {
+          "type": "string",
+          "description": "Type of address, e.g., 'shipping' or 'billing'."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the address was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when the address was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "street",
+        "city",
+        "state",
+        "postalCode",
+        "country",
+        "addressType",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Product": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Product",
+      "type": "object",
+      "description": "Represents a customizable rug or crochet kit available in the Artesã Aconchegante product catalog.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Product entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the product (e.g., 'Tapete de Crochê Clássico')."
+        },
+        "description": {
+          "type": "string",
+          "description": "A detailed description of the product."
+        },
+        "price": {
+          "type": "number",
+          "description": "The base price of the product."
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "URL to the main image of the product.",
+          "format": "uri"
+        },
+        "category": {
+          "type": "string",
+          "description": "Category of the product (e.g., 'Rugs', 'Crochet Kits')."
+        },
+        "availableSizes": {
+          "type": "array",
+          "description": "A list of available sizes for this product's customization.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "availableColors": {
+          "type": "array",
+          "description": "A list of available colors for this product's customization.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "availableMaterials": {
+          "type": "array",
+          "description": "A list of available materials for this product's customization.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the product was created in the catalog.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when the product details were last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "price",
+        "imageUrl",
+        "category",
+        "availableSizes",
+        "availableColors",
+        "availableMaterials",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Cart": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Cart",
+      "type": "object",
+      "description": "Represents a user's current shopping cart in the Artesã Aconchegante application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Cart entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to UserProfile. (Relationship: UserProfile 1:1 Cart)"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the cart was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when the cart was last updated (e.g., item added/removed).",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CartItem": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "CartItem",
+      "type": "object",
+      "description": "Represents a single product item, with its customizations and quantity, within a user's shopping cart.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the CartItem entity."
+        },
+        "cartId": {
+          "type": "string",
+          "description": "Reference to Cart. (Relationship: Cart 1:N CartItem)"
+        },
+        "productId": {
+          "type": "string",
+          "description": "Reference to Product. (Relationship: Product 1:N CartItem)"
+        },
+        "quantity": {
+          "type": "number",
+          "description": "The quantity of this specific product item."
+        },
+        "selectedSize": {
+          "type": "string",
+          "description": "The size selected for this customized product item."
+        },
+        "selectedColor": {
+          "type": "string",
+          "description": "The color selected for this customized product item."
+        },
+        "selectedMaterial": {
+          "type": "string",
+          "description": "The material selected for this customized product item."
+        },
+        "unitPriceAtAddition": {
+          "type": "number",
+          "description": "The price of the product at the moment it was added to the cart."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the cart item was added.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when the cart item was last updated (e.g., quantity change).",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "cartId",
+        "productId",
+        "quantity",
+        "selectedSize",
+        "selectedColor",
+        "selectedMaterial",
+        "unitPriceAtAddition",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Order": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Order",
+      "type": "object",
+      "description": "Represents a customer's placed order, including its status and shipping information, in the Artesã Aconchegante application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Order entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to UserProfile. (Relationship: UserProfile 1:N Order)"
+        },
+        "orderDate": {
+          "type": "string",
+          "description": "Date and time when the order was placed.",
+          "format": "date-time"
+        },
+        "totalAmount": {
+          "type": "number",
+          "description": "The total monetary amount of the order, including items, shipping, and taxes."
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the order (e.g., 'Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled')."
+        },
+        "shippingAddressId": {
+          "type": "string",
+          "description": "Reference to the Address entity used for shipping this order. (Relationship: Address 1:N Order)"
+        },
+        "billingAddressId": {
+          "type": "string",
+          "description": "Reference to the Address entity used for billing this order. (Relationship: Address 1:N Order)"
+        },
+        "trackingNumber": {
+          "type": "string",
+          "description": "Tracking number provided by the shipping carrier for this order."
+        },
+        "estimatedDeliveryDate": {
+          "type": "string",
+          "description": "Estimated date for the delivery of the order.",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the order was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when the order details or status were last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "orderDate",
+        "totalAmount",
+        "status",
+        "shippingAddressId",
+        "billingAddressId",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "OrderItem": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "OrderItem",
+      "type": "object",
+      "description": "Represents a single product item, with its customizations and quantity, within a placed order.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the OrderItem entity."
+        },
+        "orderId": {
+          "type": "string",
+          "description": "Reference to Order. (Relationship: Order 1:N OrderItem)"
+        },
+        "productId": {
+          "type": "string",
+          "description": "Reference to Product. (Relationship: Product 1:N OrderItem)"
+        },
+        "quantity": {
+          "type": "number",
+          "description": "The quantity of this specific product item within the order."
+        },
+        "selectedSize": {
+          "type": "string",
+          "description": "The size selected for this customized product item in the order."
+        },
+        "selectedColor": {
+          "type": "string",
+          "description": "The color selected for this customized product item in the order."
+        },
+        "selectedMaterial": {
+          "type": "string",
+          "description": "The material selected for this customized product item in the order."
+        },
+        "unitPriceAtOrder": {
+          "type": "number",
+          "description": "The price of the product at the moment the order was placed."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the order item was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when the order item details were last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "orderId",
+        "productId",
+        "quantity",
+        "selectedSize",
+        "selectedColor",
+        "selectedMaterial",
+        "unitPriceAtOrder",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "UserProfile",
+          "schema": {
+            "$ref": "#/backend/entities/UserProfile"
+          },
+          "description": "Stores user profile information, unique to each authenticated user. Access is restricted to the owner matching `request.auth.uid`. The `userId` parameter in the path establishes ownership for authorization independence.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user, matching `request.auth.uid`."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/addresses/{addressId}",
+        "definition": {
+          "entityName": "Address",
+          "schema": {
+            "$ref": "#/backend/entities/Address"
+          },
+          "description": "Stores addresses associated with a specific user. This subcollection ensures that only the owning user (`request.auth.uid` matching `userId` in path) can access their addresses, supporting authorization independence. The `userId` field within the document also provides a data integrity check.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user who owns this address."
+            },
+            {
+              "name": "addressId",
+              "description": "The unique identifier for the address document."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/products/{productId}",
+        "definition": {
+          "entityName": "Product",
+          "schema": {
+            "$ref": "#/backend/entities/Product"
+          },
+          "description": "Stores the catalog of available products. This is a public collection, allowing all users to read product details for browsing and selection.",
+          "params": [
+            {
+              "name": "productId",
+              "description": "The unique identifier for the product document."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/cart",
+        "definition": {
+          "entityName": "Cart",
+          "schema": {
+            "$ref": "#/backend/entities/Cart"
+          },
+          "description": "Represents a user's current shopping cart. This document is directly owned by the user (`request.auth.uid` matching `userId` in path), ensuring private and authorization-independent access. The `userId` field within the document also provides a data integrity check.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user who owns this cart."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/cart/items/{cartItemId}",
+        "definition": {
+          "entityName": "CartItem",
+          "schema": {
+            "$ref": "#/backend/entities/CartItem"
+          },
+          "description": "Stores individual items within a user's shopping cart. Access is restricted to the owning user, with `userId` implicitly available from the parent path for authorization independence. The `cartId` field within the document links to the parent cart for data integrity.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user who owns the cart containing this item."
+            },
+            {
+              "name": "cartItemId",
+              "description": "The unique identifier for the cart item document."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/orders/{orderId}",
+        "definition": {
+          "entityName": "Order",
+          "schema": {
+            "$ref": "#/backend/entities/Order"
+          },
+          "description": "Stores details of orders placed by a specific user. This subcollection ensures that only the owning user (`request.auth.uid` matching `userId` in path) can access their orders, supporting authorization independence. The `userId` field within the document also provides a data integrity check.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user who placed this order."
+            },
+            {
+              "name": "orderId",
+              "description": "The unique identifier for the order document."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/orders/{orderId}/items/{orderItemId}",
+        "definition": {
+          "entityName": "OrderItem",
+          "schema": {
+            "$ref": "#/backend/entities/OrderItem"
+          },
+          "description": "Stores individual items within a specific order. Access is restricted to the owning user, with `userId` and `orderId` implicitly available from the parent paths for authorization independence. The `orderId` field within the document links to the parent order for data integrity.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user who placed the order containing this item."
+            },
+            {
+              "name": "orderId",
+              "description": "The unique identifier of the parent order."
+            },
+            {
+              "name": "orderItemId",
+              "description": "The unique identifier for the order item document."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure for Artesã Aconchegante is meticulously designed for security, scalability, and debuggability, with a strong emphasis on authorization independence and clear access patterns. The chosen strategy minimizes complexity and enforces robust security rules.\n\nAuthorization Independence (CRITICAL):\nThe cornerstone of authorization independence in this design is path-based ownership. All user-specific data, including UserProfile, Address, Cart, Order, and their respective subcollections (CartItem, OrderItem), are organized under a `/users/{userId}` root path. This hierarchical nesting allows Firebase Security Rules to directly match `request.auth.uid` against the `{userId}` wildcard in the path. This crucial design choice eliminates the necessity for `get()` operations to fetch parent documents for authorization checks. For instance, accessing an address at `/users/{userId}/addresses/{addressId}` only requires a rule to verify `request.auth.uid == userId` from the request path, making the authorization decision atomic and independent of any data retrieval. Furthermore, existing fields like `userId` (in UserProfile, Address, Cart, Order) within documents, or `cartId`/`orderId` (in CartItem, OrderItem), serve to bolster data integrity and provide explicit consistency checks, though their primary role for authorization is superseded by the path variables.\n\nQAPs (Rules are not Filters):\nThis structure inherently supports Query-As-Permissions (QAPs) through rigorous structural segregation. User-specific collections such as `/users/{userId}/addresses`, `/users/{userId}/cart/items`, and `/users/{userId}/orders` are logically and physically confined to a single user, as identified by the `{userId}` in their path. Consequently, security rules can precisely grant access solely when `request.auth.uid` aligns with this path's `userId`. This ensures that any `list` operation performed by an authenticated user on these collections will, by design, return only their permissible data, obviating the need for complex filtering within security rules or application logic. Conversely, the `/products` collection is designed for global, public read access, allowing any `list` query to retrieve the entire catalog without authorization-based filtering. This architectural approach guarantees that security rules act as definitive gates for data access, rather than inefficient post-query filters.\n\nOverall, this design strategy results in security rules that are concise, unambiguous, highly robust, and easy to audit, while simultaneously ensuring optimal scalability and performance for the Artesã Aconchegante application."
+  }
+}

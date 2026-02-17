@@ -4,6 +4,7 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { Nav } from '@/components/nav';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { FirebaseClientProvider } from '@/firebase';
 
 export const metadata: Metadata = {
   title: 'Artesã Aconchegante',
@@ -23,17 +24,19 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Literata:wght@400;700&display=swap" rel="stylesheet" />
       </head>
       <body className="min-h-screen bg-background font-body antialiased">
-        <TooltipProvider>
-          <div className="relative flex min-h-screen flex-col">
-            <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-              <div className="container flex h-16 items-center">
-                <Nav />
-              </div>
-            </header>
-            <main className="flex-1">{children}</main>
-          </div>
-        </TooltipProvider>
-        <Toaster />
+        <FirebaseClientProvider>
+          <TooltipProvider>
+            <div className="relative flex min-h-screen flex-col">
+              <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+                <div className="container flex h-16 items-center">
+                  <Nav />
+                </div>
+              </header>
+              <main className="flex-1">{children}</main>
+            </div>
+          </TooltipProvider>
+          <Toaster />
+        </FirebaseClientProvider>
       </body>
     </html>
   );

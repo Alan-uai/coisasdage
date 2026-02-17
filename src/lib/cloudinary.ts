@@ -160,82 +160,109 @@ export async function getProducts(): Promise<Product[]> {
         return acc;
     }, {} as Record<string, RawProduct[]>);
     
-    const consolidatedProducts: Product[] = Object.values(groupedByGroupId).map(group => {
-        let mainProduct = group.find(p => p.isMain);
-        if (!mainProduct) {
-             mainProduct = group[0];
-        }
+    const consolidatedProducts: Product[] = [];
 
-        const variants: ProductVariant[] = group.map(p => ({
-            id: p.id,
-            color: p.color,
-            size: p.size,
-            material: p.material,
-            imageUrl: p.imageUrl,
-            price: p.price,
-        }));
-        
-        const allPrices = group.map(p => p.price).filter(p => p !== undefined && p > 0);
-        const minPrice = allPrices.length > 0 ? Math.min(...allPrices) : mainProduct.price;
-        const maxPrice = allPrices.length > 0 ? Math.max(...allPrices) : mainProduct.price;
-        
-        const mainOptions = {
-            sizes: mainProduct.rawOptions.sizes ? mainProduct.rawOptions.sizes.split(',').map(s => s.trim()) : [],
-            colors: mainProduct.rawOptions.colors ? mainProduct.rawOptions.colors.split(',').map(c => c.trim()) : [],
-            materials: mainProduct.rawOptions.materials ? mainProduct.rawOptions.materials.split(',').map(m => m.trim()) : [],
-        };
-        
-        let sizeRangeText: string | undefined = undefined;
-        if (mainOptions.sizes.length > 1) {
-            const sizeNumbers = mainOptions.sizes.map(s => {
-                if (s.toLowerCase() === 'padrão') {
-                    // Use the main product's specific size if it's 'padrão'
-                    return parseInt(mainProduct.size || '', 10);
-                }
-                return parseInt(s, 10);
-            }).filter(n => !isNaN(n));
+    Object.values(groupedByGroupId).forEach(group => {
+        const mainProductForGroup = group.find(p => p.isMain) || group[0];
 
-            if (sizeNumbers.length > 1) {
-                const minSize = Math.min(...sizeNumbers);
-                const maxSize = Math.max(...sizeNumbers);
-                if (minSize !== maxSize) {
-                    sizeRangeText = `${minSize}-${maxSize} peças`;
+        // LOGIC 1: If the main product of the group is NOT ready-made,
+        // then we create the full, customizable product entry.
+        if (!mainProductForGroup.readyMade) {
+            const variants: ProductVariant[] = group.map(p => ({
+                id: p.id,
+                color: p.color,
+                size: p.size,
+                material: p.material,
+                imageUrl: p.imageUrl,
+                price: p.price,
+            }));
+            
+            const allPrices = group.map(p => p.price).filter(p => p !== undefined && p > 0);
+            const minPrice = allPrices.length > 0 ? Math.min(...allPrices) : mainProductForGroup.price;
+            const maxPrice = allPrices.length > 0 ? Math.max(...allPrices) : mainProductForGroup.price;
+            
+            const mainOptions = {
+                sizes: mainProductForGroup.rawOptions.sizes ? mainProductForGroup.rawOptions.sizes.split(',').map(s => s.trim()) : [],
+                colors: mainProductForGroup.rawOptions.colors ? mainProductForGroup.rawOptions.colors.split(',').map(c => c.trim()) : [],
+                materials: mainProductForGroup.rawOptions.materials ? mainProductForGroup.rawOptions.materials.split(',').map(m => m.trim()) : [],
+            };
+            
+            let sizeRangeText: string | undefined = undefined;
+            if (mainOptions.sizes.length > 1) {
+                const sizeNumbers = mainOptions.sizes.map(s => {
+                    if (s.toLowerCase() === 'padrão') {
+                        // Use the main product's specific size if it's 'padrão'
+                        return parseInt(mainProductForGroup.size || '', 10);
+                    }
+                    return parseInt(s, 10);
+                }).filter(n => !isNaN(n));
+
+                if (sizeNumbers.length > 1) {
+                    const minSize = Math.min(...sizeNumbers);
+                    const maxSize = Math.max(...sizeNumbers);
+                    if (minSize !== maxSize) {
+                        sizeRangeText = `${minSize}-${maxSize} peças`;
+                    }
                 }
             }
+
+            const availability: Product['availability'] = {};
+            if (mainProductForGroup.rawOptions.availableColors) {
+                availability.colors = mainProductForGroup.rawOptions.availableColors.split(',').map(s => s.trim());
+            }
+             if (mainProductForGroup.rawOptions.availableSizes) {
+                availability.sizes = mainProductForGroup.rawOptions.availableSizes.split(',').map(s => s.trim());
+            }
+             if (mainProductForGroup.rawOptions.availableMaterials) {
+                availability.materials = mainProductForGroup.rawOptions.availableMaterials.split(',').map(s => s.trim());
+            }
+
+            const customizableProduct: Product = {
+                ...mainProductForGroup,
+                minPrice,
+                maxPrice,
+                options: mainOptions,
+                availability: Object.keys(availability).length > 0 ? availability : undefined,
+                variants: variants,
+                sizeRangeText,
+            };
+
+            if (customizableProduct.options.sizes.length === 0) customizableProduct.options.sizes = ['Padrão'];
+            if (customizableProduct.options.colors.length === 0) customizableProduct.options.colors = ['Padrão'];
+            if (customizableProduct.options.materials.length === 0) customizableProduct.options.materials = ['Barbante de Algodão'];
+
+            consolidatedProducts.push(customizableProduct);
         }
 
-        const availability: Product['availability'] = {};
-        if (mainProduct.rawOptions.availableColors) {
-            availability.colors = mainProduct.rawOptions.availableColors.split(',').map(s => s.trim());
-        }
-         if (mainProduct.rawOptions.availableSizes) {
-            availability.sizes = mainProduct.rawOptions.availableSizes.split(',').map(s => s.trim());
-        }
-         if (mainProduct.rawOptions.availableMaterials) {
-            availability.materials = mainProduct.rawOptions.availableMaterials.split(',').map(s => s.trim());
-        }
-
-        const finalProduct: Product = {
-            ...mainProduct,
-            id: mainProduct.id,
-            name: mainProduct.name,
-            price: mainProduct.price,
-            minPrice,
-            maxPrice,
-            description: mainProduct.description,
-            imageUrl: mainProduct.imageUrl,
-            options: mainOptions,
-            availability: Object.keys(availability).length > 0 ? availability : undefined,
-            variants: variants,
-            primaryColor: mainProduct.primaryColor,
-            sizeRangeText,
-        };
-
-        if (finalProduct.options.sizes.length === 0) finalProduct.options.sizes = ['Padrão'];
-        if (finalProduct.options.colors.length === 0) finalProduct.options.colors = ['Padrão'];
-        if (finalProduct.options.materials.length === 0) finalProduct.options.materials = ['Barbante de Algodão'];
-
-        return finalProduct;
+        // LOGIC 2: Go through the group AGAIN and create standalone entries
+        // for ANY product (main or variant) marked as readyMade.
+        group.forEach(p => {
+            if (p.readyMade) {
+                // This is a ready-made item, create a simple, standalone product for it.
+                const readyMadeProduct: Product = {
+                    ...p,
+                    price: p.price,
+                    minPrice: p.price,
+                    maxPrice: p.price,
+                    // Not customizable, so options are empty/default
+                    options: { 
+                        sizes: p.size ? [p.size] : ['Padrão'], 
+                        colors: p.color ? [p.color] : ['Padrão'],
+                        materials: p.material ? [p.material] : ['Barbante de Algodão'],
+                    },
+                    // It has no other variants in this context
+                    variants: [{
+                      id: p.id,
+                      imageUrl: p.imageUrl,
+                      price: p.price,
+                      color: p.color,
+                      size: p.size,
+                      material: p.material,
+                    }],
+                };
+                consolidatedProducts.push(readyMadeProduct);
+            }
+        });
     });
 
     productsCache = consolidatedProducts;

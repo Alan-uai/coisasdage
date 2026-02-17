@@ -166,7 +166,9 @@ export default function CartPage() {
                 <span>Total</span>
                 <span>R$ {subtotal.toFixed(2).replace('.', ',')}</span>
               </div>
-              <Button size="lg" className="w-full">Finalizar Compra</Button>
+              <Button asChild size="lg" className="w-full">
+                <Link href="/checkout">Finalizar Compra</Link>
+              </Button>
             </CardContent>
           </Card>
         </aside>

@@ -22,6 +22,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Literata:wght@400;700&display=swap" rel="stylesheet" />
+        <script src="https://sdk.mercadopago.com/js/v2"></script>
       </head>
       <body className="min-h-screen bg-background font-body antialiased">
         <FirebaseClientProvider>

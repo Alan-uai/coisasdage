@@ -4,43 +4,27 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "UserProfile",
       "type": "object",
-      "description": "Represents the profile information for a user in the Artesã Aconchegante e-commerce application, linked to an external authentication system.",
+      "description": "Represents the profile information for a user in the Artesã Aconchegante e-commerce application.",
       "properties": {
-        "id": {
+        "displayName": {
           "type": "string",
-          "description": "Unique identifier for the UserProfile entity, matching the external authentication system's user ID."
-        },
-        "firstName": {
-          "type": "string",
-          "description": "The user's first name."
-        },
-        "lastName": {
-          "type": "string",
-          "description": "The user's last name."
+          "description": "The user's display name."
         },
         "email": {
           "type": "string",
-          "description": "The user's email address.",
+          "description": "The user's email address, used for verification.",
           "format": "email"
         },
         "createdAt": {
           "type": "string",
           "description": "Timestamp when the user profile was created.",
           "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "description": "Timestamp when the user profile was last updated.",
-          "format": "date-time"
         }
       },
       "required": [
-        "id",
-        "firstName",
-        "lastName",
+        "displayName",
         "email",
-        "createdAt",
-        "updatedAt"
+        "createdAt"
       ]
     },
     "Address": {
@@ -404,6 +388,32 @@
         "createdAt",
         "updatedAt"
       ]
+    },
+    "SecurityLog": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "SecurityLog",
+      "type": "object",
+      "description": "Records a security-relevant event in a write-only collection.",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user who triggered the event."
+        },
+        "event": {
+          "type": "string",
+          "description": "A description of the security event that occurred."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the log was created.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "userId",
+        "event",
+        "createdAt"
+      ]
     }
   },
   "auth": {
@@ -467,33 +477,41 @@
         }
       },
       {
-        "path": "/users/{userId}/cart",
+        "path": "/users/{userId}/carts/{cartId}",
         "definition": {
           "entityName": "Cart",
           "schema": {
             "$ref": "#/backend/entities/Cart"
           },
-          "description": "Represents a user's current shopping cart. This document is directly owned by the user (`request.auth.uid` matching `userId` in path), ensuring private and authorization-independent access. The `userId` field within the document also provides a data integrity check.",
+          "description": "Represents a user's current shopping cart. This subcollection ensures that only the owning user (`request.auth.uid` matching `userId` in path) can access their cart.",
           "params": [
             {
               "name": "userId",
               "description": "The unique identifier of the user who owns this cart."
+            },
+            {
+              "name": "cartId",
+              "description": "The unique identifier for the cart document."
             }
           ]
         }
       },
       {
-        "path": "/users/{userId}/cart/items/{cartItemId}",
+        "path": "/users/{userId}/carts/{cartId}/items/{cartItemId}",
         "definition": {
           "entityName": "CartItem",
           "schema": {
             "$ref": "#/backend/entities/CartItem"
           },
-          "description": "Stores individual items within a user's shopping cart. Access is restricted to the owning user, with `userId` implicitly available from the parent path for authorization independence. The `cartId` field within the document links to the parent cart for data integrity.",
+          "description": "Stores individual items within a user's shopping cart. Access is restricted to the owning user. The `cartId` field within the document links to the parent cart for data integrity.",
           "params": [
             {
               "name": "userId",
               "description": "The unique identifier of the user who owns the cart containing this item."
+            },
+            {
+              "name": "cartId",
+              "description": "The unique identifier for the parent cart document."
             },
             {
               "name": "cartItemId",
@@ -529,7 +547,7 @@
           "schema": {
             "$ref": "#/backend/entities/OrderItem"
           },
-          "description": "Stores individual items within a specific order. Access is restricted to the owning user, with `userId` and `orderId` implicitly available from the parent paths for authorization independence. The `orderId` field within the document links to the parent order for data integrity.",
+          "description": "Stores individual items within a specific order. Access is restricted to the owning user. The `orderId` field within the document links to the parent order for data integrity.",
           "params": [
             {
               "name": "userId",
@@ -545,8 +563,24 @@
             }
           ]
         }
+      },
+      {
+        "path": "/security_logs/{logId}",
+        "definition": {
+          "entityName": "SecurityLog",
+          "schema": {
+            "$ref": "#/backend/entities/SecurityLog"
+          },
+          "description": "A write-only collection for security-related logs. Authenticated clients can only create logs; they cannot read, update, or delete them.",
+          "params": [
+            {
+              "name": "logId",
+              "description": "The unique identifier for the log entry."
+            }
+          ]
+        }
       }
     ],
-    "reasoning": "The Firestore structure for Artesã Aconchegante is meticulously designed for security, scalability, and debuggability, with a strong emphasis on authorization independence and clear access patterns. The chosen strategy minimizes complexity and enforces robust security rules.\n\nAuthorization Independence (CRITICAL):\nThe cornerstone of authorization independence in this design is path-based ownership. All user-specific data, including UserProfile, Address, Cart, Order, and their respective subcollections (CartItem, OrderItem), are organized under a `/users/{userId}` root path. This hierarchical nesting allows Firebase Security Rules to directly match `request.auth.uid` against the `{userId}` wildcard in the path. This crucial design choice eliminates the necessity for `get()` operations to fetch parent documents for authorization checks. For instance, accessing an address at `/users/{userId}/addresses/{addressId}` only requires a rule to verify `request.auth.uid == userId` from the request path, making the authorization decision atomic and independent of any data retrieval. Furthermore, existing fields like `userId` (in UserProfile, Address, Cart, Order) within documents, or `cartId`/`orderId` (in CartItem, OrderItem), serve to bolster data integrity and provide explicit consistency checks, though their primary role for authorization is superseded by the path variables.\n\nQAPs (Rules are not Filters):\nThis structure inherently supports Query-As-Permissions (QAPs) through rigorous structural segregation. User-specific collections such as `/users/{userId}/addresses`, `/users/{userId}/cart/items`, and `/users/{userId}/orders` are logically and physically confined to a single user, as identified by the `{userId}` in their path. Consequently, security rules can precisely grant access solely when `request.auth.uid` aligns with this path's `userId`. This ensures that any `list` operation performed by an authenticated user on these collections will, by design, return only their permissible data, obviating the need for complex filtering within security rules or application logic. Conversely, the `/products` collection is designed for global, public read access, allowing any `list` query to retrieve the entire catalog without authorization-based filtering. This architectural approach guarantees that security rules act as definitive gates for data access, rather than inefficient post-query filters.\n\nOverall, this design strategy results in security rules that are concise, unambiguous, highly robust, and easy to audit, while simultaneously ensuring optimal scalability and performance for the Artesã Aconchegante application."
+    "reasoning": "The Firestore structure for Artesã Aconchegante is meticulously designed for security, scalability, and debuggability, with a strong emphasis on authorization independence and clear access patterns. The chosen strategy minimizes complexity and enforces robust security rules.\n\nAuthorization Independence (CRITICAL):\nThe cornerstone of authorization independence in this design is path-based ownership. All user-specific data, including UserProfile, Address, Cart, and Order, are organized under a `/users/{userId}` root path. This hierarchical nesting allows Firebase Security Rules to directly match `request.auth.uid` against the `{userId}` wildcard in the path. This crucial design choice eliminates the necessity for `get()` operations to fetch parent documents for authorization checks. For instance, accessing an address at `/users/{userId}/addresses/{addressId}` only requires a rule to verify `request.auth.uid == userId` from the request path, making the authorization decision atomic and independent of any data retrieval. Furthermore, existing fields like `userId` (in UserProfile, Address, Cart, Order) within documents, or `cartId`/`orderId` (in CartItem, OrderItem), serve to bolster data integrity and provide explicit consistency checks, though their primary role for authorization is superseded by the path variables.\n\nQAPs (Rules are not Filters):\nThis structure inherently supports Query-As-Permissions (QAPs) through rigorous structural segregation. User-specific collections such as `/users/{userId}/addresses`, `/users/{userId}/carts`, and `/users/{userId}/orders` are logically and physically confined to a single user, as identified by the `{userId}` in their path. Consequently, security rules can precisely grant access solely when `request.auth.uid` aligns with this path's `userId`. This ensures that any `list` operation performed by an authenticated user on these collections will, by design, return only their permissible data, obviating the need for complex filtering within security rules or application logic. Conversely, the `/products` collection is designed for global, public read access, allowing any `list` query to retrieve the entire catalog without authorization-based filtering. This architectural approach guarantees that security rules act as definitive gates for data access, rather than inefficient post-query filters.\n\nOverall, this design strategy results in security rules that are concise, unambiguous, highly robust, and easy to audit, while simultaneously ensuring optimal scalability and performance for the Artesã Aconchegante application."
   }
 }

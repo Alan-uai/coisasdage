@@ -1,209 +1,139 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    /**
-     * Core Philosophy: This ruleset enforces a strict user-ownership model. All
-     * user-specific data, including profiles, addresses, carts, and orders, is
-     * securely nested within a user-specific document tree (/users/{userId}/...).
-     * This ensures that users can only access their own information.
-     *
-     * Data Structure: Data is segregated into two main top-level collections:
-     * - /users: Contains all private, user-specific data. Each user's data is
-     *   sandboxed under a document identified by their UID.
-     * - /products: A public collection containing the product catalog, readable by anyone.
-     *
-     * Key Security Decisions:
-     * - Default Deny: All access is denied by default. Permissions are explicitly granted.
-     * - User Scoping: The primary security mechanism is matching the authenticated
-     *   user's ID (`request.auth.uid`) with the `{userId}` wildcard in the path.
-     * - No User Listing: It is not possible for any client to list all user profiles.
-     * - Public Catalog: The product catalog is public for read operations to allow
-     *   browsing by both authenticated and unauthenticated users. Writes are disabled
-     *   pending implementation of an admin role.
-     *
-     * Denormalization for Authorization: The data structure is designed to be
-     * highly performant for security rules. By nesting all user data under
-     * `/users/{userId}`, we use path-based authorization, which is fast and
-     * avoids costly `get()` calls to other documents for permission checks.
-     * Fields like `userId` within documents serve as a secondary check for
-     * ensuring relational data integrity on creation.
-     *
-     * Structural Segregation: Private user data (`/users/{userId}/...`) is
-     * structurally separated from public data (`/products`), which provides a
-     * clear, secure, and performant boundary for list operations.
-     */
+    /* =============================
+        SECURITY FUNCTIONS
+    ============================== */
 
-    // -------------------------------------------------------------------------
-    // Helper Functions
-    // -------------------------------------------------------------------------
-
-    /**
-     * Returns true if the user is authenticated.
-     */
-    function isSignedIn() {
+    function isAuthenticated() {
       return request.auth != null;
     }
 
-    /**
-     * Returns true if the requesting user's UID matches the provided userId.
-     * This is the primary function for enforcing data ownership.
-     */
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+    function isEmailVerified() {
+      return request.auth.token.email_verified == true;
     }
 
-    /**
-     * Returns true if the user is the owner AND the document already exists.
-     * Used for safe update and delete operations.
-     */
+    function isNotAnonymous() {
+      return request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
     function isExistingOwner(userId) {
       return isOwner(userId) && resource != null;
     }
-
-    /**
-     * Validates that the UserProfile document being created has an `id` field
-     * that matches the user's own UID, ensuring relational integrity.
-     */
-    function isUserProfileDataValid(userId) {
-      return request.resource.data.id == userId;
-    }
-
-    /**
-     * Enforces immutability of the UserProfile's `id` field on update.
-     */
-    function isUserProfileIdImmutable() {
-      return request.resource.data.id == resource.data.id;
-    }
-
-    /**
-     * Validates that a document being created has a `userId` field
-     * that matches the user's own UID from the path.
-     */
+    
     function isOwnedData(userId) {
       return request.resource.data.userId == userId;
     }
-
-    /**
-     * Enforces immutability of a document's `userId` field on update.
-     */
+    
     function isOwnershipImmutable() {
       return request.resource.data.userId == resource.data.userId;
     }
+
+    function isSafeRead() {
+      return request.query.limit != null && request.query.limit <= 20;
+    }
+
+    /* =============================
+        GLOBAL BLOCK
+    ============================== */
     
-    /**
-     * Validates that the OrderItem being created has an `orderId` field
-     * that matches the parent order's ID from the path.
-     */
-    function isOrderItemDataValid(orderId) {
-      return request.resource.data.orderId == orderId;
+    // By default, deny all reads and writes.
+    // Specific rules below will grant access.
+    match /{document=**} {
+      allow read, write: if false;
     }
 
-    // `isOrderItemOrderIdImmutable` was removed as it was unused and the `update`
-    // operation for order items is explicitly denied.
+    /* =============================
+        USER DATA & SUBCOLLECTIONS
+    ============================== */
 
-    // -------------------------------------------------------------------------
-    // Collection Rules
-    // -------------------------------------------------------------------------
-
-    /**
-     * @description A user can create their own profile, and only they can read or update it.
-     * @path /users/{userId}
-     * @allow (create) An authenticated user creating their own profile document: `auth.uid == 'user_abc'`, `path == /users/user_abc`.
-     * @deny (get) A user trying to read another user's profile: `auth.uid == 'user_xyz'`, `path == /users/user_abc`.
-     * @deny (list) Any user trying to list all user profiles.
-     * @principle Restricts access to a user's own data tree and enforces self-creation of root user document.
-     */
     match /users/{userId} {
-      allow get: if isOwner(userId);
-      allow list: if false;
-      allow create: if isOwner(userId) && isUserProfileDataValid(userId);
-      allow update: if isExistingOwner(userId) && isUserProfileIdImmutable();
-      allow delete: if false; // Profiles are generally not user-deletable.
-    }
 
-    /**
-     * @description A user can manage their own shipping and billing addresses.
-     * @path /users/{userId}/addresses/{addressId}
-     * @allow (create) An authenticated user adding a new address for themselves: `auth.uid == 'user_abc'`, `path == /users/user_abc/addresses/addr_123`.
-     * @deny (update) A user trying to modify an address belonging to another user: `auth.uid == 'user_xyz'`, `path == /users/user_abc/addresses/addr_123`.
-     * @principle Enforces document ownership within a user-specific subcollection.
-     */
-    match /users/{userId}/addresses/{addressId} {
-      allow get, list: if isOwner(userId);
-      allow create: if isOwner(userId) && isOwnedData(userId);
-      allow update: if isExistingOwner(userId) && isOwnershipImmutable();
-      allow delete: if isExistingOwner(userId);
-    }
+      // A verified, non-anonymous user can only get their own profile.
+      allow get: if isOwner(userId) && isEmailVerified() && isNotAnonymous();
+      
+      // A user can create their own profile, but only with specific fields.
+      allow create: if isOwner(userId)
+                    && request.resource.data.keys().hasOnly(['displayName', 'email', 'createdAt'])
+                    && request.resource.data.email == request.auth.token.email;
+      
+      // A user can only update their own 'displayName'.
+      allow update: if isExistingOwner(userId) && request.resource.data.keys().hasOnly(['displayName']);
+      
+      allow delete: if false; // Users cannot delete their profiles.
 
-    /**
-     * @description A user can manage their shopping cart document.
-     * @path /users/{userId}/cart/{cartId}
-     * @allow (create) An authenticated user creating their cart: `auth.uid == 'user_abc'`, `path == /users/user_abc/cart/cart_123`.
-     * @deny (get) A user trying to view another user's cart: `auth.uid == 'user_xyz'`, `path == /users/user_abc/cart/cart_123`.
-     * @principle Enforces document ownership for a singleton-like cart document within a user's data tree.
-     */
-    match /users/{userId}/cart/{cartId} {
-      allow get, list: if isOwner(userId);
-      allow create: if isOwner(userId) && isOwnedData(userId);
-      allow update: if isExistingOwner(userId) && isOwnershipImmutable();
-      allow delete: if isExistingOwner(userId);
-    }
+      // --- ADDRESSES ---
+      match /addresses/{addressId} {
+        allow get, list: if isOwner(userId) && isSafeRead();
+        allow create: if isOwner(userId) && isOwnedData(userId);
+        allow update: if isExistingOwner(userId) && isOwnershipImmutable();
+        allow delete: if isExistingOwner(userId);
+      }
 
-    /**
-     * @description A user can manage the items within their own shopping cart.
-     * @path /users/{userId}/cart/items/{cartItemId}
-     * @allow (create) An authenticated user adding an item to their cart: `auth.uid == 'user_abc'`, `path == /users/user_abc/cart/items/item_123`.
-     * @deny (delete) A user trying to remove an item from another user's cart: `auth.uid == 'user_xyz'`, `path == /users/user_abc/cart/items/item_123`.
-     * @principle Enforces document ownership based on the parent path's user ID.
-     */
-    match /users/{userId}/cart/items/{cartItemId} {
-      allow get, list: if isOwner(userId);
-      allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
-    }
+      // --- CARTS ---
+      match /carts/{cartId} {
+        allow get, list: if isOwner(userId) && isSafeRead();
+        allow create: if isOwner(userId) && isOwnedData(userId);
+        allow update: if isExistingOwner(userId) && isOwnershipImmutable();
+        allow delete: if isExistingOwner(userId);
+        
+        // --- CART ITEMS ---
+        match /items/{cartItemId} {
+          allow get, list: if isOwner(userId) && isSafeRead();
+          allow create: if isOwner(userId) && request.resource.data.cartId == cartId;
+          allow update, delete: if isExistingOwner(userId);
+        }
+      }
 
-    /**
-     * @description A user can view their past orders and create new ones.
-     * @path /users/{userId}/orders/{orderId}
-     * @allow (create) An authenticated user placing a new order: `auth.uid == 'user_abc'`, `path == /users/user_abc/orders/order_123`.
-     * @deny (get) A user trying to view another user's order history: `auth.uid == 'user_xyz'`, `path == /users/user_abc/orders/order_123`.
-     * @principle Enforces document ownership for writes and reads, allowing users to see only their own order history.
-     */
-    match /users/{userId}/orders/{orderId} {
-      allow get, list: if isOwner(userId);
-      allow create: if isOwner(userId) && isOwnedData(userId);
-      allow update: if isExistingOwner(userId) && isOwnershipImmutable(); // Allows status updates by user in prototype phase.
-      allow delete: if false; // Orders should not be deletable by users.
-    }
+      // --- ORDERS ---
+      match /orders/{orderId} {
+        allow get, list: if isOwner(userId) && isSafeRead();
+        allow create: if isOwner(userId) && isOwnedData(userId);
+        
+        // Orders are immutable by users once created.
+        allow update, delete: if false;
 
-    /**
-     * @description A user can view the items within their own orders.
-     * @path /users/{userId}/orders/{orderId}/items/{orderItemId}
-     * @allow (get) An authenticated user viewing an item in their own order: `auth.uid == 'user_abc'`, `path == /users/user_abc/orders/order_123/items/item_xyz`.
-     * @deny (get) A user trying to view an item in someone else's order: `auth.uid == 'user_xyz'`, `path == /users/user_abc/orders/order_123/items/item_xyz`.
-     * @principle Restricts access to a user's own data, enforcing read-only access to order contents post-creation.
-     */
-    match /users/{userId}/orders/{orderId}/items/{orderItemId} {
-      allow get, list: if isOwner(userId);
-      allow create: if isOwner(userId) && isOrderItemDataValid(orderId);
-      allow update: if false; // Order items are immutable.
-      allow delete: if false; // Order items are not deletable.
+        // --- ORDER ITEMS ---
+        match /items/{orderItemId} {
+          allow get, list: if isOwner(userId) && isSafeRead();
+          allow create: if isOwner(userId) && request.resource.data.orderId == orderId;
+          
+          // Order items are also immutable.
+          allow update, delete: if false;
+        }
+      }
     }
-
-    /**
-     * @description Anyone can view the product catalog.
-     * @path /products/{productId}
-     * @allow (get) Any user, authenticated or not, can view a product.
-     * @deny (create) No client-side users can create, update, or delete products.
-     * @principle Provides public read access to a global collection while restricting writes.
-     */
+    
+    /* =============================
+        PUBLIC COLLECTIONS
+    ============================== */
+    
     match /products/{productId} {
-      allow get, list: if true;
-      // CRITICAL: Cannot implement owner-only writes. The 'Product' entity is missing an 'ownerId' or 'authorId' field.
-      // Writes are disabled until an admin role or ownership field is added to the data model.
-      allow create, update, delete: if false; // TODO: Add admin validation once an admin role is defined.
+      // Essential for e-commerce: Anyone can browse the product catalog.
+      allow get: if true;
+      // List operations are limited to prevent large-scale data dumps.
+      allow list: if isSafeRead();
+      
+      // Writes are restricted. Should be handled by a secure backend/admin role.
+      allow write: if false;
+    }
+    
+    /* =============================
+        WRITE-ONLY COLLECTIONS
+    ============================== */
+    
+    match /security_logs/{logId} {
+      // Any authenticated user can write a log entry.
+      allow create: if isAuthenticated() && request.resource.data.keys().hasAll(['userId', 'event', 'createdAt']);
+      
+      // No one can read, update, or delete logs from the client.
+      allow read, update, delete: if false;
     }
   }
 }

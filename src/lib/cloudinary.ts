@@ -33,13 +33,14 @@ export async function getLogoUrl(): Promise<string | null> {
   try {
     const { resources } = await cloudinary.api.resources({
       type: 'upload',
-      prefix: 'Logotipo/',
-      max_results: 10,
+      max_results: 500, // Search all resources
       context: true,
     });
     
-    // FIX: Custom metadata is under context.custom
-    const activeLogo = resources.find((resource: any) => resource.context?.custom?.active === 'true');
+    // Find a resource with metadata category: 'Logotipo' and active: 'true'
+    const activeLogo = resources.find((resource: any) => 
+      resource.context?.custom?.category === 'Logotipo' && resource.context?.custom?.active === 'true'
+    );
 
     if (activeLogo) {
       logoUrlCache = activeLogo.secure_url;
@@ -47,7 +48,7 @@ export async function getLogoUrl(): Promise<string | null> {
       return activeLogo.secure_url;
     }
 
-    console.warn('No active logo found in Cloudinary under Logotipo/. Make sure it has metadata "active" set to "true".');
+    console.warn('No active logo found. Make sure an image has metadata "category" set to "Logotipo" and "active" set to "true".');
     return null;
 
   } catch (error) {
@@ -75,23 +76,9 @@ export async function getProducts(): Promise<Product[]> {
     });
     
     const products: Product[] = resources.map((resource: any): Product | null => {
-      // FIX: Custom metadata is under context.custom
       const context = resource.context?.custom;
-      
-      // FIX: More robustly exclude the Logotipo folder and check for folder existence
-      if (!resource.folder || resource.folder.includes('Logotipo')) {
-        return null;
-      }
-
-      // FIX: Get category from the last part of the folder path
-      const category = resource.folder?.split('/').pop();
-
-      if (!category) {
-        return null;
-      }
-      
       if (!context) return null;
-
+      
       const { 
         id, 
         name, 
@@ -101,9 +88,15 @@ export async function getProducts(): Promise<Product[]> {
         sizes, 
         colors, 
         materials, 
-        imageHint 
+        imageHint,
+        category // Read category from metadata
       } = context as Record<string, string>;
 
+      // Exclude logos and items without a category
+      if (!category || category === 'Logotipo') {
+        return null;
+      }
+      
       // Essential fields: id, name, and price from context.
       if (!id || !name || !price) {
           return null;
@@ -116,7 +109,7 @@ export async function getProducts(): Promise<Product[]> {
         price: parseFloat(price) || 0,
         imageUrl: resource.secure_url,
         imageHint: imageHint || 'handmade product',
-        category, // Use derived category from folder name
+        category, // Use category from metadata
         readyMade: readyMade === 'true',
         options: {
           sizes: sizes ? sizes.split(',').map(s => s.trim()) : ['Padrão'],
@@ -137,7 +130,6 @@ export async function getProducts(): Promise<Product[]> {
 }
 
 export async function getProductById(id: string): Promise<Product | null> {
-    // FIX: Corrected broken comment
     // This function will rely on the cached getProducts() result for performance
     const products = await getProducts();
     return products.find(p => p.id === id) || null;

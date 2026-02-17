@@ -158,32 +158,40 @@ export function ProductClientPage({ product }: { product: Product }) {
   const [selectedSize, setSelectedSize] = useState<string>(() =>
     getFirstAvailable(product.options.sizes, product.availability?.sizes)
   );
-  const [selectedColor, setSelectedColor] = useState<string>(() =>
-    getFirstAvailable(product.options.colors, product.availability?.colors)
-  );
+  
   const [selectedMaterial, setSelectedMaterial] = useState<string>(() =>
     getFirstAvailable(product.options.materials, product.availability?.materials)
   );
 
   // Memoize the calculation of available colors based on the selected size.
   const availableColorsForCurrentSize = useMemo(() => {
-    // If no size is selected or it's a generic size, all globally available colors are possible.
-    if (selectedSize === 'Padrão' || !product.variants.some(v => v.size)) {
-        return product.availability?.colors || product.options.colors;
-    }
+    // 1. Get variants that match the selected size. A variant without a size is "Padrão".
+    const variantsForSize = product.variants.filter(v => (v.size || 'Padrão') === selectedSize);
 
-    // 1. Find all variants that match the selected size OR are not size-specific.
-    const relevantVariants = product.variants.filter(v => v.size === selectedSize || !v.size);
+    // 2. From these variants, find all unique, defined colors.
+    const specificColorsForSize = [...new Set(variantsForSize.map(v => v.color).filter((c): c is string => !!c))];
+
+    let candidateColors: string[];
     
-    // 2. Get the unique colors from those variants.
-    const possibleColors = [...new Set(relevantVariants.map(v => v.color).filter(Boolean))];
-
-    // 3. Filter these against the product's globally available colors.
+    // 3. If there are colors specified for this size, those are our candidates.
+    if (specificColorsForSize.length > 0) {
+      candidateColors = specificColorsForSize;
+    } else {
+    // 4. If no colors are specified for this size, it means any color is compatible with this size.
+    // So, all product colors are candidates.
+      candidateColors = product.options.colors;
+    }
+    
+    // 5. Finally, filter the candidates against what's globally marked as available for the whole product group.
     const globallyAvailableColors = product.availability?.colors || product.options.colors;
-
-    return globallyAvailableColors.filter(c => possibleColors.includes(c));
+    return candidateColors.filter(c => globallyAvailableColors.includes(c));
 
   }, [selectedSize, product.variants, product.options.colors, product.availability?.colors]);
+  
+  const [selectedColor, setSelectedColor] = useState<string>(() =>
+    // Initialize with the first available color for the initial size
+    getFirstAvailable(product.options.colors, availableColorsForCurrentSize)
+  );
 
   // Effect to update the selected color if it becomes unavailable after a size change.
   useEffect(() => {
@@ -197,41 +205,33 @@ export function ProductClientPage({ product }: { product: Product }) {
   useEffect(() => {
     const findBestVariant = (): ProductVariant | null => {
       if (!product.variants || product.variants.length === 0) return null;
-
-      // Filter out variants that contradict the current selection
-      const candidates = product.variants.filter(variant => {
-        const contradicts = 
-          (variant.color && variant.color !== selectedColor) ||
-          (variant.size && variant.size !== selectedSize) ||
-          (variant.material && variant.material !== selectedMaterial);
-        return !contradicts;
-      });
-
-      if (candidates.length === 0) return null;
-
-      // Sort candidates by how many attributes they match
-      candidates.sort((a, b) => {
-        let scoreA = 0;
-        if (a.color === selectedColor) scoreA++;
-        if (a.size === selectedSize) scoreA++;
-        if (a.material === selectedMaterial) scoreA++;
-
-        let scoreB = 0;
-        if (b.color === selectedColor) scoreB++;
-        if (b.size === selectedSize) scoreB++;
-        if (b.material === selectedMaterial) scoreB++;
-        
-        if (scoreB !== scoreA) {
-          return scoreB - scoreA;
-        }
-
-        // If scores are equal, prefer the one with more attributes defined overall
-        const definedA = (a.color ? 1 : 0) + (a.size ? 1 : 0) + (a.material ? 1 : 0);
-        const definedB = (b.color ? 1 : 0) + (b.size ? 1 : 0) + (b.material ? 1 : 0);
-        return definedB - definedA;
-      });
       
-      return candidates[0];
+      let bestScore = -1;
+      let bestVariant: ProductVariant | null = null;
+      
+      for (const variant of product.variants) {
+        const variantSize = variant.size || 'Padrão';
+
+        // A variant is a candidate if it does not contradict the user's selection.
+        // A contradiction happens if an attribute is defined on the variant AND it's different from the selection.
+        if (variant.color && variant.color !== selectedColor) continue;
+        if (variant.size && variantSize !== selectedSize) continue;
+        if (variant.material && variant.material !== selectedMaterial) continue;
+
+        // If we're here, the variant is a valid candidate.
+        // We score it based on how specific it is. A more specific match is better.
+        let currentScore = 0;
+        if (variant.color) currentScore++;
+        if (variant.size) currentScore++;
+        if (variant.material) currentScore++;
+
+        if (currentScore > bestScore) {
+          bestScore = currentScore;
+          bestVariant = variant;
+        }
+      }
+      
+      return bestVariant;
     };
 
     const variant = findBestVariant();

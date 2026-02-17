@@ -30,25 +30,25 @@ const renderColorSwatch = (color: string, primaryColor?: string): JSX.Element =>
     };
 
     const getHex = (c: string) => colorHexMap[c.toLowerCase().trim()];
-    const explicitParts = color.split(' e ').map(getHex);
+    
+    // Get colors from the 'color' option string (e.g., "Verde e Branco")
+    const optionColors = color.split(' e ').map(c => c.trim().toLowerCase()).filter(Boolean);
+    
+    let allColorNames: string[] = [];
 
-    let finalHexParts: (string | undefined)[] = [];
-
-    // Case 1: The color name itself is "A e B e C", and all parts are valid colors.
-    if (explicitParts.every(p => p)) {
-        finalHexParts = explicitParts;
-    } else {
-        // Case 2: It's a single color, which might be combined with a product's primary color.
-        const mainColorHex = getHex(color);
-        const primaryColorHex = primaryColor ? getHex(primaryColor) : undefined;
-        
-        // Form a two-tone swatch if a primary color is defined and is different from the option color
-        if (primaryColorHex && mainColorHex && primaryColorHex !== mainColorHex) {
-            finalHexParts = [primaryColorHex, mainColorHex];
-        } else if (mainColorHex) { // Otherwise, it's just a single solid color
-            finalHexParts = [mainColorHex];
-        }
+    // Add primary color if it exists and is not already in the option colors
+    if (primaryColor && !optionColors.includes(primaryColor.toLowerCase())) {
+        allColorNames.push(primaryColor.toLowerCase());
     }
+    
+    // Add the option colors
+    allColorNames.push(...optionColors);
+
+    // Remove duplicates, get hex codes, and limit to 3 for the swatch
+    const finalHexParts = [...new Set(allColorNames)]
+                            .map(getHex)
+                            .filter((c): c is string => !!c)
+                            .slice(0, 3);
     
     if (finalHexParts.length === 0) {
         // Fallback for unknown colors to prevent errors
@@ -69,7 +69,7 @@ const renderColorSwatch = (color: string, primaryColor?: string): JSX.Element =>
     }
     
     // Add a border for light colors (like white or off-white) to make them visible on light backgrounds
-    const hasLightColor = color.toLowerCase().includes('branco') || color.toLowerCase().includes('cru') || primaryColor?.toLowerCase().includes('branco') || primaryColor?.toLowerCase().includes('cru');
+    const hasLightColor = allColorNames.some(c => c.includes('branco') || c.includes('cru'));
     const className = cn(
         "w-full h-full rounded-full",
         hasLightColor && "border border-gray-300"
@@ -185,7 +185,7 @@ export const ProductCard = ({ product }: { product: Product }) => {
                 )}
                 <div className="flex-1">
                     <h2 className="text-xl font-bold font-headline">{product.name}</h2>
-                    <p className="text-muted-foreground mt-1 text-sm line-clamp-2">{product.description}</p>
+                    <p className="text-muted-foreground mt-1 text-sm line-clamp-2 whitespace-pre-wrap">{product.description}</p>
                 </div>
                 <div className="flex justify-between items-center mt-4">
                     <p className="text-lg font-semibold">

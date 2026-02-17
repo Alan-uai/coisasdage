@@ -165,92 +165,89 @@ export async function getProducts(): Promise<Product[]> {
     Object.values(groupedByGroupId).forEach(group => {
         const mainProductForGroup = group.find(p => p.isMain) || group[0];
 
-        // LOGIC 1: If the main product of the group is NOT ready-made,
-        // then we create the full, customizable product entry.
-        if (!mainProductForGroup.readyMade) {
-            const variants: ProductVariant[] = group.map(p => ({
-                id: p.id,
-                color: p.color,
-                size: p.size,
-                material: p.material,
-                imageUrl: p.imageUrl,
-                price: p.price,
-            }));
+        // --- Create the full, consolidated product from the main product's perspective ---
+        const variants: ProductVariant[] = group.map(p => ({
+            id: p.id,
+            color: p.color,
+            size: p.size,
+            material: p.material,
+            imageUrl: p.imageUrl,
+            price: p.price,
+        }));
+        
+        const allPrices = group.map(p => p.price).filter(p => p !== undefined && p > 0);
+        const minPrice = allPrices.length > 0 ? Math.min(...allPrices) : mainProductForGroup.price;
+        const maxPrice = allPrices.length > 0 ? Math.max(...allPrices) : mainProductForGroup.price;
+        
+        // IMPORTANT: Use the plural options from the main product
+        const mainOptions = {
+            sizes: mainProductForGroup.rawOptions.sizes ? mainProductForGroup.rawOptions.sizes.split(',').map(s => s.trim()) : [],
+            colors: mainProductForGroup.rawOptions.colors ? mainProductForGroup.rawOptions.colors.split(',').map(c => c.trim()) : [],
+            materials: mainProductForGroup.rawOptions.materials ? mainProductForGroup.rawOptions.materials.split(',').map(m => m.trim()) : [],
+        };
+        
+        let sizeRangeText: string | undefined = undefined;
+        if (mainOptions.sizes.length > 1) {
+            const sizeNumbers = mainOptions.sizes.map(s => parseInt(s, 10)).filter(n => !isNaN(n));
             
-            const allPrices = group.map(p => p.price).filter(p => p !== undefined && p > 0);
-            const minPrice = allPrices.length > 0 ? Math.min(...allPrices) : mainProductForGroup.price;
-            const maxPrice = allPrices.length > 0 ? Math.max(...allPrices) : mainProductForGroup.price;
-            
-            const mainOptions = {
-                sizes: mainProductForGroup.rawOptions.sizes ? mainProductForGroup.rawOptions.sizes.split(',').map(s => s.trim()) : [],
-                colors: mainProductForGroup.rawOptions.colors ? mainProductForGroup.rawOptions.colors.split(',').map(c => c.trim()) : [],
-                materials: mainProductForGroup.rawOptions.materials ? mainProductForGroup.rawOptions.materials.split(',').map(m => m.trim()) : [],
-            };
-            
-            let sizeRangeText: string | undefined = undefined;
-            if (mainOptions.sizes.length > 1) {
-                const sizeNumbers = mainOptions.sizes.map(s => {
-                    if (s.toLowerCase() === 'padrão') {
-                        // Use the main product's specific size if it's 'padrão'
-                        return parseInt(mainProductForGroup.size || '', 10);
-                    }
-                    return parseInt(s, 10);
-                }).filter(n => !isNaN(n));
-
-                if (sizeNumbers.length > 1) {
-                    const minSize = Math.min(...sizeNumbers);
-                    const maxSize = Math.max(...sizeNumbers);
-                    if (minSize !== maxSize) {
-                        sizeRangeText = `${minSize}-${maxSize} peças`;
-                    }
+            // If all items in mainOptions.sizes were successfully converted to numbers
+            if (sizeNumbers.length === mainOptions.sizes.length) {
+                const min = Math.min(...sizeNumbers);
+                const max = Math.max(...sizeNumbers);
+                if (min !== max) {
+                    sizeRangeText = `${min}-${max} peças`;
+                } else {
+                    sizeRangeText = `${min} peças`;
                 }
+            } else {
+                // Handle non-numeric sizes like P, M, G
+                sizeRangeText = `${mainOptions.sizes.length} tamanhos`;
             }
-
-            const availability: Product['availability'] = {};
-            if (mainProductForGroup.rawOptions.availableColors) {
-                availability.colors = mainProductForGroup.rawOptions.availableColors.split(',').map(s => s.trim());
-            }
-             if (mainProductForGroup.rawOptions.availableSizes) {
-                availability.sizes = mainProductForGroup.rawOptions.availableSizes.split(',').map(s => s.trim());
-            }
-             if (mainProductForGroup.rawOptions.availableMaterials) {
-                availability.materials = mainProductForGroup.rawOptions.availableMaterials.split(',').map(s => s.trim());
-            }
-
-            const customizableProduct: Product = {
-                ...mainProductForGroup,
-                minPrice,
-                maxPrice,
-                options: mainOptions,
-                availability: Object.keys(availability).length > 0 ? availability : undefined,
-                variants: variants,
-                sizeRangeText,
-            };
-
-            if (customizableProduct.options.sizes.length === 0) customizableProduct.options.sizes = ['Padrão'];
-            if (customizableProduct.options.colors.length === 0) customizableProduct.options.colors = ['Padrão'];
-            if (customizableProduct.options.materials.length === 0) customizableProduct.options.materials = ['Barbante de Algodão'];
-
-            consolidatedProducts.push(customizableProduct);
+        } else if (mainOptions.sizes.length === 1 && mainOptions.sizes[0].toLowerCase() !== 'padrão') {
+            sizeRangeText = mainOptions.sizes[0];
         }
 
-        // LOGIC 2: Go through the group AGAIN and create standalone entries
-        // for ANY product (main or variant) marked as readyMade.
+
+        const availability: Product['availability'] = {};
+        if (mainProductForGroup.rawOptions.availableColors) {
+            availability.colors = mainProductForGroup.rawOptions.availableColors.split(',').map(s => s.trim());
+        }
+          if (mainProductForGroup.rawOptions.availableSizes) {
+            availability.sizes = mainProductForGroup.rawOptions.availableSizes.split(',').map(s => s.trim());
+        }
+          if (mainProductForGroup.rawOptions.availableMaterials) {
+            availability.materials = mainProductForGroup.rawOptions.availableMaterials.split(',').map(s => s.trim());
+        }
+
+        const consolidatedProduct: Product = {
+            ...mainProductForGroup,
+            minPrice,
+            maxPrice,
+            options: mainOptions,
+            availability: Object.keys(availability).length > 0 ? availability : undefined,
+            variants: variants,
+            sizeRangeText,
+        };
+
+        if (consolidatedProduct.options.sizes.length === 0) consolidatedProduct.options.sizes = ['Padrão'];
+        if (consolidatedProduct.options.colors.length === 0) consolidatedProduct.options.colors = ['Padrão'];
+        if (consolidatedProduct.options.materials.length === 0) consolidatedProduct.options.materials = ['Barbante de Algodão'];
+
+        consolidatedProducts.push(consolidatedProduct);
+
+        // --- Create standalone products for ready-made VARIANTS (not main) ---
         group.forEach(p => {
-            if (p.readyMade) {
-                // This is a ready-made item, create a simple, standalone product for it.
-                const readyMadeProduct: Product = {
+            if (p.readyMade && !p.isMain) {
+                const readyMadeVariantProduct: Product = {
                     ...p,
                     price: p.price,
                     minPrice: p.price,
                     maxPrice: p.price,
-                    // Not customizable, so options are empty/default
                     options: { 
                         sizes: p.size ? [p.size] : ['Padrão'], 
                         colors: p.color ? [p.color] : ['Padrão'],
                         materials: p.material ? [p.material] : ['Barbante de Algodão'],
                     },
-                    // It has no other variants in this context
                     variants: [{
                       id: p.id,
                       imageUrl: p.imageUrl,
@@ -260,7 +257,7 @@ export async function getProducts(): Promise<Product[]> {
                       material: p.material,
                     }],
                 };
-                consolidatedProducts.push(readyMadeProduct);
+                consolidatedProducts.push(readyMadeVariantProduct);
             }
         });
     });
@@ -277,5 +274,6 @@ export async function getProducts(): Promise<Product[]> {
 
 export async function getProductByGroupId(groupId: string): Promise<Product | null> {
     const products = await getProducts();
-    return products.find(p => p.groupId === groupId) || null;
+    // Return the consolidated product, not a simple ready-made variant that might share the groupId
+    return products.find(p => p.groupId === groupId && p.variants.length > 1) || products.find(p => p.groupId === groupId) || null;
 }

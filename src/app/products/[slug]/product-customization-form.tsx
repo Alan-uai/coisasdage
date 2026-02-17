@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
+import { useSearchParams } from 'next/navigation';
 import type { Product, ProductVariant } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -39,7 +40,8 @@ function ProductCustomizationFormComponent({
   setSelectedSize,
   selectedMaterial,
   setSelectedMaterial,
-  availableColorsForCurrentSize, // new prop
+  availableColorsForCurrentSize,
+  availableMaterialsForCurrentSelection,
 }: { 
   product: Product, 
   selectedColor: string,
@@ -49,6 +51,7 @@ function ProductCustomizationFormComponent({
   selectedMaterial: string,
   setSelectedMaterial: (material: string) => void,
   availableColorsForCurrentSize: string[],
+  availableMaterialsForCurrentSelection: string[],
 }) {
   const { toast } = useToast();
 
@@ -65,7 +68,6 @@ function ProductCustomizationFormComponent({
   const hasMaterialOptions = product.options.materials.length > 1 || (product.options.materials.length === 1 && product.options.materials[0] !== 'Padrão');
 
   const globallyAvailableSizes = product.availability?.sizes;
-  const globallyAvailableMaterials = product.availability?.materials;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -129,7 +131,7 @@ function ProductCustomizationFormComponent({
             </SelectTrigger>
             <SelectContent>
               {product.options.materials.map((material) => {
-                 const isAvailable = globallyAvailableMaterials ? globallyAvailableMaterials.includes(material) : true;
+                 const isAvailable = availableMaterialsForCurrentSelection.includes(material);
                  return (
                   <SelectItem key={material} value={material} disabled={!isAvailable}>
                     {material}
@@ -152,6 +154,9 @@ function ProductCustomizationFormComponent({
 
 // The client page component that holds state and renders the layout
 export function ProductClientPage({ product }: { product: Product }) {
+  const searchParams = useSearchParams();
+  const colorFromUrl = searchParams.get('color');
+
   const [selectedImageUrl, setSelectedImageUrl] = useState(product.imageUrl);
   const [currentPrice, setCurrentPrice] = useState(product.price);
   
@@ -159,10 +164,6 @@ export function ProductClientPage({ product }: { product: Product }) {
     getFirstAvailable(product.options.sizes, product.availability?.sizes)
   );
   
-  const [selectedMaterial, setSelectedMaterial] = useState<string>(() =>
-    getFirstAvailable(product.options.materials, product.availability?.materials)
-  );
-
   // Memoize the calculation of available colors based on the selected size.
   const availableColorsForCurrentSize = useMemo(() => {
     // 1. Get the real size we're filtering for. 'Padrão' maps to the main product's size.
@@ -193,9 +194,46 @@ export function ProductClientPage({ product }: { product: Product }) {
 
   }, [selectedSize, product]);
   
-  const [selectedColor, setSelectedColor] = useState<string>(() =>
-    // Initialize with the first available color for the initial size
-    getFirstAvailable(product.options.colors, availableColorsForCurrentSize)
+  const [selectedColor, setSelectedColor] = useState<string>(() => {
+    // If colorFromUrl is valid and available for the default size, use it.
+    if (colorFromUrl && availableColorsForCurrentSize.includes(colorFromUrl)) {
+      return colorFromUrl;
+    }
+    // Otherwise, fall back to the first available color.
+    return getFirstAvailable(product.options.colors, availableColorsForCurrentSize);
+  });
+
+  // Calculate available materials based on size AND color
+  const availableMaterialsForCurrentSelection = useMemo(() => {
+    const sizeToMatch = selectedSize === 'Padrão' ? (product.size || 'Padrão') : selectedSize;
+    
+    // Find variants matching the selected size
+    const variantsForSize = product.variants.filter(v => (v.size || product.size || 'Padrão') === sizeToMatch);
+
+    // A variant matches the color if it has the exact same color OR has NO color defined
+    const variantsForSizeAndColor = variantsForSize.filter(v => v.color === selectedColor || !v.color);
+    
+    // Get all unique materials from these variants.
+    const specificMaterials = [...new Set(variantsForSizeAndColor.map(v => v.material).filter((m): m is string => !!m))];
+    
+    let candidateMaterials: string[];
+
+    if (specificMaterials.length > 0) {
+        candidateMaterials = specificMaterials;
+    } else {
+        // If no variants for this combo specify a material, it means any globally available material is compatible.
+        candidateMaterials = product.options.materials;
+    }
+
+    const globallyAvailableMaterials = product.availability?.materials || product.options.materials;
+    const finalMaterials = candidateMaterials.filter(m => globallyAvailableMaterials.includes(m));
+
+    return finalMaterials.length > 0 ? finalMaterials : globallyAvailableMaterials;
+
+  }, [selectedSize, selectedColor, product]);
+
+  const [selectedMaterial, setSelectedMaterial] = useState<string>(() => 
+    getFirstAvailable(product.options.materials, product.availability?.materials)
   );
 
   // Effect to update the selected color if it becomes unavailable after a size change.
@@ -204,6 +242,13 @@ export function ProductClientPage({ product }: { product: Product }) {
       setSelectedColor(availableColorsForCurrentSize[0] || product.options.colors[0]);
     }
   }, [availableColorsForCurrentSize, selectedColor, product.options.colors]);
+  
+  // Effect to update the selected material if it becomes unavailable after a size/color change.
+  useEffect(() => {
+    if (!availableMaterialsForCurrentSelection.includes(selectedMaterial)) {
+      setSelectedMaterial(availableMaterialsForCurrentSelection[0] || product.options.materials[0]);
+    }
+  }, [availableMaterialsForCurrentSelection, selectedMaterial, product.options.materials]);
 
 
   // Effect to find the best variant and update image/price
@@ -288,6 +333,7 @@ export function ProductClientPage({ product }: { product: Product }) {
               selectedMaterial={selectedMaterial}
               setSelectedMaterial={setSelectedMaterial}
               availableColorsForCurrentSize={availableColorsForCurrentSize}
+              availableMaterialsForCurrentSelection={availableMaterialsForCurrentSelection}
             />
           </div>
         </div>

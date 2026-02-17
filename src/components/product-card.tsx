@@ -102,11 +102,15 @@ export const ProductCard = ({ product }: { product: Product }) => {
     const MAX_SWATCHES = 5;
     const visibleColors = sortedColors.slice(0, MAX_SWATCHES);
     const remainingColorsCount = sortedColors.length - MAX_SWATCHES;
+    
+    const productUrl = `/products/${product.groupId}`;
+    const productLink = activeColor ? `${productUrl}?color=${encodeURIComponent(activeColor)}` : productUrl;
+
 
     return (
         <Card className="overflow-hidden flex flex-col group h-full">
             <CardHeader className="p-0">
-                <Link href={`/products/${product.groupId}`} className="block overflow-hidden">
+                <Link href={productLink} className="block overflow-hidden">
                     <Image
                         src={activeImageUrl}
                         alt={product.name}
@@ -180,7 +184,7 @@ export const ProductCard = ({ product }: { product: Product }) => {
                             : `R$ ${product.price.toFixed(2).replace('.', ',')}`}
                     </p>
                     <Button asChild>
-                        <Link href={`/products/${product.groupId}`}>Ver Detalhes</Link>
+                        <Link href={productLink}>Ver Detalhes</Link>
                     </Button>
                 </div>
             </CardContent>

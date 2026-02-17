@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { createPreference } from './actions';
+import { createPreference, type PreferenceCartItem } from './actions';
 import type { CartItem } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
@@ -19,7 +19,18 @@ export function CheckoutForm({ cartItems, subtotal }: { cartItems: CartItem[], s
 
     useEffect(() => {
         if (cartItems.length > 0) {
-            createPreference(cartItems).then(result => {
+             // Manually create plain objects without the Timestamp fields
+            const serializableCartItems: PreferenceCartItem[] = cartItems.map(item => ({
+                id: item.id,
+                productName: item.productName,
+                selectedColor: item.selectedColor,
+                selectedSize: item.selectedSize,
+                selectedMaterial: item.selectedMaterial,
+                quantity: item.quantity,
+                unitPriceAtAddition: item.unitPriceAtAddition,
+            }));
+
+            createPreference(serializableCartItems).then(result => {
                 if (result.preferenceId) {
                     setPreferenceId(result.preferenceId);
                 } else {
@@ -27,6 +38,8 @@ export function CheckoutForm({ cartItems, subtotal }: { cartItems: CartItem[], s
                     setIsLoading(false);
                 }
             });
+        } else {
+            setIsLoading(false);
         }
     }, [cartItems]);
 

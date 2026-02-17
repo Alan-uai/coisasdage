@@ -1,19 +1,29 @@
 'use server';
 
 import mercadopago from 'mercadopago';
-import type { CartItem } from '@/lib/types';
 
 // Configure Mercado Pago
 mercadopago.configure({
   access_token: process.env.MP_ACCESS_TOKEN!,
 });
 
+// Define a serializable type for items passed from client to server action
+export type PreferenceCartItem = {
+    id: string;
+    productName: string;
+    selectedColor: string;
+    selectedSize: string;
+    selectedMaterial: string;
+    quantity: number;
+    unitPriceAtAddition: number;
+};
+
 type PreferenceResult = {
   preferenceId?: string;
   error?: string;
 }
 
-export async function createPreference(cartItems: CartItem[]): Promise<PreferenceResult> {
+export async function createPreference(cartItems: PreferenceCartItem[]): Promise<PreferenceResult> {
     if (!process.env.MP_ACCESS_TOKEN) {
         console.error("Mercado Pago access token not configured.");
         return { error: 'O servidor de pagamento não está configurado.' };

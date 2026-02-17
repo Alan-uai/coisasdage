@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutGrid, Package, Palette, ShoppingBag } from 'lucide-react';
+import { LayoutGrid, Package, Palette, ShoppingBag, HelpCircle } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -16,6 +16,7 @@ const links = [
   { href: '/orders', label: 'Meus Pedidos', icon: Package },
   { href: '/design', label: 'Design IA', icon: Palette },
   { href: '/cart', label: 'Carrinho', icon: ShoppingBag },
+  { href: '/faq', label: 'Dúvidas', icon: HelpCircle },
 ];
 
 export function Nav() {

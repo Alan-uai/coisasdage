@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
-import { collection, doc, query, where } from 'firebase/firestore';
+import { collection, doc, query, limit } from 'firebase/firestore';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -42,7 +42,7 @@ export default function CartPage() {
   const firestore = useFirestore();
 
   const cartItemsQuery = useMemoFirebase(
-    () => (user && firestore ? query(collection(firestore, 'users', user.uid, 'carts', 'main', 'items')) : null),
+    () => (user && firestore ? query(collection(firestore, 'users', user.uid, 'carts', 'main', 'items'), limit(20)) : null),
     [user, firestore]
   );
 
@@ -174,5 +174,3 @@ export default function CartPage() {
     </div>
   );
 }
-
-    

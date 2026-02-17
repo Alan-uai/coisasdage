@@ -13,8 +13,11 @@ export default async function ProductsPage() {
   
   const readyMadeProducts = products.filter(product => product.readyMade);
   
-  const productsByCategory = products.reduce((acc, product) => {
-    // Products are grouped by their category. Ready-made products will also appear here.
+  // A product appears in a category if it's not ready-made, OR if it's a ready-made main product.
+  // This prevents ready-made variants from appearing in both the ready-made and category carousels.
+  const categoryDisplayProducts = products.filter(p => !p.readyMade || (p.readyMade && p.isMain));
+  
+  const productsByCategory = categoryDisplayProducts.reduce((acc, product) => {
     if (!acc[product.category]) {
       acc[product.category] = [];
     }

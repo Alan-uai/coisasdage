@@ -64,6 +64,10 @@ export default function OrdersPage() {
 
   const { data: orders, isLoading: isOrdersLoading } = useCollection<Order>(ordersQuery);
 
+  const sortedOrders = useMemo(() => {
+    return orders?.sort((a, b) => b.orderDate.toMillis() - a.orderDate.toMillis()) || [];
+  }, [orders]);
+
   if (isUserLoading) {
     return (
       <div className="flex-1 space-y-6 p-4 sm:p-6 lg:p-8">
@@ -103,10 +107,6 @@ export default function OrdersPage() {
     )
   }
   
-  const sortedOrders = useMemo(() => {
-    return orders?.sort((a, b) => b.orderDate.toMillis() - a.orderDate.toMillis()) || [];
-  }, [orders]);
-
 
   return (
     <div className="flex flex-col min-h-screen p-4 sm:p-6 lg:p-8">

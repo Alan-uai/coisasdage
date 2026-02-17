@@ -188,20 +188,18 @@ export async function getProducts(): Promise<Product[]> {
         
         let sizeRangeText: string | undefined = undefined;
         if (mainOptions.sizes.length > 1) {
-            const sizeNumbers = mainOptions.sizes.map(s => parseInt(s, 10)).filter(n => !isNaN(n));
+            // Regex to check if a string is a number, optionally followed by "peça" or "peças"
+            const isPieceCount = (s: string) => /^\d+\s*(peças?)?$/.test(s.trim().toLowerCase());
             
-            // If all items in mainOptions.sizes were successfully converted to numbers
-            if (sizeNumbers.length === mainOptions.sizes.length) {
-                const min = Math.min(...sizeNumbers);
-                const max = Math.max(...sizeNumbers);
-                if (min !== max) {
-                    sizeRangeText = `${min}-${max} peças`;
-                } else {
-                    sizeRangeText = `${min} peças`;
-                }
+            const allArePieceCounts = mainOptions.sizes.every(isPieceCount);
+
+            if (allArePieceCounts) {
+                const pieceNumbers = mainOptions.sizes.map(s => parseInt(s, 10));
+                const maxPieces = Math.max(...pieceNumbers);
+                sizeRangeText = `até ${maxPieces} peças`;
             } else {
-                // Handle non-numeric sizes like P, M, G
-                sizeRangeText = `${mainOptions.sizes.length} tamanhos`;
+                // For non-numeric sizes like P, M, G, or lengths like 2m, 50cm
+                sizeRangeText = `até ${mainOptions.sizes.length} tamanhos`;
             }
         } else if (mainOptions.sizes.length === 1 && mainOptions.sizes[0].toLowerCase() !== 'padrão') {
             sizeRangeText = mainOptions.sizes[0];

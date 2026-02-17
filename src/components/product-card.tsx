@@ -184,13 +184,26 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
             <CardContent className="p-4 flex flex-col flex-1">
                 <div className="flex justify-between items-center mb-3 min-h-[20px]">
                     {isReadyMadeCarousel ? (
-                         (product.color && product.color !== 'Padrão' || product.size && product.size !== 'Padrão') ? (
-                            <div className="flex w-full justify-end items-center gap-2 text-xs text-muted-foreground font-semibold">
-                                {product.color && product.color !== 'Padrão' && <span>{product.color}</span>}
-                                {product.color && product.color !== 'Padrão' && product.size && product.size !== 'Padrão' && <span className="text-xs">&bull;</span>}
-                                {product.size && product.size !== 'Padrão' && <span>{product.size}</span>}
-                            </div>
-                        ) : <div />
+                         <div className="flex w-full justify-between items-center gap-2">
+                            {product.color && product.color !== 'Padrão' ? (
+                                <TooltipProvider delayDuration={100}>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <div className="w-5 h-5 rounded-full cursor-default">
+                                                {renderColorSwatch(product.color, product.primaryColor)}
+                                            </div>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p>{product.primaryColor && product.primaryColor.toLowerCase() !== product.color.toLowerCase() ? `${product.primaryColor} e ${product.color}` : product.color}</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            ) : <div />}
+
+                            {product.size && product.size !== 'Padrão' && (
+                                <span className="text-xs text-muted-foreground font-semibold">{product.size}</span>
+                            )}
+                        </div>
                     ) : (
                         <>
                             {hasColorVariants ? (
@@ -251,7 +264,7 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
 
                 <div className="flex-1">
                     <h2 className="text-xl font-bold font-headline">{product.name}</h2>
-                    <p className="text-muted-foreground mt-1 text-sm line-clamp-2 whitespace-pre-wrap">{product.description}</p>
+                    <p className="text-base leading-relaxed whitespace-pre-wrap">{product.description}</p>
                 </div>
                 <div className="flex justify-between items-center mt-4">
                     <p className="text-lg font-semibold">{priceText}</p>

@@ -1,17 +1,28 @@
-export type Product = {
+export type ProductVariant = {
   id: string;
+  color?: string;
+  size?: string;
+  material?: string;
+  imageUrl: string;
+};
+
+export type Product = {
+  id: string; // The ID of the main product
+  groupId: string;
+  isMain?: boolean;
   name: string;
   description: string;
   price: number;
-  imageUrl: string;
+  imageUrl: string; // The default/main image URL
   imageHint: string;
   category: string;
   readyMade?: boolean;
-  options: {
+  options: { // All available options for the group
     sizes: string[];
     colors: string[];
     materials: string[];
   };
+  variants: ProductVariant[]; // All variants in the group
 };
 
 export type Order = {

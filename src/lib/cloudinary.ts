@@ -1,7 +1,7 @@
 'use server';
 
 import { v2 as cloudinary } from 'cloudinary';
-import type { Product } from '@/lib/types';
+import type { Product, ProductVariant } from '@/lib/types';
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dme6as4bi',
@@ -18,6 +18,20 @@ const CACHE_DURATION = 60 * 1000; // 1 minute
 // Cache for the logo
 let logoUrlCache: string | null = null;
 let logoCacheTimestamp: number | null = null;
+
+// An internal type for processing
+type RawProduct = Omit<Product, 'variants' | 'options'> & {
+  color?: string; // Singular color for this specific variant
+  size?: string;
+  material?: string;
+  // Raw options from Cloudinary
+  rawOptions: {
+    sizes?: string;
+    colors?: string;
+    materials?: string;
+  }
+};
+
 
 export async function getLogoUrl(): Promise<string | null> {
   const now = Date.now();
@@ -75,53 +89,107 @@ export async function getProducts(): Promise<Product[]> {
       context: true,
     });
     
-    const products: Product[] = resources.map((resource: any): Product | null => {
+    const rawProducts: RawProduct[] = resources.map((resource: any): RawProduct | null => {
       const context = resource.context?.custom;
       if (!context) return null;
-      
+
       const { 
         id, 
+        groupId,
+        isMain,
         name, 
         price, 
-        description, 
+        description,
+        category,
         readyMade, 
         sizes, 
         colors, 
-        materials, 
+        materials,
+        color,
+        size,
+        material,
         imageHint,
-        category // Read category from metadata
       } = context as Record<string, string>;
 
-      // Exclude logos and items without a category
-      if (!category || category === 'Logotipo') {
+      if (category === 'Logotipo') {
         return null;
       }
       
-      // Essential fields: id, name, and price from context.
-      if (!id || !name || !price) {
+      if (!id || !groupId) {
           return null;
       }
 
       return {
         id,
-        name,
+        groupId,
+        isMain: isMain === 'true',
+        name: name || '',
         description: description || '',
         price: parseFloat(price) || 0,
         imageUrl: resource.secure_url,
         imageHint: imageHint || 'handmade product',
-        category, // Use category from metadata
+        category: category || 'Sem Categoria',
         readyMade: readyMade === 'true',
-        options: {
-          sizes: sizes ? sizes.split(',').map(s => s.trim()) : ['Padrão'],
-          colors: colors ? colors.split(',').map(c => c.trim()) : ['Padrão'],
-          materials: materials ? materials.split(',').map(m => m.trim()) : ['Barbante de Algodão'],
+        rawOptions: {
+            sizes,
+            colors,
+            materials,
         },
+        color,
+        size,
+        material,
       };
-    }).filter((p): p is Product => p !== null);
+    }).filter((p): p is RawProduct => p !== null);
+
+    const groupedByGroupId = rawProducts.reduce((acc, product) => {
+        if (!acc[product.groupId]) {
+            acc[product.groupId] = [];
+        }
+        acc[product.groupId].push(product);
+        return acc;
+    }, {} as Record<string, RawProduct[]>);
     
-    productsCache = products;
+    const consolidatedProducts: Product[] = Object.values(groupedByGroupId).map(group => {
+        let mainProduct = group.find(p => p.isMain);
+        if (!mainProduct) {
+             mainProduct = group.find(p => p.name && p.price) || group[0];
+        }
+
+        const variants: ProductVariant[] = group.map(p => ({
+            id: p.id,
+            color: p.color,
+            size: p.size,
+            material: p.material,
+            imageUrl: p.imageUrl,
+        }));
+        
+        const mainOptions = {
+            sizes: mainProduct.rawOptions.sizes ? mainProduct.rawOptions.sizes.split(',').map(s => s.trim()) : [],
+            colors: mainProduct.rawOptions.colors ? mainProduct.rawOptions.colors.split(',').map(c => c.trim()) : [],
+            materials: mainProduct.rawOptions.materials ? mainProduct.rawOptions.materials.split(',').map(m => m.trim()) : [],
+        };
+
+        const finalProduct: Product = {
+            ...mainProduct,
+            id: mainProduct.id,
+            name: mainProduct.name,
+            price: mainProduct.price,
+            description: mainProduct.description,
+            imageUrl: mainProduct.imageUrl,
+            options: mainOptions,
+            variants: variants,
+        };
+
+        if (finalProduct.options.sizes.length === 0) finalProduct.options.sizes = ['Padrão'];
+        if (finalProduct.options.colors.length === 0) finalProduct.options.colors = ['Padrão'];
+        if (finalProduct.options.materials.length === 0) finalProduct.options.materials = ['Barbante de Algodão'];
+
+        return finalProduct;
+    });
+
+    productsCache = consolidatedProducts;
     cacheTimestamp = now;
-    return products;
+    return consolidatedProducts;
 
   } catch (error) {
     console.error('Error fetching products from Cloudinary:', error);
@@ -129,8 +197,7 @@ export async function getProducts(): Promise<Product[]> {
   }
 }
 
-export async function getProductById(id: string): Promise<Product | null> {
-    // This function will rely on the cached getProducts() result for performance
+export async function getProductByGroupId(groupId: string): Promise<Product | null> {
     const products = await getProducts();
-    return products.find(p => p.id === id) || null;
+    return products.find(p => p.groupId === groupId) || null;
 }

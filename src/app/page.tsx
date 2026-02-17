@@ -10,7 +10,7 @@ import type { Product } from '@/lib/types';
 const ProductCard = ({ product }: { product: Product }) => (
   <Card key={product.id} className="overflow-hidden flex flex-col group h-full">
     <CardHeader className="p-0">
-      <Link href={`/products/${product.id}`} className="block overflow-hidden">
+      <Link href={`/products/${product.groupId}`} className="block overflow-hidden">
         <Image
           src={product.imageUrl}
           alt={product.name}
@@ -29,7 +29,7 @@ const ProductCard = ({ product }: { product: Product }) => (
       <div className="flex justify-between items-center mt-4">
         <p className="text-lg font-semibold">R$ {product.price.toFixed(2).replace('.', ',')}</p>
         <Button asChild>
-          <Link href={`/products/${product.id}`}>Ver Detalhes</Link>
+          <Link href={`/products/${product.groupId}`}>Ver Detalhes</Link>
         </Button>
       </div>
     </CardContent>
@@ -82,8 +82,8 @@ export default async function ProductsPage() {
                 </p>
                 <ul className="list-disc list-inside text-left max-w-md mx-auto mt-4 space-y-1">
                     <li>Verifique se suas credenciais <code className="font-semibold bg-muted px-1 py-0.5 rounded">CLOUDINARY_API_KEY</code> e <code className="font-semibold bg-muted px-1 py-0.5 rounded">CLOUDINARY_API_SECRET</code> estão configuradas no arquivo <code className="font-semibold bg-muted px-1 py-0.5 rounded">.env</code>. <strong>Importante:</strong> Após criar ou editar este arquivo, você precisa reiniciar o servidor.</li>
-                    <li>Confirme que cada imagem de produto tem os metadados de contexto obrigatórios salvos, escritos <strong>exatamente</strong> assim (tudo em minúsculo): <code className="font-semibold bg-muted px-1 py-0.5 rounded">id</code>, <code className="font-semibold bg-muted px-1 py-0.5 rounded">name</code>, e <code className="font-semibold bg-muted px-1 py-0.5 rounded">price</code>.</li>
-                     <li>Certifique-se de que suas imagens estão em pastas no Cloudinary (ex: "Jogo-Banho").</li>
+                    <li>Confirme que cada imagem de produto tem os metadados de contexto obrigatórios salvos, escritos <strong>exatamente</strong> assim (tudo em minúsculo): <code className="font-semibold bg-muted px-1 py-0.5 rounded">id</code>, <code className="font-semibold bg-muted px-1 py-0.5 rounded">groupId</code>, e <code className="font-semibold bg-muted px-1 py-0.5 rounded">name</code>, <code className="font-semibold bg-muted px-1 py-0.5 rounded">price</code>, <code className="font-semibold bg-muted px-1 py-0.5 rounded">category</code>.</li>
+                     <li>Para variações, garanta que um produto do grupo tenha `isMain: true` e as opções listadas (ex: `colors`).</li>
                 </ul>
                 <p className="mt-4">Após verificar, pode levar até 1 minuto para as alterações aparecerem.</p>
             </div>

@@ -1,44 +1,9 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { getProducts, getLogoUrl } from '@/lib/cloudinary';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 import type { Product } from '@/lib/types';
-
-// Helper function to render a product card
-const ProductCard = ({ product }: { product: Product }) => (
-  <Card key={product.id} className="overflow-hidden flex flex-col group h-full">
-    <CardHeader className="p-0">
-      <Link href={`/products/${product.groupId}`} className="block overflow-hidden">
-        <Image
-          src={product.imageUrl}
-          alt={product.name}
-          width={600}
-          height={400}
-          className="object-cover w-full aspect-[3/2] group-hover:scale-105 transition-transform duration-300"
-          data-ai-hint={product.imageHint}
-        />
-      </Link>
-    </CardHeader>
-    <CardContent className="p-4 flex flex-col flex-1">
-      <div className="flex-1">
-        <h2 className="text-xl font-bold font-headline">{product.name}</h2>
-        <p className="text-muted-foreground mt-1 text-sm line-clamp-2">{product.description}</p>
-      </div>
-      <div className="flex justify-between items-center mt-4">
-        <p className="text-lg font-semibold">
-          {product.minPrice !== product.maxPrice 
-            ? `R$ ${product.minPrice.toFixed(2).replace('.', ',')} - R$ ${product.maxPrice.toFixed(2).replace('.', ',')}`
-            : `R$ ${product.price.toFixed(2).replace('.', ',')}`}
-        </p>
-        <Button asChild>
-          <Link href={`/products/${product.groupId}`}>Ver Detalhes</Link>
-        </Button>
-      </div>
-    </CardContent>
-  </Card>
-);
+import { ProductCard } from '@/components/product-card';
 
 export default async function ProductsPage() {
   const [logoUrl, products] = await Promise.all([

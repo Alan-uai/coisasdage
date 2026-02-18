@@ -1,13 +1,15 @@
+
 'use client';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertCircle, Info } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
 export default function PaymentStatusPage() {
     const searchParams = useSearchParams();
     const status = searchParams.get('status');
+    const paymentId = searchParams.get('payment_id');
 
     const statusConfig = {
         success: {
@@ -43,6 +45,13 @@ export default function PaymentStatusPage() {
                     <CardTitle className="text-2xl font-bold mt-4">{currentStatus.title}</CardTitle>
                 </CardHeader>
                 <CardContent className="text-center space-y-6">
+                    {paymentId && (
+                        <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg flex items-center gap-3 text-blue-800 text-sm text-left">
+                            <Info className="size-5 shrink-0" />
+                            <p><strong>ID do Pagamento para Homologação:</strong> {paymentId}</p>
+                        </div>
+                    )}
+
                     <p className="text-muted-foreground">{currentStatus.description}</p>
                     <Button asChild className="w-full">
                         <Link href={status === 'failure' ? '/checkout' : '/orders'}>

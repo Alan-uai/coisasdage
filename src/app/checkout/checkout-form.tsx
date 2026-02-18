@@ -1,3 +1,4 @@
+
 'use client';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useForm } from 'react-hook-form';
@@ -16,7 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useFirestore, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc, serverTimestamp } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, Copy, AlertCircle, QrCode, Loader2 } from 'lucide-react';
+import { CheckCircle2, Copy, AlertCircle, QrCode, Loader2, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -30,6 +31,7 @@ declare global {
 export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartItems: CartItem[], subtotal: number }) {
     const [preferenceId, setPreferenceId] = useState<string | null>(null);
     const [orderId, setOrderId] = useState<string | null>(null);
+    const [paymentId, setPaymentId] = useState<number | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isBrickLoaded, setIsBrickLoaded] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -130,6 +132,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
 
             if (result.success) {
                 if (result.payment_id) {
+                    setPaymentId(result.payment_id);
                     const orderRef = doc(firestore, 'users', user.uid, 'orders', orderId);
                     updateDocumentNonBlocking(orderRef, { 
                         paymentId: result.payment_id,
@@ -144,9 +147,9 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                         qr_code_base64: result.qr_code_base64 || '',
                     });
                 } else if (result.status === 'approved') {
-                    router.push(`/payment-status?status=success&order_id=${orderId}`);
+                    router.push(`/payment-status?status=success&order_id=${orderId}&payment_id=${result.payment_id}`);
                 } else {
-                    router.push(`/payment-status?status=pending&order_id=${orderId}`);
+                    router.push(`/payment-status?status=pending&order_id=${orderId}&payment_id=${result.payment_id}`);
                 }
             } else {
                 setError(result.error || 'Erro ao processar pagamento.');
@@ -177,7 +180,6 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                     initialization: {
                         amount: subtotal,
                         preferenceId: preferenceId,
-                        // Providing the email here helps the Brick hide the email field in the Pix section
                         payer: {
                             email: user.email,
                         }
@@ -233,6 +235,13 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-8 flex flex-col items-center">
+                        {paymentId && (
+                            <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg flex items-center gap-3 text-blue-800 text-sm w-full">
+                                <Info className="size-5 shrink-0" />
+                                <p><strong>ID do Pagamento para Homologação:</strong> {paymentId}</p>
+                            </div>
+                        )}
+
                         {pixData.qr_code_base64 && (
                             <div className="bg-white p-6 rounded-2xl shadow-xl border-4 border-primary/20">
                                 <Image 
@@ -306,7 +315,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                 </CardContent>
             </Card>
             
-            <Card className="shadow-lg border-primary/10 overflow-hidden">
+            <Card className="shadow-lg border-primary/10 overflow-hidden min-h-[500px]">
                 <CardHeader>
                     <CardTitle className="font-headline text-2xl">Finalizar Pagamento</CardTitle>
                     {error && (

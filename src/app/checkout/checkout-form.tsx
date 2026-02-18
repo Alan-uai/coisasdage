@@ -123,8 +123,9 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
         if (!orderId || !user.email || !firestore) return;
 
         try {
-            // paymentData is the actual object to be sent to Mercado Pago (it contains token, method, etc.)
-            const result = await processPayment(paymentData, orderId, user.email, subtotal);
+            // Safety check for paymentData from Brick
+            const finalPaymentData = paymentData.formData || paymentData;
+            const result = await processPayment(finalPaymentData, orderId, user.email, subtotal);
 
             if (result.success) {
                 if (result.payment_id) {
@@ -136,7 +137,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                     });
                 }
 
-                if (paymentData.payment_method_id === 'pix' && result.qr_code) {
+                if (finalPaymentData.payment_method_id === 'pix' && result.qr_code) {
                     setPixData({
                         qr_code: result.qr_code,
                         qr_code_base64: result.qr_code_base64 || '',
@@ -159,7 +160,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
         if (preferenceId && !pixData && !brickRendered.current) {
             const publicKey = process.env.NEXT_PUBLIC_MP_PUBLIC_KEY;
             if (!publicKey) {
-                setError('Public Key do Mercado Pago não encontrada.');
+                setError('Public Key do Mercado Pago não encontrada no sistema.');
                 return;
             }
 
@@ -189,18 +190,16 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                             console.log('Payment Brick ready');
                         },
                         onSubmit: (param: any) => {
-                            // Extract formData properly from Brick callback. The parameter is usually { formData, ... }
-                            const { formData } = param;
-                            return handlePaymentSubmit(formData || param);
+                            return handlePaymentSubmit(param);
                         },
                         onError: (error: any) => {
                             console.error('Brick error:', error);
-                            setError('Erro ao carregar o módulo de pagamento.');
+                            setError(`Erro no módulo de pagamento: ${error.message || 'Verifique suas chaves.'}`);
                         },
                     },
                 });
             } else {
-                setError('Script do Mercado Pago não carregado.');
+                setError('O script do Mercado Pago não pôde ser carregado.');
             }
         }
     }, [preferenceId, pixData, subtotal, handlePaymentSubmit]);
@@ -308,7 +307,11 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                     {error && (
                         <div className="bg-destructive/10 text-destructive p-4 rounded-lg flex items-center gap-3 text-sm mt-4 border border-destructive/20">
                             <AlertCircle className="size-5 shrink-0" />
-                            {error}
+                            <div className="flex flex-col">
+                                <p className="font-bold">Aviso:</p>
+                                <p>{error}</p>
+                                <p className="text-xs mt-1">Dica: Verifique se suas chaves no arquivo .env são do mesmo ambiente (Teste ou Produção).</p>
+                            </div>
                         </div>
                     )}
                 </CardHeader>

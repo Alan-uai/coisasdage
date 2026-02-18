@@ -47,7 +47,7 @@ export async function createPreference(
     const accessToken = process.env.MP_ACCESS_TOKEN;
     
     if (!accessToken) {
-        return { error: 'Token de acesso não configurado no servidor.' };
+        return { error: 'Token de acesso não configurado no servidor (.env).' };
     }
 
     if (!cartItems || cartItems.length === 0) {
@@ -67,26 +67,39 @@ export async function createPreference(
             unit_price: item.unitPriceAtAddition,
         }));
         
+        // Detailed payer info as per Mercado Pago best practices
         const response = await preference.create({
             body: {
                 items: items,
                 payer: {
                     email: userEmail,
-                    name: userName || 'Cliente',
+                    name: userName?.split(' ')[0] || 'Cliente',
+                    surname: userName?.split(' ').slice(1).join(' ') || 'Artesã',
+                    identification: {
+                        type: 'CPF',
+                        number: addressData.cpf.replace(/\D/g, ''),
+                    },
+                    address: {
+                        street_name: addressData.streetName,
+                        street_number: parseInt(addressData.streetNumber, 10),
+                        zip_code: addressData.zipCode.replace(/\D/g, ''),
+                    }
                 },
                 external_reference: orderId,
+                statement_descriptor: "ARTESAACONCHEG",
+                binary_mode: false,
             }
         });
         
         if (!response.id) {
-            throw new Error('ID da preferência não retornado.');
+            throw new Error('ID da preferência não retornado pela API.');
         }
 
         return { preferenceId: response.id };
 
     } catch (error: any) {
         console.error('Mercado Pago preference error:', error);
-        return { error: `Erro ao iniciar pagamento: ${error.message}` };
+        return { error: `Erro ao iniciar pagamento: ${error.message || 'Erro desconhecido'}` };
     }
 }
 
@@ -103,7 +116,7 @@ export async function processPayment(
     const accessToken = process.env.MP_ACCESS_TOKEN;
     
     if (!accessToken) {
-        return { success: false, error: 'Token de acesso não configurado.' };
+        return { success: false, error: 'Token de acesso não configurado no servidor (.env).' };
     }
 
     try {
@@ -111,11 +124,10 @@ export async function processPayment(
         const payment = new Payment(client);
 
         // Map the brick's paymentData to the Mercado Pago Payment API request body
-        // Ensure critical attributes like transaction_amount and payment_method_id are present
         const response = await payment.create({
             body: {
-                ...paymentData, // Spreading the data received from the Brick (includes token, payment_method_id, installments, etc.)
-                transaction_amount: amount, // Overwrite with server-calculated amount for security
+                ...paymentData, 
+                transaction_amount: Number(amount.toFixed(2)), // Ensure number format
                 description: `Pedido ${orderId} - Artesã Aconchegante`,
                 external_reference: orderId,
                 payer: {
@@ -125,7 +137,7 @@ export async function processPayment(
             }
         });
 
-        // Pix specific data extraction from point_of_interaction
+        // Pix specific data extraction
         const poi = response.point_of_interaction;
         const qrCode = poi?.transaction_data?.qr_code;
         const qrCodeBase64 = poi?.transaction_data?.qr_code_base64;
@@ -140,7 +152,7 @@ export async function processPayment(
         };
     } catch (error: any) {
         console.error('Mercado Pago payment processing error:', error);
-        // Error details can be complex in Mercado Pago SDK
+        // Extracting detailed error from MP SDK
         const errorMessage = error.message || (error.cause && error.cause[0]?.description) || 'Erro ao processar o pagamento.';
         return { 
             success: false, 

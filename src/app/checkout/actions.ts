@@ -1,3 +1,4 @@
+
 'use server';
 
 import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
@@ -28,7 +29,7 @@ type PaymentResult = {
     status?: string;
     status_detail?: string;
     payment_id?: number;
-    merchant_order_id?: number;
+    merchant_order_id?: number | string;
     qr_code?: string;
     qr_code_base64?: string;
     error?: string;
@@ -68,7 +69,6 @@ export async function createPreference(
             unit_price: item.unitPriceAtAddition,
         }));
         
-        // Detailed payer info as per Mercado Pago best practices
         const response = await preference.create({
             body: {
                 items: items,
@@ -106,7 +106,6 @@ export async function createPreference(
 
 /**
  * Processes the payment using the Checkout API (v1/payments).
- * Correctly extracts and merges data from the Payment Brick.
  */
 export async function processPayment(
     paymentData: any, 
@@ -124,8 +123,6 @@ export async function processPayment(
         const client = new MercadoPagoConfig({ accessToken });
         const payment = new Payment(client);
 
-        // Map the brick's paymentData to the Mercado Pago Payment API request body
-        // Ensure amount is strictly a number to avoid "Unauthorized use of live credentials" issues
         const response = await payment.create({
             body: {
                 ...paymentData, 
@@ -139,17 +136,20 @@ export async function processPayment(
             }
         });
 
-        // Pix specific data extraction
         const poi = response.point_of_interaction;
         const qrCode = poi?.transaction_data?.qr_code;
         const qrCodeBase64 = poi?.transaction_data?.qr_code_base64;
+
+        // Extract merchant order ID if available in the response
+        // Sometimes it's inside the 'order' object, sometimes it's returned as 'merchant_order_id'
+        const merchantOrderId = response.order?.id || (response as any).merchant_order_id;
 
         return {
             success: true,
             status: response.status,
             status_detail: response.status_detail,
             payment_id: response.id,
-            merchant_order_id: response.order?.id,
+            merchant_order_id: merchantOrderId,
             qr_code: qrCode,
             qr_code_base64: qrCodeBase64,
         };
@@ -158,7 +158,6 @@ export async function processPayment(
         
         let errorMessage = 'Erro ao processar o pagamento.';
         
-        // Handle specific "Unauthorized use of live credentials" error
         if (error.message?.includes('Unauthorized use of live credentials') || error.status === 401 || error.status === 403) {
             errorMessage = 'Sua conta do Mercado Pago ainda não foi homologada para usar chaves de Produção (APP_USR). Por favor, use as chaves de Teste (TEST) ou preencha o formulário de "Go Live" no painel do Mercado Pago.';
         } else {

@@ -1,3 +1,4 @@
+
 'use client';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useForm } from 'react-hook-form';
@@ -31,7 +32,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
     const [preferenceId, setPreferenceId] = useState<string | null>(null);
     const [orderId, setOrderId] = useState<string | null>(null);
     const [paymentId, setPaymentId] = useState<number | null>(null);
-    const [merchantOrderId, setMerchantOrderId] = useState<number | null>(null);
+    const [merchantOrderId, setMerchantOrderId] = useState<number | string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isBrickLoaded, setIsBrickLoaded] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -238,17 +239,15 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-8 flex flex-col items-center">
-                        {(paymentId || merchantOrderId) && (
-                            <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg space-y-2 text-blue-800 text-sm w-full">
-                                <div className="flex items-center gap-2 font-bold mb-1">
-                                    <Info className="size-5 shrink-0" />
-                                    <span>Dados para Homologação (Go Live)</span>
-                                </div>
-                                {paymentId && <p><strong>ID do Pagamento:</strong> {paymentId}</p>}
-                                {merchantOrderId && <p><strong>ID da Ordem (Merchant Order):</strong> {merchantOrderId}</p>}
-                                <p className="text-xs italic opacity-80 pt-1">Copie esses IDs para preencher o formulário do Mercado Pago.</p>
+                        <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg space-y-2 text-blue-800 text-sm w-full">
+                            <div className="flex items-center gap-2 font-bold mb-1">
+                                <Info className="size-5 shrink-0" />
+                                <span>Dados para Homologação (Go Live)</span>
                             </div>
-                        )}
+                            {paymentId && <p><strong>ID do Pagamento:</strong> {paymentId}</p>}
+                            {merchantOrderId && merchantOrderId !== 'undefined' && <p><strong>ID da Ordem (Merchant Order):</strong> {merchantOrderId}</p>}
+                            <p className="text-xs italic opacity-80 pt-1">Copie esses IDs para preencher o formulário do Mercado Pago.</p>
+                        </div>
 
                         {pixData.qr_code_base64 && (
                             <div className="bg-white p-6 rounded-2xl shadow-xl border-4 border-primary/20">

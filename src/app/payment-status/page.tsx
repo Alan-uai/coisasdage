@@ -1,3 +1,4 @@
+
 'use client';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -45,17 +46,15 @@ export default function PaymentStatusPage() {
                     <CardTitle className="text-2xl font-bold mt-4">{currentStatus.title}</CardTitle>
                 </CardHeader>
                 <CardContent className="text-center space-y-6">
-                    {(paymentId || merchantOrderId) && (
-                        <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg space-y-2 text-blue-800 text-sm text-left">
-                            <div className="flex items-center gap-2 font-bold mb-1">
-                                <Info className="size-5 shrink-0" />
-                                <span>Dados para Homologação (Go Live)</span>
-                            </div>
-                            {paymentId && <p><strong>ID do Pagamento:</strong> {paymentId}</p>}
-                            {merchantOrderId && <p><strong>ID da Ordem (Merchant Order):</strong> {merchantOrderId}</p>}
-                            <p className="text-xs italic opacity-80 pt-1">Use esses IDs no formulário do Mercado Pago.</p>
+                    <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg space-y-2 text-blue-800 text-sm text-left">
+                        <div className="flex items-center gap-2 font-bold mb-1">
+                            <Info className="size-5 shrink-0" />
+                            <span>Dados para Homologação (Go Live)</span>
                         </div>
-                    )}
+                        {paymentId && <p><strong>ID do Pagamento:</strong> {paymentId}</p>}
+                        {merchantOrderId && merchantOrderId !== 'undefined' && <p><strong>ID da Ordem (Merchant Order):</strong> {merchantOrderId}</p>}
+                        <p className="text-xs italic opacity-80 pt-1">Use esses IDs no formulário do Mercado Pago.</p>
+                    </div>
 
                     <p className="text-muted-foreground">{currentStatus.description}</p>
                     <Button asChild className="w-full">

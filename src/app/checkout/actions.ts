@@ -33,6 +33,9 @@ type PaymentResult = {
     error?: string;
 };
 
+/**
+ * Creates a preference to initialize the Payment Brick with the correct total and items.
+ */
 export async function createPreference(
     userId: string,
     userEmail: string,
@@ -42,7 +45,7 @@ export async function createPreference(
     orderId: string
 ): Promise<PreferenceResult> {
     if (!process.env.MP_ACCESS_TOKEN) {
-        console.error("Mercado Pago access token not configured.");
+        console.error("Mercado Pago access token not configured in .env");
         return { error: 'O servidor de pagamento não está configurado.' };
     }
 
@@ -67,25 +70,23 @@ export async function createPreference(
         const firstName = nameParts[0];
         const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : ' ';
 
-        const payer = {
-            email: userEmail,
-            name: firstName,
-            surname: lastName,
-            identification: {
-                type: 'CPF',
-                number: addressData.cpf,
-            },
-            address: {
-                street_name: addressData.streetName,
-                street_number: parseInt(addressData.streetNumber, 10),
-                zip_code: addressData.zipCode,
-            }
-        };
-
         const response = await preference.create({
             body: {
                 items: items,
-                payer: payer,
+                payer: {
+                    email: userEmail,
+                    name: firstName,
+                    surname: lastName,
+                    identification: {
+                        type: 'CPF',
+                        number: addressData.cpf.replace(/\D/g, ''),
+                    },
+                    address: {
+                        street_name: addressData.streetName,
+                        street_number: parseInt(addressData.streetNumber, 10),
+                        zip_code: addressData.zipCode.replace(/\D/g, ''),
+                    }
+                },
                 external_reference: orderId,
                 notification_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/mercadopago`,
                 back_urls: {
@@ -105,6 +106,10 @@ export async function createPreference(
     }
 }
 
+/**
+ * Processes the payment using the Checkout API (v1/payments).
+ * This is called by the Payment Brick onSubmit callback.
+ */
 export async function processPayment(formData: any, orderId: string, userEmail: string): Promise<PaymentResult> {
     if (!process.env.MP_ACCESS_TOKEN) {
         return { success: false, error: 'O servidor de pagamento não está configurado.' };
@@ -114,23 +119,23 @@ export async function processPayment(formData: any, orderId: string, userEmail: 
         const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
         const payment = new Payment(client);
 
-        const paymentBody = {
-            transaction_amount: formData.transaction_amount,
-            token: formData.token,
-            description: formData.description,
-            installments: formData.installments,
-            payment_method_id: formData.payment_method_id,
-            issuer_id: formData.issuer_id,
-            payer: {
-                email: userEmail,
-                ...formData.payer,
-            },
-            external_reference: orderId,
-        };
+        const response = await payment.create({
+            body: {
+                transaction_amount: formData.transaction_amount,
+                token: formData.token,
+                description: formData.description || `Pedido ${orderId}`,
+                installments: formData.installments,
+                payment_method_id: formData.payment_method_id,
+                issuer_id: formData.issuer_id,
+                payer: {
+                    email: userEmail,
+                    ...formData.payer,
+                },
+                external_reference: orderId,
+            }
+        });
 
-        const response = await payment.create({ body: paymentBody });
-
-        // Pix specific data
+        // Pix specific data extraction
         const pointOfInteraction = response.point_of_interaction;
         const qrCode = pointOfInteraction?.transaction_data?.qr_code;
         const qrCodeBase64 = pointOfInteraction?.transaction_data?.qr_code_base64;

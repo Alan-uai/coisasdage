@@ -21,7 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
 declare global {
-    interface window {
+    interface Window {
         MercadoPago: any;
     }
 }
@@ -119,12 +119,12 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
         }
     }
 
-    const handlePaymentSubmit = useCallback(async (formData: any) => {
+    const handlePaymentSubmit = useCallback(async (paymentData: any) => {
         if (!orderId || !user.email || !firestore) return;
 
         try {
-            // We pass the subtotal here explicitly to avoid the transaction_amount error
-            const result = await processPayment(formData, orderId, user.email, subtotal);
+            // paymentData is the actual object to be sent to Mercado Pago (it contains token, method, etc.)
+            const result = await processPayment(paymentData, orderId, user.email, subtotal);
 
             if (result.success) {
                 if (result.payment_id) {
@@ -136,7 +136,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                     });
                 }
 
-                if (formData.payment_method_id === 'pix' && result.qr_code) {
+                if (paymentData.payment_method_id === 'pix' && result.qr_code) {
                     setPixData({
                         qr_code: result.qr_code,
                         qr_code_base64: result.qr_code_base64 || '',
@@ -188,8 +188,10 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                         onReady: () => {
                             console.log('Payment Brick ready');
                         },
-                        onSubmit: (formData: any) => {
-                            return handlePaymentSubmit(formData);
+                        onSubmit: (param: any) => {
+                            // Extract formData properly from Brick callback. The parameter is usually { formData, ... }
+                            const { formData } = param;
+                            return handlePaymentSubmit(formData || param);
                         },
                         onError: (error: any) => {
                             console.error('Brick error:', error);

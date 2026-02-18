@@ -92,10 +92,10 @@ export async function createPreference(
 
 /**
  * Processes the payment using the Checkout API (v1/payments).
- * We pass the amount explicitly to avoid "transaction_amount can't be null" error.
+ * Correctly extracts and merges data from the Payment Brick.
  */
 export async function processPayment(
-    formData: any, 
+    paymentData: any, 
     orderId: string, 
     userEmail: string, 
     amount: number
@@ -110,26 +110,22 @@ export async function processPayment(
         const client = new MercadoPagoConfig({ accessToken });
         const payment = new Payment(client);
 
-        // Map the brick's formData to the Mercado Pago Payment API request body
-        // We use the 'amount' passed from the client to ensure it's not null.
+        // Map the brick's paymentData to the Mercado Pago Payment API request body
+        // Ensure critical attributes like transaction_amount and payment_method_id are present
         const response = await payment.create({
             body: {
-                transaction_amount: amount,
-                token: formData.token,
+                ...paymentData, // Spreading the data received from the Brick (includes token, payment_method_id, installments, etc.)
+                transaction_amount: amount, // Overwrite with server-calculated amount for security
                 description: `Pedido ${orderId} - Artesã Aconchegante`,
-                installments: formData.installments,
-                payment_method_id: formData.payment_method_id,
-                issuer_id: formData.issuer_id,
-                payer: {
-                    email: userEmail,
-                    ...formData.payer,
-                },
                 external_reference: orderId,
+                payer: {
+                    ...paymentData.payer,
+                    email: userEmail,
+                },
             }
         });
 
         // Pix specific data extraction from point_of_interaction
-        // This data contains the QR Code and the Copy-Paste string.
         const poi = response.point_of_interaction;
         const qrCode = poi?.transaction_data?.qr_code;
         const qrCodeBase64 = poi?.transaction_data?.qr_code_base64;
@@ -144,9 +140,11 @@ export async function processPayment(
         };
     } catch (error: any) {
         console.error('Mercado Pago payment processing error:', error);
+        // Error details can be complex in Mercado Pago SDK
+        const errorMessage = error.message || (error.cause && error.cause[0]?.description) || 'Erro ao processar o pagamento.';
         return { 
             success: false, 
-            error: error.message || 'Erro ao processar o pagamento.' 
+            error: errorMessage
         };
     }
 }

@@ -70,7 +70,6 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                 imageUrl: item.imageUrl,
             }));
 
-            // Create order in Firestore first
             const ordersRef = collection(firestore, 'users', user.uid, 'orders');
             const newOrderRef = doc(ordersRef);
             const generatedOrderId = newOrderRef.id;
@@ -98,7 +97,6 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
 
             setDocumentNonBlocking(newOrderRef, orderData, { merge: true });
 
-            // Call server action to create preference
             const result = await createPreference(
                 user.uid, 
                 user.email, 
@@ -125,7 +123,8 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
         if (!orderId || !user.email || !firestore) return;
 
         try {
-            const result = await processPayment(formData, orderId, user.email);
+            // We pass the subtotal here explicitly to avoid the transaction_amount error
+            const result = await processPayment(formData, orderId, user.email, subtotal);
 
             if (result.success) {
                 if (result.payment_id) {
@@ -154,13 +153,13 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
             console.error('Payment processing error:', e);
             setError('Erro ao finalizar o pagamento.');
         }
-    }, [orderId, user.email, firestore, router]);
+    }, [orderId, user.email, firestore, router, subtotal]);
 
     useEffect(() => {
         if (preferenceId && !pixData && !brickRendered.current) {
             const publicKey = process.env.NEXT_PUBLIC_MP_PUBLIC_KEY;
             if (!publicKey) {
-                setError('Public Key do Mercado Pago não encontrada no .env.');
+                setError('Public Key do Mercado Pago não encontrada.');
                 return;
             }
 
@@ -199,7 +198,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                     },
                 });
             } else {
-                setError('O script do Mercado Pago não foi carregado corretamente.');
+                setError('Script do Mercado Pago não carregado.');
             }
         }
     }, [preferenceId, pixData, subtotal, handlePaymentSubmit]);
@@ -216,137 +215,165 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
 
     if (pixData) {
         return (
-            <Card className="max-w-xl mx-auto border-primary/20 shadow-2xl">
-                <CardHeader className="text-center">
-                    <QrCode className="size-16 text-primary mx-auto mb-4" />
-                    <CardTitle className="text-2xl font-bold font-headline">Pague com Pix</CardTitle>
-                    <CardDescription>Escaneie o QR Code ou use o código Copia e Cola.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6 flex flex-col items-center">
-                    {pixData.qr_code_base64 && (
-                        <div className="bg-white p-4 rounded-xl shadow-inner border">
-                            <Image 
-                                src={`data:image/png;base64,${pixData.qr_code_base64}`} 
-                                alt="QR Code Pix" 
-                                width={250} 
-                                height={250} 
-                            />
+            <div className="max-w-2xl mx-auto p-4">
+                <Card className="border-primary/20 shadow-2xl bg-card">
+                    <CardHeader className="text-center">
+                        <div className="bg-primary/10 size-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <QrCode className="size-12 text-primary" />
                         </div>
-                    )}
-                    <div className="w-full space-y-2">
-                        <p className="text-sm font-semibold text-muted-foreground uppercase text-center">Código Pix</p>
-                        <div className="flex gap-2">
-                            <Input value={pixData.qr_code} readOnly className="font-mono text-xs" />
-                            <Button variant="outline" size="icon" onClick={copyPixCode}>
-                                <Copy className="size-4" />
+                        <CardTitle className="text-3xl font-bold font-headline">Pague com Pix</CardTitle>
+                        <CardDescription className="text-lg">
+                            Escaneie o QR Code abaixo com o app do seu banco para finalizar a compra.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-8 flex flex-col items-center">
+                        {pixData.qr_code_base64 && (
+                            <div className="bg-white p-6 rounded-2xl shadow-xl border-4 border-primary/20">
+                                <Image 
+                                    src={`data:image/png;base64,${pixData.qr_code_base64}`} 
+                                    alt="QR Code Pix" 
+                                    width={280} 
+                                    height={280} 
+                                    className="rounded-lg"
+                                />
+                            </div>
+                        )}
+                        
+                        <div className="w-full space-y-3 bg-muted p-6 rounded-xl">
+                            <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider text-center">Pix Copia e Cola</p>
+                            <div className="flex gap-2">
+                                <Input 
+                                    value={pixData.qr_code} 
+                                    readOnly 
+                                    className="font-mono text-xs h-12 bg-background border-primary/20" 
+                                />
+                                <Button size="lg" onClick={copyPixCode} className="shrink-0">
+                                    <Copy className="size-5 mr-2" />
+                                    Copiar
+                                </Button>
+                            </div>
+                            <p className="text-xs text-center text-muted-foreground italic">
+                                O pagamento é aprovado instantaneamente após a conclusão no seu banco.
+                            </p>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-4 w-full">
+                            <Button asChild variant="outline" size="lg" className="flex-1">
+                                <Link href="/">Continuar Comprando</Link>
+                            </Button>
+                            <Button asChild size="lg" className="flex-1">
+                                <Link href="/orders">Meus Pedidos</Link>
                             </Button>
                         </div>
-                    </div>
-                    <Button asChild className="w-full">
-                        <Link href="/orders">Acompanhar Pedido</Link>
-                    </Button>
-                </CardContent>
-            </Card>
+                    </CardContent>
+                </Card>
+            </div>
         );
     }
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start max-w-6xl mx-auto">
-            <Card>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start max-w-6xl mx-auto p-4">
+            <Card className="shadow-lg border-primary/10">
                 <CardHeader>
-                    <CardTitle className="font-headline">Seu Pedido</CardTitle>
+                    <CardTitle className="font-headline text-2xl">Resumo do Pedido</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-6">
                     {cartItems.map(item => (
-                        <div key={item.id} className="flex justify-between items-center text-sm">
-                            <div className="flex items-center gap-3">
-                                <div className="relative size-12 overflow-hidden rounded-md border">
+                        <div key={item.id} className="flex justify-between items-center">
+                            <div className="flex items-center gap-4">
+                                <div className="relative size-16 overflow-hidden rounded-lg border bg-muted">
                                     <Image src={item.imageUrl} alt={item.productName} fill className="object-cover" />
                                 </div>
-                                <span>{item.productName} (x{item.quantity})</span>
+                                <div className="flex flex-col">
+                                    <span className="font-semibold text-base">{item.productName}</span>
+                                    <span className="text-sm text-muted-foreground">Qtde: {item.quantity}</span>
+                                </div>
                             </div>
-                            <span className="font-semibold">R$ {(item.unitPriceAtAddition * item.quantity).toFixed(2).replace('.', ',')}</span>
+                            <span className="font-bold text-lg">R$ {(item.unitPriceAtAddition * item.quantity).toFixed(2).replace('.', ',')}</span>
                         </div>
                     ))}
-                    <div className="h-px bg-border w-full my-4" />
-                    <div className="flex justify-between font-bold text-xl text-primary">
-                        <span>Total</span>
+                    <div className="h-px bg-border w-full my-6" />
+                    <div className="flex justify-between font-bold text-2xl text-primary">
+                        <span>Total a Pagar</span>
                         <span>R$ {subtotal.toFixed(2).replace('.', ',')}</span>
                     </div>
                 </CardContent>
             </Card>
             
-            <Card>
+            <Card className="shadow-lg border-primary/10">
                 <CardHeader>
-                    <CardTitle className="font-headline">Dados de Entrega e Pagamento</CardTitle>
+                    <CardTitle className="font-headline text-2xl">Finalizar Pagamento</CardTitle>
                     {error && (
-                        <div className="bg-destructive/10 text-destructive p-3 rounded-md flex items-center gap-2 text-xs mt-2">
-                            <AlertCircle className="size-4 shrink-0" />
+                        <div className="bg-destructive/10 text-destructive p-4 rounded-lg flex items-center gap-3 text-sm mt-4 border border-destructive/20">
+                            <AlertCircle className="size-5 shrink-0" />
                             {error}
                         </div>
                     )}
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-6">
                     {!preferenceId ? (
                         <Form {...form}>
-                            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
                                 <FormField control={form.control} name="cpf" render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>CPF</FormLabel>
-                                        <FormControl><Input placeholder="000.000.000-00" {...field} /></FormControl>
+                                        <FormLabel className="text-base font-semibold">CPF</FormLabel>
+                                        <FormControl><Input placeholder="000.000.000-00" className="h-12 text-lg" {...field} /></FormControl>
                                         <FormMessage />
                                     </FormItem>
                                 )}/>
                                 <div className="grid grid-cols-2 gap-4">
                                     <FormField control={form.control} name="zipCode" render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>CEP</FormLabel>
-                                            <FormControl><Input placeholder="00000-000" {...field} /></FormControl>
+                                            <FormLabel className="text-base font-semibold">CEP</FormLabel>
+                                            <FormControl><Input placeholder="00000-000" className="h-12" {...field} /></FormControl>
                                             <FormMessage />
                                         </FormItem>
                                     )}/>
                                     <FormField control={form.control} name="state" render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>UF</FormLabel>
-                                            <FormControl><Input placeholder="SP" {...field} maxLength={2} /></FormControl>
+                                            <FormLabel className="text-base font-semibold">UF</FormLabel>
+                                            <FormControl><Input placeholder="SP" className="h-12" {...field} maxLength={2} /></FormControl>
                                             <FormMessage />
                                         </FormItem>
                                     )}/>
                                 </div>
                                 <FormField control={form.control} name="streetName" render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Rua / Endereço</FormLabel>
-                                        <FormControl><Input placeholder="Ex: Av. Brasil" {...field} /></FormControl>
+                                        <FormLabel className="text-base font-semibold">Rua / Logradouro</FormLabel>
+                                        <FormControl><Input placeholder="Ex: Avenida Paulista" className="h-12" {...field} /></FormControl>
                                         <FormMessage />
                                     </FormItem>
                                 )}/>
                                 <div className="grid grid-cols-2 gap-4">
                                     <FormField control={form.control} name="streetNumber" render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Número</FormLabel>
-                                            <FormControl><Input placeholder="123" {...field} /></FormControl>
+                                            <FormLabel className="text-base font-semibold">Número</FormLabel>
+                                            <FormControl><Input placeholder="123" className="h-12" {...field} /></FormControl>
                                             <FormMessage />
                                         </FormItem>
                                     )}/>
                                     <FormField control={form.control} name="city" render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Cidade</FormLabel>
-                                            <FormControl><Input placeholder="Sua cidade" {...field} /></FormControl>
+                                            <FormLabel className="text-base font-semibold">Cidade</FormLabel>
+                                            <FormControl><Input placeholder="Sua cidade" className="h-12" {...field} /></FormControl>
                                             <FormMessage />
                                         </FormItem>
                                     )}/>
                                 </div>
-                                <Button type="submit" disabled={isLoading} className="w-full h-12 text-lg">
+                                <Button type="submit" disabled={isLoading} className="w-full h-14 text-xl font-bold mt-6 shadow-lg hover:shadow-primary/20 transition-all">
                                     {isLoading ? 'Aguarde...' : 'Escolher Forma de Pagamento'}
                                 </Button>
                             </form>
                         </Form>
                     ) : (
-                        <div id="paymentCard" className="min-h-[400px]">
-                            <div className="flex flex-col items-center justify-center h-full space-y-4 py-20">
-                                <Skeleton className="h-10 w-full" />
-                                <Skeleton className="h-40 w-full" />
-                                <p className="text-sm text-muted-foreground animate-pulse">Carregando Mercado Pago...</p>
+                        <div id="paymentCard" className="min-h-[500px] flex flex-col">
+                            <div className="flex flex-col items-center justify-center flex-1 space-y-6 py-10">
+                                <Skeleton className="h-12 w-full rounded-xl" />
+                                <Skeleton className="h-64 w-full rounded-2xl" />
+                                <div className="flex flex-col items-center gap-2 animate-pulse">
+                                    <p className="text-lg font-bold text-primary">Conectando ao Mercado Pago</p>
+                                    <p className="text-sm text-muted-foreground">Estamos carregando suas opções de pagamento...</p>
+                                </div>
                             </div>
                         </div>
                     )}

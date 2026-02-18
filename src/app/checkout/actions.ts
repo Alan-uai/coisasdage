@@ -35,7 +35,6 @@ type PaymentResult = {
 
 /**
  * Creates a preference to initialize the Payment Brick.
- * Using a preference is the recommended way to initialize Bricks with total and items.
  */
 export async function createPreference(
     userId: string,
@@ -48,7 +47,7 @@ export async function createPreference(
     const accessToken = process.env.MP_ACCESS_TOKEN;
     
     if (!accessToken) {
-        return { error: 'Token de acesso (MP_ACCESS_TOKEN) não encontrado no arquivo .env.' };
+        return { error: 'Token de acesso não configurado no servidor.' };
     }
 
     if (!cartItems || cartItems.length === 0) {
@@ -76,32 +75,35 @@ export async function createPreference(
                     name: userName || 'Cliente',
                 },
                 external_reference: orderId,
-                // Removing auto_return to avoid "back_url.success must be defined" error.
-                // The Payment Brick handles the result via onSubmit callback.
             }
         });
         
         if (!response.id) {
-            throw new Error('ID da preferência não retornado pelo Mercado Pago.');
+            throw new Error('ID da preferência não retornado.');
         }
 
         return { preferenceId: response.id };
 
     } catch (error: any) {
         console.error('Mercado Pago preference error:', error);
-        return { error: `Erro ao iniciar pagamento: ${error.message || 'Verifique as credenciais no .env.'}` };
+        return { error: `Erro ao iniciar pagamento: ${error.message}` };
     }
 }
 
 /**
  * Processes the payment using the Checkout API (v1/payments).
- * This is called by the Payment Brick onSubmit callback.
+ * We pass the amount explicitly to avoid "transaction_amount can't be null" error.
  */
-export async function processPayment(formData: any, orderId: string, userEmail: string): Promise<PaymentResult> {
+export async function processPayment(
+    formData: any, 
+    orderId: string, 
+    userEmail: string, 
+    amount: number
+): Promise<PaymentResult> {
     const accessToken = process.env.MP_ACCESS_TOKEN;
     
     if (!accessToken) {
-        return { success: false, error: 'Token de acesso não configurado no servidor.' };
+        return { success: false, error: 'Token de acesso não configurado.' };
     }
 
     try {
@@ -109,11 +111,12 @@ export async function processPayment(formData: any, orderId: string, userEmail: 
         const payment = new Payment(client);
 
         // Map the brick's formData to the Mercado Pago Payment API request body
+        // We use the 'amount' passed from the client to ensure it's not null.
         const response = await payment.create({
             body: {
-                transaction_amount: formData.transaction_amount,
-                token: formData.token, // Present for card payments
-                description: formData.description || `Pedido ${orderId}`,
+                transaction_amount: amount,
+                token: formData.token,
+                description: `Pedido ${orderId} - Artesã Aconchegante`,
                 installments: formData.installments,
                 payment_method_id: formData.payment_method_id,
                 issuer_id: formData.issuer_id,
@@ -126,6 +129,7 @@ export async function processPayment(formData: any, orderId: string, userEmail: 
         });
 
         // Pix specific data extraction from point_of_interaction
+        // This data contains the QR Code and the Copy-Paste string.
         const poi = response.point_of_interaction;
         const qrCode = poi?.transaction_data?.qr_code;
         const qrCodeBase64 = poi?.transaction_data?.qr_code_base64;
@@ -142,7 +146,7 @@ export async function processPayment(formData: any, orderId: string, userEmail: 
         console.error('Mercado Pago payment processing error:', error);
         return { 
             success: false, 
-            error: error.message || 'Erro ao processar o pagamento. Verifique os dados e tente novamente.' 
+            error: error.message || 'Erro ao processar o pagamento.' 
         };
     }
 }

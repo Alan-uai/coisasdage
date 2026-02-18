@@ -1,6 +1,6 @@
 'use server';
 
-import { MercadoPagoConfig, Preference } from 'mercadopago';
+import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
 import { z } from 'zod';
 import { addressSchema } from './form-schema';
 
@@ -23,6 +23,16 @@ type PreferenceResult = {
   error?: string;
 }
 
+type PaymentResult = {
+    success: boolean;
+    status?: string;
+    status_detail?: string;
+    payment_id?: number;
+    qr_code?: string;
+    qr_code_base64?: string;
+    error?: string;
+};
+
 export async function createPreference(
     userId: string,
     userEmail: string,
@@ -41,7 +51,6 @@ export async function createPreference(
     }
     
     try {
-        // Create the Mercado Pago Preference
         const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
         const preference = new Preference(client);
 
@@ -77,7 +86,7 @@ export async function createPreference(
             body: {
                 items: items,
                 payer: payer,
-                external_reference: orderId, // Links the MP payment to the Firestore Order ID
+                external_reference: orderId,
                 notification_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/mercadopago`,
                 back_urls: {
                     success: `${process.env.NEXT_PUBLIC_APP_URL}/payment-status?status=success&order_id=${orderId}`,
@@ -93,5 +102,49 @@ export async function createPreference(
     } catch (error) {
         console.error('Error creating Mercado Pago preference:', error);
         return { error: 'Não foi possível iniciar o pagamento. Tente novamente.' };
+    }
+}
+
+export async function processPayment(formData: any, orderId: string, userEmail: string): Promise<PaymentResult> {
+    if (!process.env.MP_ACCESS_TOKEN) {
+        return { success: false, error: 'O servidor de pagamento não está configurado.' };
+    }
+
+    try {
+        const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
+        const payment = new Payment(client);
+
+        const paymentBody = {
+            transaction_amount: formData.transaction_amount,
+            token: formData.token,
+            description: formData.description,
+            installments: formData.installments,
+            payment_method_id: formData.payment_method_id,
+            issuer_id: formData.issuer_id,
+            payer: {
+                email: userEmail,
+                ...formData.payer,
+            },
+            external_reference: orderId,
+        };
+
+        const response = await payment.create({ body: paymentBody });
+
+        // Pix specific data
+        const pointOfInteraction = response.point_of_interaction;
+        const qrCode = pointOfInteraction?.transaction_data?.qr_code;
+        const qrCodeBase64 = pointOfInteraction?.transaction_data?.qr_code_base64;
+
+        return {
+            success: true,
+            status: response.status,
+            status_detail: response.status_detail,
+            payment_id: response.id,
+            qr_code: qrCode,
+            qr_code_base64: qrCodeBase64,
+        };
+    } catch (error: any) {
+        console.error('Mercado Pago payment processing error:', error);
+        return { success: false, error: error.message || 'Erro ao processar o pagamento.' };
     }
 }

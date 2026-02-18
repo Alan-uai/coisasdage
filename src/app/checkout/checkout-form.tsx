@@ -1,20 +1,23 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { User } from 'firebase/auth';
-import { createPreference, type PreferenceCartItem } from './actions';
+import { createPreference, processPayment, type PreferenceCartItem } from './actions';
 import type { CartItem } from '@/lib/types';
 import { addressSchema } from './form-schema';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useFirestore, setDocumentNonBlocking } from '@/firebase';
+import { useFirestore, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc, serverTimestamp } from 'firebase/firestore';
+import { useRouter } from 'next/navigation';
+import { CheckCircle2, Copy, AlertCircle } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 declare global {
     interface Window {
@@ -24,9 +27,13 @@ declare global {
 
 export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartItems: CartItem[], subtotal: number }) {
     const [preferenceId, setPreferenceId] = useState<string | null>(null);
+    const [orderId, setOrderId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [pixData, setPixData] = useState<{ qr_code: string, qr_code_base64: string } | null>(null);
     const firestore = useFirestore();
+    const router = useRouter();
+    const { toast } = useToast();
 
     const form = useForm<z.infer<typeof addressSchema>>({
         resolver: zodResolver(addressSchema),
@@ -42,7 +49,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
 
     async function onSubmit(values: z.infer<typeof addressSchema>) {
         if (!user || cartItems.length === 0 || !user.email || !firestore) {
-            setError('Usuário não autenticado, sem e-mail ou erro no banco de dados.');
+            setError('Usuário não autenticado ou erro no banco de dados.');
             return;
         }
         
@@ -50,7 +57,6 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
         setError(null);
 
         try {
-            // 1. Prepare serializable items
             const serializableCartItems: PreferenceCartItem[] = cartItems.map(item => ({
                 id: item.id,
                 productName: item.productName,
@@ -62,10 +68,10 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                 imageUrl: item.imageUrl,
             }));
 
-            // 2. Create the Order document on the client first (follows zero-trust/client-side constraints)
             const ordersRef = collection(firestore, 'users', user.uid, 'orders');
             const newOrderRef = doc(ordersRef);
-            const orderId = newOrderRef.id;
+            const generatedOrderId = newOrderRef.id;
+            setOrderId(generatedOrderId);
 
             const orderData = {
                 userId: user.uid,
@@ -87,75 +93,160 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                 updatedAt: serverTimestamp(),
             };
 
-            // Use non-blocking helper for the write to ensure responsiveness and proper error tracking
             setDocumentNonBlocking(newOrderRef, orderData, { merge: true });
 
-            // 3. Call server action to create Mercado Pago Preference
             const result = await createPreference(
                 user.uid, 
                 user.email, 
                 user.displayName, 
                 serializableCartItems, 
                 values, 
-                orderId
+                generatedOrderId
             );
 
             if (result.preferenceId) {
                 setPreferenceId(result.preferenceId);
             } else {
-                setError(result.error || 'Ocorreu um erro desconhecido ao criar a preferência de pagamento.');
+                setError(result.error || 'Erro ao preparar o pagamento.');
             }
         } catch (e: any) {
             console.error('Checkout error:', e);
-            setError('Ocorreu um erro ao processar seu pedido. Tente novamente.');
+            setError('Erro ao processar seu pedido.');
         } finally {
             setIsLoading(false);
         }
     }
 
+    const handlePaymentSubmit = useCallback(async (formData: any) => {
+        if (!orderId || !user.email || !firestore) return;
+
+        try {
+            const result = await processPayment(formData, orderId, user.email);
+
+            if (result.success) {
+                if (result.payment_id) {
+                    const orderRef = doc(firestore, 'users', user.uid, 'orders', orderId);
+                    updateDocumentNonBlocking(orderRef, { 
+                        paymentId: result.payment_id,
+                        status: result.status === 'approved' ? 'Crafting' : 'Processing',
+                        updatedAt: serverTimestamp(),
+                    });
+                }
+
+                if (formData.payment_method_id === 'pix' && result.qr_code) {
+                    setPixData({
+                        qr_code: result.qr_code,
+                        qr_code_base64: result.qr_code_base64 || '',
+                    });
+                } else if (result.status === 'approved') {
+                    router.push(`/payment-status?status=success&order_id=${orderId}`);
+                } else {
+                    router.push(`/payment-status?status=pending&order_id=${orderId}`);
+                }
+            } else {
+                setError(result.error || 'Erro ao processar pagamento.');
+            }
+        } catch (e) {
+            setError('Erro inesperado no pagamento.');
+        }
+    }, [orderId, user.email, firestore, router]);
+
     useEffect(() => {
-        if (preferenceId) {
+        if (preferenceId && !pixData) {
+            const publicKey = process.env.NEXT_PUBLIC_MP_PUBLIC_KEY;
+            if (!publicKey) {
+                setError('Public Key do Mercado Pago não configurada.');
+                return;
+            }
+
             if (window.MercadoPago) {
-                const mp = new window.MercadoPago(process.env.NEXT_PUBLIC_MP_PUBLIC_KEY!, {
+                const mp = new window.MercadoPago(publicKey, {
                     locale: 'pt-BR'
                 });
                 
-                const container = document.getElementById('wallet_container');
+                const container = document.getElementById('paymentCard');
                 if (container) container.innerHTML = '';
 
-                mp.bricks().create('wallet', 'wallet_container', {
+                mp.bricks().create('payment', 'paymentCard', {
                     initialization: {
+                        amount: subtotal,
                         preferenceId: preferenceId,
                     },
                     customization: {
-                       texts: { valueProp: 'smart_option' },
-                    }
-                }).catch(() => {
-                    setError('Não foi possível renderizar o checkout do Mercado Pago.');
+                        paymentMethods: {
+                            ticket: 'all',
+                            bankTransfer: 'all',
+                            creditCard: 'all',
+                            debitCard: 'all',
+                            mercadoPago: 'all',
+                        },
+                    },
+                    callbacks: {
+                        onReady: () => {
+                            console.log('Payment Brick ready');
+                        },
+                        onSubmit: (formData: any) => {
+                            return handlePaymentSubmit(formData);
+                        },
+                        onError: (error: any) => {
+                            console.error('Brick error:', error);
+                            setError('Erro ao carregar opções de pagamento.');
+                        },
+                    },
                 });
             } else {
-                setError('O SDK de pagamento não carregou corretamente.');
+                setError('SDK do Mercado Pago não encontrado.');
             }
         }
-    }, [preferenceId]);
+    }, [preferenceId, pixData, subtotal, handlePaymentSubmit]);
 
-    const renderPaymentArea = () => {
-        if (isLoading) {
-            return (
-                <div className="space-y-4">
-                    <Skeleton className="h-12 w-full" />
-                    <Skeleton className="h-12 w-full" />
-                    <Skeleton className="h-12 w-full" />
-                </div>
-            );
+    const copyPixCode = () => {
+        if (pixData?.qr_code) {
+            navigator.clipboard.writeText(pixData.qr_code);
+            toast({
+                title: "Código Copiado!",
+                description: "Agora é só colar no aplicativo do seu banco.",
+            });
         }
-        if (error) {
-            return <p className="text-destructive">{error}</p>;
-        }
-        if (preferenceId) {
-            return <div id="wallet_container" className="min-h-[200px]"></div>;
-        }
-        return null;
+    };
+
+    if (pixData) {
+        return (
+            <Card className="max-w-2xl mx-auto">
+                <CardHeader className="text-center">
+                    <CheckCircle2 className="size-16 text-green-500 mx-auto mb-4" />
+                    <CardTitle className="text-2xl font-bold font-headline">Pedido Recebido!</CardTitle>
+                    <CardDescription>Pague com Pix para que possamos iniciar a produção artesanal.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6 flex flex-col items-center">
+                    {pixData.qr_code_base64 && (
+                        <div className="bg-white p-4 rounded-lg shadow-sm border">
+                            <Image 
+                                src={`data:image/png;base64,${pixData.qr_code_base64}`} 
+                                alt="QR Code Pix" 
+                                width={200} 
+                                height={200} 
+                            />
+                        </div>
+                    )}
+                    <div className="w-full space-y-2">
+                        <p className="text-sm font-semibold text-center">Código Pix (Copia e Cola)</p>
+                        <div className="flex gap-2">
+                            <Input value={pixData.qr_code} readOnly className="font-mono text-xs" />
+                            <Button variant="outline" size="icon" onClick={copyPixCode}>
+                                <Copy className="size-4" />
+                            </Button>
+                        </div>
+                    </div>
+                    <Button asChild className="w-full">
+                        <Link href="/orders">Ver meus pedidos</Link>
+                    </Button>
+                    <p className="text-xs text-muted-foreground text-center">
+                        Após o pagamento, seu pedido entrará em produção automaticamente.
+                    </p>
+                </CardContent>
+            </Card>
+        );
     }
 
     return (
@@ -187,6 +278,12 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
             <Card>
                 <CardHeader>
                     <CardTitle>Pagamento e Entrega</CardTitle>
+                    {error && (
+                        <div className="bg-destructive/10 text-destructive p-3 rounded-md flex items-center gap-2 text-sm">
+                            <AlertCircle className="size-4" />
+                            {error}
+                        </div>
+                    )}
                 </CardHeader>
                 <CardContent>
                     {!preferenceId ? (
@@ -243,9 +340,20 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                                 </Button>
                             </form>
                         </Form>
-                    ) : renderPaymentArea()}
+                    ) : (
+                        <div id="paymentCard" className="min-h-[400px]">
+                            {/* Mercado Pago Payment Brick renders here */}
+                            <div className="space-y-4">
+                                <Skeleton className="h-12 w-full" />
+                                <Skeleton className="h-48 w-full" />
+                                <Skeleton className="h-12 w-full" />
+                            </div>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         </div>
     );
 }
+
+import Link from 'next/link';

@@ -18,6 +18,7 @@ import { collection, doc, serverTimestamp } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, Copy, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import Link from 'next/link';
 
 declare global {
     interface Window {
@@ -355,5 +356,3 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
         </div>
     );
 }
-
-import Link from 'next/link';

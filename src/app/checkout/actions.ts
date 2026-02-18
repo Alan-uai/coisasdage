@@ -28,6 +28,7 @@ type PaymentResult = {
     status?: string;
     status_detail?: string;
     payment_id?: number;
+    merchant_order_id?: number;
     qr_code?: string;
     qr_code_base64?: string;
     error?: string;
@@ -148,6 +149,7 @@ export async function processPayment(
             status: response.status,
             status_detail: response.status_detail,
             payment_id: response.id,
+            merchant_order_id: response.order?.id,
             qr_code: qrCode,
             qr_code_base64: qrCodeBase64,
         };

@@ -1,4 +1,3 @@
-
 'use client';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -10,6 +9,7 @@ export default function PaymentStatusPage() {
     const searchParams = useSearchParams();
     const status = searchParams.get('status');
     const paymentId = searchParams.get('payment_id');
+    const merchantOrderId = searchParams.get('merchant_order_id');
 
     const statusConfig = {
         success: {
@@ -45,10 +45,15 @@ export default function PaymentStatusPage() {
                     <CardTitle className="text-2xl font-bold mt-4">{currentStatus.title}</CardTitle>
                 </CardHeader>
                 <CardContent className="text-center space-y-6">
-                    {paymentId && (
-                        <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg flex items-center gap-3 text-blue-800 text-sm text-left">
-                            <Info className="size-5 shrink-0" />
-                            <p><strong>ID do Pagamento para Homologação:</strong> {paymentId}</p>
+                    {(paymentId || merchantOrderId) && (
+                        <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg space-y-2 text-blue-800 text-sm text-left">
+                            <div className="flex items-center gap-2 font-bold mb-1">
+                                <Info className="size-5 shrink-0" />
+                                <span>Dados para Homologação (Go Live)</span>
+                            </div>
+                            {paymentId && <p><strong>ID do Pagamento:</strong> {paymentId}</p>}
+                            {merchantOrderId && <p><strong>ID da Ordem (Merchant Order):</strong> {merchantOrderId}</p>}
+                            <p className="text-xs italic opacity-80 pt-1">Use esses IDs no formulário do Mercado Pago.</p>
                         </div>
                     )}
 

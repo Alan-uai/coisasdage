@@ -1,4 +1,3 @@
-
 'use client';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useForm } from 'react-hook-form';
@@ -32,6 +31,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
     const [preferenceId, setPreferenceId] = useState<string | null>(null);
     const [orderId, setOrderId] = useState<string | null>(null);
     const [paymentId, setPaymentId] = useState<number | null>(null);
+    const [merchantOrderId, setMerchantOrderId] = useState<number | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isBrickLoaded, setIsBrickLoaded] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -133,9 +133,12 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
             if (result.success) {
                 if (result.payment_id) {
                     setPaymentId(result.payment_id);
+                    setMerchantOrderId(result.merchant_order_id || null);
+                    
                     const orderRef = doc(firestore, 'users', user.uid, 'orders', orderId);
                     updateDocumentNonBlocking(orderRef, { 
                         paymentId: result.payment_id,
+                        merchantOrderId: result.merchant_order_id || null,
                         status: result.status === 'approved' ? 'Crafting' : 'Processing',
                         updatedAt: serverTimestamp(),
                     });
@@ -147,9 +150,9 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                         qr_code_base64: result.qr_code_base64 || '',
                     });
                 } else if (result.status === 'approved') {
-                    router.push(`/payment-status?status=success&order_id=${orderId}&payment_id=${result.payment_id}`);
+                    router.push(`/payment-status?status=success&order_id=${orderId}&payment_id=${result.payment_id}&merchant_order_id=${result.merchant_order_id}`);
                 } else {
-                    router.push(`/payment-status?status=pending&order_id=${orderId}&payment_id=${result.payment_id}`);
+                    router.push(`/payment-status?status=pending&order_id=${orderId}&payment_id=${result.payment_id}&merchant_order_id=${result.merchant_order_id}`);
                 }
             } else {
                 setError(result.error || 'Erro ao processar pagamento.');
@@ -235,10 +238,15 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-8 flex flex-col items-center">
-                        {paymentId && (
-                            <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg flex items-center gap-3 text-blue-800 text-sm w-full">
-                                <Info className="size-5 shrink-0" />
-                                <p><strong>ID do Pagamento para Homologação:</strong> {paymentId}</p>
+                        {(paymentId || merchantOrderId) && (
+                            <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg space-y-2 text-blue-800 text-sm w-full">
+                                <div className="flex items-center gap-2 font-bold mb-1">
+                                    <Info className="size-5 shrink-0" />
+                                    <span>Dados para Homologação (Go Live)</span>
+                                </div>
+                                {paymentId && <p><strong>ID do Pagamento:</strong> {paymentId}</p>}
+                                {merchantOrderId && <p><strong>ID da Ordem (Merchant Order):</strong> {merchantOrderId}</p>}
+                                <p className="text-xs italic opacity-80 pt-1">Copie esses IDs para preencher o formulário do Mercado Pago.</p>
                             </div>
                         )}
 

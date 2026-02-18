@@ -16,9 +16,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useFirestore, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc, serverTimestamp } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, Copy, AlertCircle, QrCode } from 'lucide-react';
+import { CheckCircle2, Copy, AlertCircle, QrCode, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
 declare global {
     interface Window {
@@ -30,6 +31,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
     const [preferenceId, setPreferenceId] = useState<string | null>(null);
     const [orderId, setOrderId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [isBrickLoaded, setIsBrickLoaded] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [pixData, setPixData] = useState<{ qr_code: string, qr_code_base64: string } | null>(null);
     const brickRendered = useRef(false);
@@ -123,7 +125,6 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
         if (!orderId || !user.email || !firestore) return;
 
         try {
-            // Safety check for paymentData from Brick
             const finalPaymentData = paymentData.formData || paymentData;
             const result = await processPayment(finalPaymentData, orderId, user.email, subtotal);
 
@@ -187,7 +188,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                     },
                     callbacks: {
                         onReady: () => {
-                            console.log('Payment Brick ready');
+                            setIsBrickLoaded(true);
                         },
                         onSubmit: (param: any) => {
                             return handlePaymentSubmit(param);
@@ -301,7 +302,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                 </CardContent>
             </Card>
             
-            <Card className="shadow-lg border-primary/10">
+            <Card className="shadow-lg border-primary/10 overflow-hidden">
                 <CardHeader>
                     <CardTitle className="font-headline text-2xl">Finalizar Pagamento</CardTitle>
                     {error && (
@@ -310,12 +311,11 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                             <div className="flex flex-col">
                                 <p className="font-bold">Aviso:</p>
                                 <p>{error}</p>
-                                <p className="text-xs mt-1">Dica: Verifique se suas chaves no arquivo .env são do mesmo ambiente (Teste ou Produção).</p>
                             </div>
                         </div>
                     )}
                 </CardHeader>
-                <CardContent className="p-6">
+                <CardContent className="p-6 relative">
                     {!preferenceId ? (
                         <Form {...form}>
                             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
@@ -366,20 +366,35 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                                     )}/>
                                 </div>
                                 <Button type="submit" disabled={isLoading} className="w-full h-14 text-xl font-bold mt-6 shadow-lg hover:shadow-primary/20 transition-all">
-                                    {isLoading ? 'Aguarde...' : 'Escolher Forma de Pagamento'}
+                                    {isLoading ? (
+                                        <div className="flex items-center gap-2">
+                                            <Loader2 className="animate-spin" />
+                                            Preparando...
+                                        </div>
+                                    ) : 'Escolher Forma de Pagamento'}
                                 </Button>
                             </form>
                         </Form>
                     ) : (
-                        <div id="paymentCard" className="min-h-[500px] flex flex-col">
-                            <div className="flex flex-col items-center justify-center flex-1 space-y-6 py-10">
-                                <Skeleton className="h-12 w-full rounded-xl" />
-                                <Skeleton className="h-64 w-full rounded-2xl" />
-                                <div className="flex flex-col items-center gap-2 animate-pulse">
-                                    <p className="text-lg font-bold text-primary">Conectando ao Mercado Pago</p>
-                                    <p className="text-sm text-muted-foreground">Estamos carregando suas opções de pagamento...</p>
+                        <div className="min-h-[400px]">
+                            {!isBrickLoaded && (
+                                <div className="absolute inset-0 z-10 bg-card flex flex-col items-center justify-center p-10 space-y-6">
+                                    <div className="relative">
+                                        <Skeleton className="size-20 rounded-full" />
+                                        <Loader2 className="absolute inset-0 m-auto animate-spin text-primary size-10" />
+                                    </div>
+                                    <div className="text-center space-y-2">
+                                        <p className="text-lg font-bold text-primary animate-pulse">Conectando ao Mercado Pago</p>
+                                        <p className="text-sm text-muted-foreground">Estamos carregando suas opções de pagamento seguras...</p>
+                                    </div>
+                                    <div className="w-full space-y-3">
+                                        <Skeleton className="h-12 w-full rounded-lg" />
+                                        <Skeleton className="h-12 w-full rounded-lg" />
+                                        <Skeleton className="h-12 w-full rounded-lg" />
+                                    </div>
                                 </div>
-                            </div>
+                            )}
+                            <div id="paymentCard" className={cn("transition-opacity duration-500", !isBrickLoaded ? "opacity-0" : "opacity-100")} />
                         </div>
                     )}
                 </CardContent>

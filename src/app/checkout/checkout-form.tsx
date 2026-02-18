@@ -13,6 +13,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useFirestore, setDocumentNonBlocking } from '@/firebase';
+import { collection, doc, serverTimestamp } from 'firebase/firestore';
 
 declare global {
     interface Window {
@@ -24,6 +26,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
     const [preferenceId, setPreferenceId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const firestore = useFirestore();
 
     const form = useForm<z.infer<typeof addressSchema>>({
         resolver: zodResolver(addressSchema),
@@ -38,40 +41,76 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
     });
 
     async function onSubmit(values: z.infer<typeof addressSchema>) {
-        if (!user || cartItems.length === 0 || !user.email) {
-            setError('Usuário não autenticado, sem e-mail ou carrinho vazio.');
+        if (!user || cartItems.length === 0 || !user.email || !firestore) {
+            setError('Usuário não autenticado, sem e-mail ou erro no banco de dados.');
             return;
         }
         
         setIsLoading(true);
         setError(null);
 
-        const serializableCartItems: PreferenceCartItem[] = cartItems.map(item => ({
-            id: item.id,
-            productName: item.productName,
-            selectedColor: item.selectedColor,
-            selectedSize: item.selectedSize,
-            selectedMaterial: item.selectedMaterial,
-            quantity: item.quantity,
-            unitPriceAtAddition: item.unitPriceAtAddition,
-            imageUrl: item.imageUrl,
-        }));
-        
-        const result = await createPreference(
-            user.uid, 
-            user.email, 
-            user.displayName, 
-            serializableCartItems, 
-            values, 
-            subtotal
-        );
+        try {
+            // 1. Prepare serializable items
+            const serializableCartItems: PreferenceCartItem[] = cartItems.map(item => ({
+                id: item.id,
+                productName: item.productName,
+                selectedColor: item.selectedColor,
+                selectedSize: item.selectedSize,
+                selectedMaterial: item.selectedMaterial,
+                quantity: item.quantity,
+                unitPriceAtAddition: item.unitPriceAtAddition,
+                imageUrl: item.imageUrl,
+            }));
 
-        if (result.preferenceId) {
-            setPreferenceId(result.preferenceId);
-        } else {
-            setError(result.error || 'Ocorreu um erro desconhecido ao criar a preferência de pagamento.');
+            // 2. Create the Order document on the client first (follows zero-trust/client-side constraints)
+            const ordersRef = collection(firestore, 'users', user.uid, 'orders');
+            const newOrderRef = doc(ordersRef);
+            const orderId = newOrderRef.id;
+
+            const orderData = {
+                userId: user.uid,
+                orderDate: serverTimestamp(),
+                totalAmount: subtotal,
+                status: 'Processing',
+                shippingAddress: values,
+                items: serializableCartItems.map(item => ({
+                    productId: item.id,
+                    productName: item.productName,
+                    imageUrl: item.imageUrl,
+                    quantity: item.quantity,
+                    unitPriceAtOrder: item.unitPriceAtAddition,
+                    selectedSize: item.selectedSize,
+                    selectedColor: item.selectedColor,
+                    selectedMaterial: item.selectedMaterial,
+                })),
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            };
+
+            // Use non-blocking helper for the write to ensure responsiveness and proper error tracking
+            setDocumentNonBlocking(newOrderRef, orderData, { merge: true });
+
+            // 3. Call server action to create Mercado Pago Preference
+            const result = await createPreference(
+                user.uid, 
+                user.email, 
+                user.displayName, 
+                serializableCartItems, 
+                values, 
+                orderId
+            );
+
+            if (result.preferenceId) {
+                setPreferenceId(result.preferenceId);
+            } else {
+                setError(result.error || 'Ocorreu um erro desconhecido ao criar a preferência de pagamento.');
+            }
+        } catch (e: any) {
+            console.error('Checkout error:', e);
+            setError('Ocorreu um erro ao processar seu pedido. Tente novamente.');
+        } finally {
+            setIsLoading(false);
         }
-        setIsLoading(false);
     }
 
     useEffect(() => {

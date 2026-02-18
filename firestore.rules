@@ -96,15 +96,17 @@ service cloud.firestore {
         allow get, list: if isOwner(userId) && isSafeRead();
         allow create: if isOwner(userId) && isOwnedData(userId);
         
-        // Orders are immutable by users once created.
-        allow update, delete: if false;
+        // Allow updates to status and paymentId for the owner after payment processing.
+        allow update: if isExistingOwner(userId) && isOwnershipImmutable();
+        
+        allow delete: if false;
 
         // --- ORDER ITEMS ---
         match /items/{orderItemId} {
           allow get, list: if isOwner(userId) && isSafeRead();
           allow create: if isOwner(userId) && request.resource.data.orderId == orderId;
           
-          // Order items are also immutable.
+          // Order items are immutable once created.
           allow update, delete: if false;
         }
       }

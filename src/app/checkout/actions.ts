@@ -48,7 +48,7 @@ export async function createPreference(
     const accessToken = process.env.MP_ACCESS_TOKEN;
     
     if (!accessToken) {
-        return { error: 'Token de acesso (MP_ACCESS_TOKEN) não encontrado no servidor.' };
+        return { error: 'Token de acesso (MP_ACCESS_TOKEN) não encontrado no arquivo .env.' };
     }
 
     if (!cartItems || cartItems.length === 0) {
@@ -76,8 +76,8 @@ export async function createPreference(
                     name: userName || 'Cliente',
                 },
                 external_reference: orderId,
-                // Simplified for initial setup to avoid validation errors
-                auto_return: 'approved',
+                // Removing auto_return to avoid "back_url.success must be defined" error.
+                // The Payment Brick handles the result via onSubmit callback.
             }
         });
         
@@ -89,7 +89,7 @@ export async function createPreference(
 
     } catch (error: any) {
         console.error('Mercado Pago preference error:', error);
-        return { error: `Erro ao iniciar pagamento: ${error.message || 'Verifique as credenciais.'}` };
+        return { error: `Erro ao iniciar pagamento: ${error.message || 'Verifique as credenciais no .env.'}` };
     }
 }
 

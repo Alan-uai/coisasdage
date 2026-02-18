@@ -34,7 +34,8 @@ type PaymentResult = {
 };
 
 /**
- * Creates a preference to initialize the Payment Brick with the correct total and items.
+ * Creates a preference to initialize the Payment Brick.
+ * Using a preference is the recommended way to initialize Bricks with total and items.
  */
 export async function createPreference(
     userId: string,
@@ -44,9 +45,10 @@ export async function createPreference(
     addressData: AddressData,
     orderId: string
 ): Promise<PreferenceResult> {
-    if (!process.env.MP_ACCESS_TOKEN) {
-        console.error("Mercado Pago access token not configured in .env");
-        return { error: 'O servidor de pagamento não está configurado.' };
+    const accessToken = process.env.MP_ACCESS_TOKEN;
+    
+    if (!accessToken) {
+        return { error: 'Token de acesso (MP_ACCESS_TOKEN) não encontrado no servidor.' };
     }
 
     if (!cartItems || cartItems.length === 0) {
@@ -54,55 +56,40 @@ export async function createPreference(
     }
     
     try {
-        const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
+        const client = new MercadoPagoConfig({ accessToken });
         const preference = new Preference(client);
 
         const items = cartItems.map(item => ({
             id: item.id,
             title: item.productName,
-            description: `${item.selectedColor} / ${item.selectedSize} / ${item.selectedMaterial}`,
+            description: `${item.selectedColor} / ${item.selectedSize}`,
             quantity: item.quantity,
             currency_id: 'BRL',
             unit_price: item.unitPriceAtAddition,
         }));
         
-        const nameParts = (userName || 'Comprador Anônimo').split(' ');
-        const firstName = nameParts[0];
-        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : ' ';
-
         const response = await preference.create({
             body: {
                 items: items,
                 payer: {
                     email: userEmail,
-                    name: firstName,
-                    surname: lastName,
-                    identification: {
-                        type: 'CPF',
-                        number: addressData.cpf.replace(/\D/g, ''),
-                    },
-                    address: {
-                        street_name: addressData.streetName,
-                        street_number: parseInt(addressData.streetNumber, 10),
-                        zip_code: addressData.zipCode.replace(/\D/g, ''),
-                    }
+                    name: userName || 'Cliente',
                 },
                 external_reference: orderId,
-                notification_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/mercadopago`,
-                back_urls: {
-                    success: `${process.env.NEXT_PUBLIC_APP_URL}/payment-status?status=success&order_id=${orderId}`,
-                    failure: `${process.env.NEXT_PUBLIC_APP_URL}/payment-status?status=failure&order_id=${orderId}`,
-                    pending: `${process.env.NEXT_PUBLIC_APP_URL}/payment-status?status=pending&order_id=${orderId}`,
-                },
+                // Simplified for initial setup to avoid validation errors
                 auto_return: 'approved',
             }
         });
         
+        if (!response.id) {
+            throw new Error('ID da preferência não retornado pelo Mercado Pago.');
+        }
+
         return { preferenceId: response.id };
 
-    } catch (error) {
-        console.error('Error creating Mercado Pago preference:', error);
-        return { error: 'Não foi possível iniciar o pagamento. Tente novamente.' };
+    } catch (error: any) {
+        console.error('Mercado Pago preference error:', error);
+        return { error: `Erro ao iniciar pagamento: ${error.message || 'Verifique as credenciais.'}` };
     }
 }
 
@@ -111,18 +98,21 @@ export async function createPreference(
  * This is called by the Payment Brick onSubmit callback.
  */
 export async function processPayment(formData: any, orderId: string, userEmail: string): Promise<PaymentResult> {
-    if (!process.env.MP_ACCESS_TOKEN) {
-        return { success: false, error: 'O servidor de pagamento não está configurado.' };
+    const accessToken = process.env.MP_ACCESS_TOKEN;
+    
+    if (!accessToken) {
+        return { success: false, error: 'Token de acesso não configurado no servidor.' };
     }
 
     try {
-        const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
+        const client = new MercadoPagoConfig({ accessToken });
         const payment = new Payment(client);
 
+        // Map the brick's formData to the Mercado Pago Payment API request body
         const response = await payment.create({
             body: {
                 transaction_amount: formData.transaction_amount,
-                token: formData.token,
+                token: formData.token, // Present for card payments
                 description: formData.description || `Pedido ${orderId}`,
                 installments: formData.installments,
                 payment_method_id: formData.payment_method_id,
@@ -135,10 +125,10 @@ export async function processPayment(formData: any, orderId: string, userEmail: 
             }
         });
 
-        // Pix specific data extraction
-        const pointOfInteraction = response.point_of_interaction;
-        const qrCode = pointOfInteraction?.transaction_data?.qr_code;
-        const qrCodeBase64 = pointOfInteraction?.transaction_data?.qr_code_base64;
+        // Pix specific data extraction from point_of_interaction
+        const poi = response.point_of_interaction;
+        const qrCode = poi?.transaction_data?.qr_code;
+        const qrCodeBase64 = poi?.transaction_data?.qr_code_base64;
 
         return {
             success: true,
@@ -150,6 +140,9 @@ export async function processPayment(formData: any, orderId: string, userEmail: 
         };
     } catch (error: any) {
         console.error('Mercado Pago payment processing error:', error);
-        return { success: false, error: error.message || 'Erro ao processar o pagamento.' };
+        return { 
+            success: false, 
+            error: error.message || 'Erro ao processar o pagamento. Verifique os dados e tente novamente.' 
+        };
     }
 }

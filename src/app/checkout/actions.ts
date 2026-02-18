@@ -124,10 +124,11 @@ export async function processPayment(
         const payment = new Payment(client);
 
         // Map the brick's paymentData to the Mercado Pago Payment API request body
+        // Ensure amount is strictly a number to avoid "Unauthorized use of live credentials" issues
         const response = await payment.create({
             body: {
                 ...paymentData, 
-                transaction_amount: Number(amount.toFixed(2)), // Ensure number format
+                transaction_amount: Number(amount.toFixed(2)), 
                 description: `Pedido ${orderId} - Artesã Aconchegante`,
                 external_reference: orderId,
                 payer: {
@@ -152,8 +153,16 @@ export async function processPayment(
         };
     } catch (error: any) {
         console.error('Mercado Pago payment processing error:', error);
-        // Extracting detailed error from MP SDK
-        const errorMessage = error.message || (error.cause && error.cause[0]?.description) || 'Erro ao processar o pagamento.';
+        
+        let errorMessage = 'Erro ao processar o pagamento.';
+        
+        // Handle specific "Unauthorized use of live credentials" error
+        if (error.message?.includes('Unauthorized use of live credentials') || error.status === 401 || error.status === 403) {
+            errorMessage = 'Sua conta do Mercado Pago ainda não foi homologada para usar chaves de Produção (APP_USR). Por favor, use as chaves de Teste (TEST) ou preencha o formulário de "Go Live" no painel do Mercado Pago.';
+        } else {
+            errorMessage = error.message || (error.cause && error.cause[0]?.description) || errorMessage;
+        }
+
         return { 
             success: false, 
             error: errorMessage

@@ -177,6 +177,10 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                     initialization: {
                         amount: subtotal,
                         preferenceId: preferenceId,
+                        // Providing the email here helps the Brick hide the email field in the Pix section
+                        payer: {
+                            email: user.email,
+                        }
                     },
                     customization: {
                         paymentMethods: {
@@ -203,7 +207,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                 setError('O script do Mercado Pago não pôde ser carregado.');
             }
         }
-    }, [preferenceId, pixData, subtotal, handlePaymentSubmit]);
+    }, [preferenceId, pixData, subtotal, handlePaymentSubmit, user.email]);
 
     const copyPixCode = () => {
         if (pixData?.qr_code) {

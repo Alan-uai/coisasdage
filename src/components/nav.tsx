@@ -3,7 +3,7 @@
 
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutGrid, Package, Palette, ShoppingBag, HelpCircle, User, LogIn, LogOut, ClipboardList, ShieldCheck } from 'lucide-react';
+import { LayoutGrid, Package, ShoppingBag, HelpCircle, User, LogIn, LogOut, ShieldCheck } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -30,8 +30,6 @@ import { doc } from 'firebase/firestore';
 const mainLinks = [
   { href: '/', label: 'Catálogo', icon: LayoutGrid },
   { href: '/orders', label: 'Meus Pedidos', icon: Package },
-  { href: '/my-requests', label: 'Sob Demanda', icon: ClipboardList },
-  { href: '/design', label: 'Design IA', icon: Palette },
   { href: '/cart', label: 'Carrinho', icon: ShoppingBag },
   { href: '/faq', label: 'Dúvidas', icon: HelpCircle },
 ];

@@ -1,11 +1,11 @@
 'use client';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { User } from 'firebase/auth';
 import { createPreference, processPayment, type PreferenceCartItem } from './actions';
-import type { CartItem } from '@/lib/types';
+import type { CartItem, Order } from '@/lib/types';
 import { addressSchema } from './form-schema';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useFirestore, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { useFirestore, setDocumentNonBlocking, updateDocumentNonBlocking, useDoc, useMemoFirebase } from '@/firebase';
 import { collection, doc, serverTimestamp } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, Copy, AlertCircle, QrCode, Loader2, Info } from 'lucide-react';
@@ -30,8 +30,6 @@ declare global {
 export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartItems: CartItem[], subtotal: number }) {
     const [preferenceId, setPreferenceId] = useState<string | null>(null);
     const [orderId, setOrderId] = useState<string | null>(null);
-    const [paymentId, setPaymentId] = useState<number | null>(null);
-    const [merchantOrderId, setMerchantOrderId] = useState<number | string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isBrickLoaded, setIsBrickLoaded] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -40,6 +38,13 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
     const firestore = useFirestore();
     const router = useRouter();
     const { toast } = useToast();
+
+    // Listen to the order document in real-time to get the merchantOrderId from Webhook
+    const orderDocRef = useMemoFirebase(() => 
+        (user && firestore && orderId) ? doc(firestore, 'users', user.uid, 'orders', orderId) : null,
+        [user, firestore, orderId]
+    );
+    const { data: orderData } = useDoc<Order>(orderDocRef);
 
     const form = useForm<z.infer<typeof addressSchema>>({
         resolver: zodResolver(addressSchema),
@@ -79,7 +84,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
             const generatedOrderId = newOrderRef.id;
             setOrderId(generatedOrderId);
 
-            const orderData = {
+            const initialOrderData = {
                 userId: user.uid,
                 orderDate: serverTimestamp(),
                 totalAmount: subtotal,
@@ -99,7 +104,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                 updatedAt: serverTimestamp(),
             };
 
-            setDocumentNonBlocking(newOrderRef, orderData, { merge: true });
+            setDocumentNonBlocking(newOrderRef, initialOrderData, { merge: true });
 
             const result = await createPreference(
                 user.uid, 
@@ -132,9 +137,6 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
 
             if (result.success) {
                 if (result.payment_id) {
-                    setPaymentId(result.payment_id);
-                    setMerchantOrderId(result.merchant_order_id || null);
-                    
                     const orderRef = doc(firestore, 'users', user.uid, 'orders', orderId);
                     updateDocumentNonBlocking(orderRef, { 
                         paymentId: result.payment_id,
@@ -216,14 +218,14 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                         <CardDescription>Escaneie o QR Code ou copie o código abaixo.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6 flex flex-col items-center">
-                        <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg text-sm w-full">
+                        <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg text-sm w-full text-blue-800">
                             <div className="flex items-center gap-2 font-bold mb-2">
                                 <Info className="size-5" />
                                 <span>Dados para Homologação (Go Live)</span>
                             </div>
-                            {paymentId && <p><strong>ID do Pagamento:</strong> {paymentId}</p>}
-                            {merchantOrderId && <p><strong>Merchant Order ID (ORD...):</strong> {merchantOrderId}</p>}
-                            <p className="text-xs italic mt-2">Use o Merchant Order ID para o formulário do Mercado Pago.</p>
+                            <p><strong>ID do Pagamento:</strong> {orderData?.paymentId || 'Aguardando...'}</p>
+                            <p><strong>Merchant Order ID (ORD...):</strong> {orderData?.merchantOrderId || 'Aguardando atualização do Webhook...'}</p>
+                            <p className="text-xs italic mt-2 opacity-80">O Merchant Order costuma aparecer alguns segundos após a geração do Pix através do Webhook.</p>
                         </div>
 
                         {pixData.qr_code_base64 && (

@@ -27,7 +27,7 @@ type PaymentResult = {
     success: boolean;
     status?: string;
     status_detail?: string;
-    payment_id?: number;
+    payment_id?: number | string;
     merchant_order_id?: number | string;
     qr_code?: string;
     qr_code_base64?: string;
@@ -119,7 +119,8 @@ export async function processPayment(
         });
 
         // Try to get the Merchant Order ID (the "ORD..." one)
-        const merchantOrderId = response.order?.id || (response as any).merchant_order_id;
+        // It can be in response.order.id or response.merchant_order_id depending on the SDK response
+        const merchantOrderId = response.order?.id || (response as any).merchant_order_id || null;
 
         return {
             success: true,

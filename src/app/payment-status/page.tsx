@@ -4,13 +4,27 @@ import Link from 'next/link';
 import { CheckCircle2, XCircle, AlertCircle, Info } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Suspense } from 'react';
+import { Suspense, useMemo } from 'react';
+import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
+import type { Order } from '@/lib/types';
 
 function PaymentStatusContent() {
     const searchParams = useSearchParams();
     const status = searchParams.get('status');
-    const paymentId = searchParams.get('payment_id');
-    const merchantOrderId = searchParams.get('merchant_order_id');
+    const paramPaymentId = searchParams.get('payment_id');
+    const paramMerchantOrderId = searchParams.get('merchant_order_id');
+    const orderId = searchParams.get('order_id');
+    
+    const { user } = useUser();
+    const firestore = useFirestore();
+
+    // Monitor the order in real-time to see webhook updates
+    const orderDocRef = useMemoFirebase(() => 
+        (user && firestore && orderId) ? doc(firestore, 'users', user.uid, 'orders', orderId) : null,
+        [user, firestore, orderId]
+    );
+    const { data: orderData } = useDoc<Order>(orderDocRef);
 
     const statusConfig = {
         success: {
@@ -38,6 +52,9 @@ function PaymentStatusContent() {
             description: 'Houve um problema ao verificar seu pagamento.'
         };
 
+    const displayPaymentId = orderData?.paymentId || paramPaymentId;
+    const displayMerchantOrderId = orderData?.merchantOrderId || (paramMerchantOrderId !== 'null' ? paramMerchantOrderId : null);
+
     return (
         <div className="flex flex-col flex-1 items-center justify-center p-4">
             <Card className="max-w-md w-full">
@@ -46,17 +63,19 @@ function PaymentStatusContent() {
                     <CardTitle className="text-2xl font-bold mt-4">{currentStatus.title}</CardTitle>
                 </CardHeader>
                 <CardContent className="text-center space-y-6">
-                    {(paymentId || merchantOrderId) && (
+                    {(displayPaymentId || displayMerchantOrderId) && (
                         <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg space-y-2 text-blue-800 text-sm text-left">
                             <div className="flex items-center gap-2 font-bold mb-1">
                                 <Info className="size-5 shrink-0" />
                                 <span>Dados para Homologação (Go Live)</span>
                             </div>
-                            {paymentId && <p><strong>ID do Pagamento:</strong> {paymentId}</p>}
-                            {merchantOrderId && merchantOrderId !== 'null' && merchantOrderId !== 'undefined' && (
-                                <p><strong>Merchant Order ID (ORD...):</strong> {merchantOrderId}</p>
+                            {displayPaymentId && <p><strong>ID do Pagamento:</strong> {displayPaymentId}</p>}
+                            {displayMerchantOrderId ? (
+                                <p><strong>Merchant Order ID (ORD...):</strong> {displayMerchantOrderId}</p>
+                            ) : (
+                                <p className="text-xs italic opacity-70">Aguardando Merchant Order via Webhook...</p>
                             )}
-                            <p className="text-xs italic opacity-80 pt-1">Copie esses IDs para o formulário do Mercado Pago.</p>
+                            <p className="text-xs italic opacity-80 pt-1">Use esses IDs para o formulário do Mercado Pago.</p>
                         </div>
                     )}
 

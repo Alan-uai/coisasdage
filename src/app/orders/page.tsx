@@ -1,15 +1,16 @@
 'use client';
 
-import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
+import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
 import { collection, query, orderBy, limit, doc, serverTimestamp } from 'firebase/firestore';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Label } from '@/components/ui/label';
-import { Truck, PackageSearch, LogIn, XCircle, AlertCircle } from 'lucide-react';
+import { Truck, PackageSearch, LogIn, XCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { Order } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 const statusMap = {
   Processing: { text: 'Processando', value: 25, variant: 'secondary' as const },
@@ -69,6 +71,7 @@ export default function OrdersPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
+  const router = useRouter();
 
   const ordersQuery = useMemoFirebase(
     () => (user && firestore ? query(collection(firestore, 'users', user.uid, 'orders'), orderBy('orderDate', 'desc'), limit(20)) : null),
@@ -88,6 +91,37 @@ export default function OrdersPage() {
       title: "Pedido Cancelado",
       description: "Sua desistência foi registrada com sucesso.",
     });
+  };
+
+  const handleRedoOrder = (order: Order) => {
+    if (!user || !firestore) return;
+
+    order.items.forEach(item => {
+      const cartItemData = {
+        cartId: 'main',
+        productId: item.productId,
+        productGroupId: item.productGroupId || item.productId, // Fallback for safety
+        productName: item.productName,
+        imageUrl: item.imageUrl,
+        quantity: item.quantity,
+        selectedSize: item.selectedSize,
+        selectedColor: item.selectedColor,
+        selectedMaterial: item.selectedMaterial,
+        unitPriceAtAddition: item.unitPriceAtOrder,
+        selected: true,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      const cartItemsRef = collection(firestore, 'users', user.uid, 'carts', 'main', 'items');
+      addDocumentNonBlocking(cartItemsRef, cartItemData);
+    });
+
+    toast({
+      title: "Pedido Restaurado!",
+      description: "Os itens foram adicionados de volta ao seu carrinho.",
+    });
+    router.push('/cart');
   };
 
   if (isUserLoading) {
@@ -146,9 +180,10 @@ export default function OrdersPage() {
           (orders || []).map((order) => {
             const statusInfo = statusMap[order.status];
             const canCancel = order.status === 'Processing' || order.status === 'Crafting';
+            const isCancelled = order.status === 'Cancelled';
 
             return (
-              <Card key={order.id} className={cn(order.status === 'Cancelled' && "opacity-75 bg-muted/30")}>
+              <Card key={order.id} className={cn(isCancelled && "opacity-75 bg-muted/30")}>
                 <CardHeader>
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
                     <div>
@@ -185,10 +220,10 @@ export default function OrdersPage() {
                   <Separator className="my-4" />
                    <div className="flex justify-between items-center">
                     <div className="text-sm text-muted-foreground">
-                        {order.status === 'Cancelled' ? (
+                        {isCancelled ? (
                             <div className="flex items-center gap-1 text-destructive">
                                 <XCircle className="size-4" />
-                                <span>Pedido cancelado pelo cliente</span>
+                                <span>Pedido cancelado</span>
                             </div>
                         ) : order.trackingNumber ? (
                             <div className="flex items-center gap-2 text-primary">
@@ -202,7 +237,7 @@ export default function OrdersPage() {
                     <p className="font-bold text-lg">Total: R$ {order.totalAmount.toFixed(2).replace('.', ',')}</p>
                    </div>
                   
-                  {statusInfo && order.status !== 'Cancelled' && (
+                  {statusInfo && !isCancelled && (
                     <>
                       <Separator className="my-4" />
                       <div>
@@ -218,8 +253,8 @@ export default function OrdersPage() {
                     </>
                   )}
                 </CardContent>
-                {canCancel && (
-                    <CardFooter className="justify-end bg-muted/50 py-3 rounded-b-lg">
+                <CardFooter className="justify-end bg-muted/50 py-3 rounded-b-lg gap-2">
+                    {canCancel && (
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
                                 <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10">
@@ -242,8 +277,14 @@ export default function OrdersPage() {
                                 </AlertDialogFooter>
                             </AlertDialogContent>
                         </AlertDialog>
-                    </CardFooter>
-                )}
+                    )}
+                    {isCancelled && (
+                        <Button variant="outline" size="sm" onClick={() => handleRedoOrder(order)}>
+                            <RefreshCw className="size-4 mr-2" />
+                            Refazer Pedido
+                        </Button>
+                    )}
+                </CardFooter>
               </Card>
             );
           })
@@ -252,5 +293,3 @@ export default function OrdersPage() {
     </div>
   );
 }
-
-import { cn } from '@/lib/utils';

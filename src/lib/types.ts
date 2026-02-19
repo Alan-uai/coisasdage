@@ -40,6 +40,7 @@ export type Product = {
 
 export type OrderItemSummary = {
   productId: string;
+  productGroupId: string; // Added to facilitate re-ordering and linking
   productName: string;
   imageUrl: string;
   quantity: number;

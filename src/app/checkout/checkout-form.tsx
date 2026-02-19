@@ -98,8 +98,9 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                 totalAmount: subtotal,
                 status: 'Processing',
                 shippingAddress: values,
-                items: serializableCartItems.map(item => ({
-                    productId: item.id,
+                items: cartItems.map(item => ({
+                    productId: item.productId,
+                    productGroupId: item.productGroupId,
                     productName: item.productName,
                     imageUrl: item.imageUrl,
                     quantity: item.quantity,

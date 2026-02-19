@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
 import { collection, query, orderBy, limit, doc, serverTimestamp } from 'firebase/firestore';
 import Image from 'next/image';
@@ -10,7 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Label } from '@/components/ui/label';
-import { Truck, PackageSearch, LogIn, XCircle, RefreshCw } from 'lucide-react';
+import { Truck, PackageSearch, LogIn, XCircle, RefreshCw, MapPin, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
@@ -24,7 +25,21 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import type { Order } from '@/lib/types';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from '@/components/ui/input';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { addressSchema } from '@/app/checkout/form-schema';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import type { Order, Address } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
@@ -73,6 +88,9 @@ export default function OrdersPage() {
   const { toast } = useToast();
   const router = useRouter();
 
+  const [addressDialogOpen, setAddressDialogOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+
   const ordersQuery = useMemoFirebase(
     () => (user && firestore ? query(collection(firestore, 'users', user.uid, 'orders'), orderBy('orderDate', 'desc'), limit(20)) : null),
     [user, firestore]
@@ -100,7 +118,7 @@ export default function OrdersPage() {
       const cartItemData = {
         cartId: 'main',
         productId: item.productId,
-        productGroupId: item.productGroupId || item.productId, // Fallback for safety
+        productGroupId: item.productGroupId || item.productId,
         productName: item.productName,
         imageUrl: item.imageUrl,
         quantity: item.quantity,
@@ -122,6 +140,39 @@ export default function OrdersPage() {
       description: "Os itens foram adicionados de volta ao seu carrinho.",
     });
     router.push('/cart');
+  };
+
+  const openAddressDialog = (order: Order) => {
+    setEditingOrder(order);
+    setAddressDialogOpen(true);
+  };
+
+  const addressForm = useForm<z.infer<typeof addressSchema>>({
+    resolver: zodResolver(addressSchema),
+    values: editingOrder ? {
+        cpf: editingOrder.shippingAddress.cpf,
+        streetName: editingOrder.shippingAddress.streetName,
+        streetNumber: editingOrder.shippingAddress.streetNumber,
+        zipCode: editingOrder.shippingAddress.zipCode,
+        city: editingOrder.shippingAddress.city,
+        state: editingOrder.shippingAddress.state,
+    } : undefined,
+  });
+
+  const onAddressSubmit = (values: z.infer<typeof addressSchema>) => {
+    if (!user || !firestore || !editingOrder) return;
+    
+    const orderRef = doc(firestore, 'users', user.uid, 'orders', editingOrder.id);
+    updateDocumentNonBlocking(orderRef, {
+        shippingAddress: values,
+        updatedAt: serverTimestamp(),
+    });
+
+    toast({
+        title: "Endereço Atualizado",
+        description: "Os dados de entrega foram alterados com sucesso.",
+    });
+    setAddressDialogOpen(false);
   };
 
   if (isUserLoading) {
@@ -162,7 +213,6 @@ export default function OrdersPage() {
       </div>
     )
   }
-  
 
   return (
     <div className="flex flex-col min-h-screen p-4 sm:p-6 lg:p-8">
@@ -180,6 +230,7 @@ export default function OrdersPage() {
           (orders || []).map((order) => {
             const statusInfo = statusMap[order.status];
             const canCancel = order.status === 'Processing' || order.status === 'Crafting';
+            const canChangeAddress = order.status === 'Processing' || order.status === 'Crafting';
             const isCancelled = order.status === 'Cancelled';
 
             return (
@@ -231,7 +282,13 @@ export default function OrdersPage() {
                                 <span>Rastreio: <span className="font-mono font-bold">{order.trackingNumber}</span></span>
                             </div>
                         ) : (
-                            <span>Aguardando produção...</span>
+                            <div className="flex flex-col gap-1">
+                                <span>Aguardando produção...</span>
+                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <MapPin className="size-3" />
+                                    {order.shippingAddress.streetName}, {order.shippingAddress.streetNumber}
+                                </span>
+                            </div>
                         )}
                     </div>
                     <p className="font-bold text-lg">Total: R$ {order.totalAmount.toFixed(2).replace('.', ',')}</p>
@@ -254,6 +311,12 @@ export default function OrdersPage() {
                   )}
                 </CardContent>
                 <CardFooter className="justify-end bg-muted/50 py-3 rounded-b-lg gap-2">
+                    {canChangeAddress && (
+                        <Button variant="ghost" size="sm" onClick={() => openAddressDialog(order)}>
+                            <MapPin className="size-4 mr-2" />
+                            Mudei de endereço
+                        </Button>
+                    )}
                     {canCancel && (
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
@@ -290,6 +353,47 @@ export default function OrdersPage() {
           })
         )}
       </main>
+
+      <Dialog open={addressDialogOpen} onOpenChange={setAddressDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Atualizar Endereço de Entrega</DialogTitle>
+            <DialogDescription>
+              Altere os dados de destino para o pedido #{editingOrder?.id.substring(0,6)}.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...addressForm}>
+            <form onSubmit={addressForm.handleSubmit(onAddressSubmit)} className="space-y-4 py-4">
+              <FormField control={addressForm.control} name="cpf" render={({ field }) => (
+                <FormItem><FormLabel>CPF</FormLabel><FormControl><Input placeholder="000.000.000-00" {...field} /></FormControl><FormMessage /></FormItem>
+              )}/>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={addressForm.control} name="zipCode" render={({ field }) => (
+                  <FormItem><FormLabel>CEP</FormLabel><FormControl><Input placeholder="00000-000" {...field} /></FormControl><FormMessage /></FormItem>
+                )}/>
+                <FormField control={addressForm.control} name="state" render={({ field }) => (
+                  <FormItem><FormLabel>UF</FormLabel><FormControl><Input placeholder="SP" {...field} maxLength={2} /></FormControl><FormMessage /></FormItem>
+                )}/>
+              </div>
+              <FormField control={addressForm.control} name="streetName" render={({ field }) => (
+                <FormItem><FormLabel>Rua</FormLabel><FormControl><Input placeholder="Endereço" {...field} /></FormControl><FormMessage /></FormItem>
+              )}/>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={addressForm.control} name="streetNumber" render={({ field }) => (
+                  <FormItem><FormLabel>Número</FormLabel><FormControl><Input placeholder="123" {...field} /></FormControl><FormMessage /></FormItem>
+                )}/>
+                <FormField control={addressForm.control} name="city" render={({ field }) => (
+                  <FormItem><FormLabel>Cidade</FormLabel><FormControl><Input placeholder="Sua cidade" {...field} /></FormControl><FormMessage /></FormItem>
+                )}/>
+              </div>
+              <DialogFooter className="pt-4">
+                <Button variant="outline" type="button" onClick={() => setAddressDialogOpen(false)}>Cancelar</Button>
+                <Button type="submit">Salvar Alterações</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -39,7 +39,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
     const router = useRouter();
     const { toast } = useToast();
 
-    // Listen to the order document in real-time to get the merchantOrderId from Webhook
+    // Listen to the order document in real-time to get technical IDs from Webhook
     const orderDocRef = useMemoFirebase(() => 
         (user && firestore && orderId) ? doc(firestore, 'users', user.uid, 'orders', orderId) : null,
         [user, firestore, orderId]

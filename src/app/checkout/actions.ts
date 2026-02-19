@@ -52,7 +52,6 @@ export async function createPreference(
         const client = new MercadoPagoConfig({ accessToken });
         const preference = new Preference(client);
 
-        // Get the host for the notification URL
         const headersList = await headers();
         const host = headersList.get('host');
         const protocol = host?.includes('localhost') ? 'http' : 'https';
@@ -77,7 +76,8 @@ export async function createPreference(
                         number: addressData.cpf.replace(/\D/g, ''),
                     },
                 },
-                external_reference: orderId,
+                // Combined reference to help the webhook find the document directly
+                external_reference: `${userId}|${orderId}`,
                 notification_url: notificationUrl,
                 statement_descriptor: "ARTESAACONCHEG",
             }
@@ -118,8 +118,6 @@ export async function processPayment(
             }
         });
 
-        // Try to get the Merchant Order ID (the "ORD..." one)
-        // It can be in response.order.id or response.merchant_order_id depending on the SDK response
         const merchantOrderId = response.order?.id || (response as any).merchant_order_id || null;
 
         return {

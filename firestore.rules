@@ -11,14 +11,6 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isEmailVerified() {
-      return request.auth.token.email_verified == true;
-    }
-
-    function isNotAnonymous() {
-      return request.auth.token.firebase.sign_in_provider != 'anonymous';
-    }
-
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
@@ -36,6 +28,7 @@ service cloud.firestore {
     }
 
     function isSafeRead() {
+      // Ensure queries are limited for performance and security.
       return request.query.limit != null && request.query.limit <= 20;
     }
 
@@ -44,7 +37,6 @@ service cloud.firestore {
     ============================== */
     
     // By default, deny all reads and writes.
-    // Specific rules below will grant access.
     match /{document=**} {
       allow read, write: if false;
     }
@@ -55,58 +47,49 @@ service cloud.firestore {
 
     match /users/{userId} {
 
-      // A verified, non-anonymous user can only get their own profile.
-      allow get: if isOwner(userId) && isEmailVerified() && isNotAnonymous();
-      
-      // A user can create their own profile, but only with specific fields.
-      allow create: if isOwner(userId)
-                    && request.resource.data.keys().hasOnly(['displayName', 'email', 'createdAt'])
-                    && request.resource.data.email == request.auth.token.email;
-      
-      // A user can only update their own 'displayName'.
-      allow update: if isExistingOwner(userId) && request.resource.data.keys().hasOnly(['displayName']);
-      
-      allow delete: if false; // Users cannot delete their profiles.
+      // A user can access their own profile.
+      allow get, create, update: if isOwner(userId);
+      allow delete: if false;
 
       // --- ADDRESSES ---
       match /addresses/{addressId} {
-        allow get, list: if isOwner(userId) && isSafeRead();
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId) && isSafeRead();
         allow create: if isOwner(userId) && isOwnedData(userId);
-        allow update: if isExistingOwner(userId) && isOwnershipImmutable();
-        allow delete: if isExistingOwner(userId);
+        allow update, delete: if isOwner(userId);
       }
 
       // --- CARTS ---
       match /carts/{cartId} {
-        allow get, list: if isOwner(userId) && isSafeRead();
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId) && isSafeRead();
         allow create: if isOwner(userId) && isOwnedData(userId);
-        allow update: if isExistingOwner(userId) && isOwnershipImmutable();
-        allow delete: if isExistingOwner(userId);
+        allow update, delete: if isOwner(userId);
         
-        // --- CART ITEMS ---
         match /items/{cartItemId} {
-          allow get, list: if isOwner(userId) && isSafeRead();
-          allow create: if isOwner(userId) && request.resource.data.cartId == cartId;
-          allow update, delete: if isExistingOwner(userId);
+          allow get: if isOwner(userId);
+          allow list: if isOwner(userId) && isSafeRead();
+          allow create, update, delete: if isOwner(userId);
         }
       }
 
       // --- ORDERS ---
       match /orders/{orderId} {
-        allow get, list: if isOwner(userId) && isSafeRead();
+        // Separated get and list to avoid isSafeRead failing on single doc listeners
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId) && isSafeRead();
+        
         allow create: if isOwner(userId) && isOwnedData(userId);
         
-        // Allow updates to status and paymentId for the owner after payment processing.
-        allow update: if isExistingOwner(userId) && isOwnershipImmutable();
+        // Allow owner to update order details (payment status, IDs)
+        allow update: if isOwner(userId);
         
         allow delete: if false;
 
-        // --- ORDER ITEMS ---
         match /items/{orderItemId} {
-          allow get, list: if isOwner(userId) && isSafeRead();
-          allow create: if isOwner(userId) && request.resource.data.orderId == orderId;
-          
-          // Order items are immutable once created.
+          allow get: if isOwner(userId);
+          allow list: if isOwner(userId) && isSafeRead();
+          allow create: if isOwner(userId);
           allow update, delete: if false;
         }
       }
@@ -117,12 +100,8 @@ service cloud.firestore {
     ============================== */
     
     match /products/{productId} {
-      // Essential for e-commerce: Anyone can browse the product catalog.
       allow get: if true;
-      // List operations are limited to prevent large-scale data dumps.
       allow list: if isSafeRead();
-      
-      // Writes are restricted. Should be handled by a secure backend/admin role.
       allow write: if false;
     }
     
@@ -131,10 +110,7 @@ service cloud.firestore {
     ============================== */
     
     match /security_logs/{logId} {
-      // Any authenticated user can write a log entry.
-      allow create: if isAuthenticated() && request.resource.data.keys().hasAll(['userId', 'event', 'createdAt']);
-      
-      // No one can read, update, or delete logs from the client.
+      allow create: if isAuthenticated();
       allow read, update, delete: if false;
     }
   }

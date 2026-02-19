@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MercadoPagoConfig, Payment } from 'mercadopago';
 import { initializeFirebase } from '@/firebase';
-import { doc, updateDoc, collection, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Webhook handler for Mercado Pago notifications.
- * It processes both 'payment' and 'merchant_order' topics.
- */
 export async function POST(request: NextRequest) {
   const { firestore } = initializeFirebase();
   const accessToken = process.env.MP_ACCESS_TOKEN;
@@ -25,8 +21,6 @@ export async function POST(request: NextRequest) {
     const resourceId = body.data?.id || body.id;
 
     if (topic === 'payment' || topic === 'merchant_order' || topic === 'order') {
-      // In webhooks, the external_reference is key to finding our order
-      // But if we only have the ID, we might need to fetch the full data from MP
       const client = new MercadoPagoConfig({ accessToken });
       
       let externalReference: string | null = null;
@@ -43,35 +37,19 @@ export async function POST(request: NextRequest) {
         merchantOrderId = paymentData.order?.id?.toString() || null;
       }
 
-      if (externalReference) {
-        // Find the order in Firestore. Since it's nested under users/{uid}/orders/{id},
-        // we use a collection group query or we need to know the userId.
-        // For simplicity in this MVP, we'll search across all orders if possible, 
-        // but Firestore collection groups require an index. 
-        // Better: the external_reference should ideally contain "userId|orderId"
+      // If we have our combined reference (userId|orderId), we can update directly
+      if (externalReference && externalReference.includes('|')) {
+        const [userId, orderId] = externalReference.split('|');
+        const orderRef = doc(firestore, 'users', userId, 'orders', orderId);
         
-        console.log(`Updating order ${externalReference} with Merchant Order: ${merchantOrderId}`);
+        await updateDoc(orderRef, {
+          merchantOrderId: merchantOrderId || undefined,
+          paymentId: paymentId || undefined,
+          status: status === 'approved' ? 'Crafting' : undefined,
+          updatedAt: serverTimestamp(),
+        });
         
-        // This is a simplified search. In production, use a more direct path or collection group.
-        // Assuming externalReference is the orderId
-        const usersRef = collection(firestore, 'users');
-        const usersSnap = await getDocs(usersRef);
-        
-        for (const userDoc of usersSnap.docs) {
-          const orderRef = doc(firestore, 'users', userDoc.id, 'orders', externalReference);
-          try {
-            await updateDoc(orderRef, {
-              merchantOrderId: merchantOrderId || undefined,
-              paymentId: paymentId || undefined,
-              status: status === 'approved' ? 'Crafting' : undefined,
-              updatedAt: serverTimestamp(),
-            });
-            console.log(`Successfully updated order ${externalReference}`);
-            break; // Found and updated
-          } catch (e) {
-            // Not in this user's subcollection, continue
-          }
-        }
+        console.log(`Successfully updated order ${orderId} via direct path`);
       }
     }
 

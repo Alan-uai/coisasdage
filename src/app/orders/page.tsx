@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
+import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
 import { collection, query, orderBy, limit, doc, serverTimestamp } from 'firebase/firestore';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -39,7 +39,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { addressSchema } from '@/app/checkout/form-schema';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import type { Order, Address } from '@/lib/types';
+import type { Order } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
@@ -114,6 +114,7 @@ export default function OrdersPage() {
   const handleRedoOrder = (order: Order) => {
     if (!user || !firestore) return;
 
+    // 1. Move items to cart
     order.items.forEach(item => {
       const cartItemData = {
         cartId: 'main',
@@ -135,9 +136,13 @@ export default function OrdersPage() {
       addDocumentNonBlocking(cartItemsRef, cartItemData);
     });
 
+    // 2. Remove the old cancelled order from history as requested
+    const orderRef = doc(firestore, 'users', user.uid, 'orders', order.id);
+    deleteDocumentNonBlocking(orderRef);
+
     toast({
       title: "Pedido Restaurado!",
-      description: "Os itens foram adicionados de volta ao seu carrinho.",
+      description: "Os itens foram movidos para o carrinho e o registro antigo foi removido.",
     });
     router.push('/cart');
   };

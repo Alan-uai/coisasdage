@@ -1,6 +1,14 @@
 
 import type { Timestamp } from 'firebase/firestore';
 
+export type UserProfile = {
+  id: string;
+  displayName: string;
+  email: string;
+  createdAt: Timestamp;
+  isAdmin?: boolean;
+};
+
 export type ProductVariant = {
   id: string;
   color?: string;

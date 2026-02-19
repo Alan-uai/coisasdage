@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -95,6 +94,7 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
         }
     };
 
+    // Sorted colors for the card: Available first
     const sortedColors = useMemo(() => {
         const colors = product.options.colors.filter(c => c !== 'Padrão');
         const available = colors.filter(c => !product.availability?.colors || product.availability.colors.includes(c));
@@ -124,7 +124,7 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
 
     return (
         <Card className="overflow-hidden flex flex-col group h-full relative">
-            {!isReady && !isReadyMadeCarousel && (
+            {!isReady && (
                 <div className="absolute top-2 right-2 z-10">
                     <Badge variant="secondary" className="bg-primary text-primary-foreground shadow-sm">
                         Sob Demanda

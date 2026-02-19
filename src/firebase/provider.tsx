@@ -1,9 +1,8 @@
-
 'use client';
 
 import React, { DependencyList, createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import { FirebaseApp } from 'firebase/app';
-import { Firestore } from 'firebase/firestore';
+import { Firestore, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Auth, User, onAuthStateChanged } from 'firebase/auth';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener'
 
@@ -67,15 +66,31 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
 
     const unsubscribe = onAuthStateChanged(
       auth,
-      (firebaseUser) => {
+      async (firebaseUser) => {
         setUserAuthState({ user: firebaseUser, isUserLoading: false, userError: null });
+        
+        // Sync profile non-blockingly for faster navigation
+        if (firebaseUser && firestore) {
+          const userRef = doc(firestore, 'users', firebaseUser.uid);
+          // Check if profile exists before setting to avoid unnecessary writes
+          getDoc(userRef).then(snap => {
+            if (!snap.exists()) {
+              setDoc(userRef, {
+                displayName: firebaseUser.displayName || 'Cliente',
+                email: firebaseUser.email,
+                createdAt: serverTimestamp(),
+                isAdmin: false, // Default to false, manually change in console
+              }, { merge: true });
+            }
+          });
+        }
       },
       (error) => {
         setUserAuthState({ user: null, isUserLoading: false, userError: error });
       }
     );
     return () => unsubscribe();
-  }, [auth]);
+  }, [auth, firestore]);
 
   const contextValue = useMemo((): FirebaseContextState => {
     const servicesAvailable = !!(firebaseApp && firestore && auth);

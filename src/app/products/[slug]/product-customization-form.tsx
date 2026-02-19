@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -152,13 +151,6 @@ function ProductCustomizationFormComponent({
 
   const globallyAvailableSizes = product.availability?.sizes || product.options.sizes;
 
-  const sortedDisplayColors = useMemo(() => {
-    const all = product.options.colors;
-    const available = all.filter(c => availableColorsForCurrentSize.includes(c));
-    const unavailable = all.filter(c => !availableColorsForCurrentSize.includes(c));
-    return [...available, ...unavailable];
-  }, [product.options.colors, availableColorsForCurrentSize]);
-
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {hasSizeOptions && (
@@ -190,7 +182,7 @@ function ProductCustomizationFormComponent({
         <div className="space-y-3">
           <Label className="text-base font-semibold">Cor</Label>
            <RadioGroup value={selectedColor} onValueChange={setSelectedColor} className="flex flex-wrap gap-x-4 gap-y-2">
-            {sortedDisplayColors.map((color) => {
+            {product.options.colors.map((color) => {
               const isAvailable = availableColorsForCurrentSize.includes(color);
               return (
                 <div key={color} className={cn("flex items-center", !isAvailable && "opacity-40")}>

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -11,8 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Label } from '@/components/ui/label';
-import { Truck, PackageSearch, LogIn, XCircle, RefreshCw, MapPin, ClipboardList, ShoppingBag, Clock } from 'lucide-react';
+import { Truck, PackageSearch, LogIn, XCircle, RefreshCw, MapPin, ShoppingBag, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
@@ -86,14 +84,12 @@ export default function OrdersPage() {
   const [addressDialogOpen, setAddressDialogOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
 
-  // 1. Fetch finished orders
   const ordersQuery = useMemoFirebase(
     () => (user && firestore ? query(collection(firestore, 'users', user.uid, 'orders'), orderBy('orderDate', 'desc'), limit(20)) : null),
     [user, firestore]
   );
   const { data: orders, isLoading: isOrdersLoading } = useCollection<Order>(ordersQuery);
 
-  // 2. Fetch custom requests (on-demand)
   const requestsQuery = useMemoFirebase(
     () => (user && firestore ? query(
       collection(firestore, 'custom_requests'), 
@@ -108,38 +104,8 @@ export default function OrdersPage() {
   const handleCancelOrder = (orderId: string) => {
     if (!user || !firestore) return;
     const orderRef = doc(firestore, 'users', user.uid, 'orders', orderId);
-    updateDocumentNonBlocking(orderRef, { 
-      status: 'Cancelled',
-      updatedAt: serverTimestamp()
-    });
+    updateDocumentNonBlocking(orderRef, { status: 'Cancelled', updatedAt: serverTimestamp() });
     toast({ title: "Pedido Cancelado" });
-  };
-
-  const handleRedoOrder = (order: Order) => {
-    if (!user || !firestore) return;
-    order.items.forEach(item => {
-      const cartItemData = {
-        cartId: 'main',
-        productId: item.productId,
-        productGroupId: item.productGroupId || item.productId,
-        productName: item.productName,
-        imageUrl: item.imageUrl,
-        quantity: item.quantity,
-        selectedSize: item.selectedSize,
-        selectedColor: item.selectedColor,
-        selectedMaterial: item.selectedMaterial,
-        unitPriceAtAddition: item.unitPriceAtOrder,
-        selected: true,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-      const cartItemsRef = collection(firestore, 'users', user.uid, 'carts', 'main', 'items');
-      addDocumentNonBlocking(cartItemsRef, cartItemData);
-    });
-    const orderRef = doc(firestore, 'users', user.uid, 'orders', order.id);
-    deleteDocumentNonBlocking(orderRef);
-    toast({ title: "Itens movidos para o carrinho!" });
-    router.push('/cart');
   };
 
   const handleAddToCartRequest = (request: CustomRequest) => {
@@ -171,11 +137,6 @@ export default function OrdersPage() {
     router.push('/cart');
   };
 
-  const openAddressDialog = (order: Order) => {
-    setEditingOrder(order);
-    setAddressDialogOpen(true);
-  };
-
   const addressForm = useForm<z.infer<typeof addressSchema>>({
     resolver: zodResolver(addressSchema),
     values: editingOrder ? {
@@ -191,10 +152,7 @@ export default function OrdersPage() {
   const onAddressSubmit = (values: z.infer<typeof addressSchema>) => {
     if (!user || !firestore || !editingOrder) return;
     const orderRef = doc(firestore, 'users', user.uid, 'orders', editingOrder.id);
-    updateDocumentNonBlocking(orderRef, {
-        shippingAddress: values,
-        updatedAt: serverTimestamp(),
-    });
+    updateDocumentNonBlocking(orderRef, { shippingAddress: values, updatedAt: serverTimestamp() });
     toast({ title: "Endereço Atualizado" });
     setAddressDialogOpen(false);
   };
@@ -203,7 +161,6 @@ export default function OrdersPage() {
     return (
       <div className="p-4 sm:p-8 space-y-6">
         <Skeleton className="h-10 w-64" />
-        <OrderCardSkeleton />
         <OrderCardSkeleton />
       </div>
     );
@@ -239,8 +196,7 @@ export default function OrdersPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* 1. Custom Requests Section (Pending Approval) */}
-            {(requests && requests.length > 0) && (
+            {requests && requests.length > 0 && (
               <section className="space-y-4">
                 <h2 className="text-xl font-bold flex items-center gap-2 text-primary">
                   <Clock className="size-5" /> Sob Demanda (Em Análise)
@@ -279,8 +235,7 @@ export default function OrdersPage() {
               </section>
             )}
 
-            {/* 2. Finished Orders Section */}
-            {(orders && orders.length > 0) && (
+            {orders && orders.length > 0 && (
               <section className="space-y-4">
                 <h2 className="text-xl font-bold flex items-center gap-2 text-primary">
                   <Truck className="size-5" /> Compras e Entregas
@@ -329,7 +284,7 @@ export default function OrdersPage() {
                       <CardFooter className="p-2 px-4 bg-muted/30 rounded-b-lg justify-end gap-2">
                         {(order.status === 'Processing' || order.status === 'Crafting') && (
                           <>
-                            <Button variant="ghost" size="sm" onClick={() => openAddressDialog(order)}>
+                            <Button variant="ghost" size="sm" onClick={() => { setEditingOrder(order); setAddressDialogOpen(true); }}>
                               <MapPin className="size-4 mr-1" /> Mudar Endereço
                             </Button>
                             <AlertDialog>
@@ -350,11 +305,6 @@ export default function OrdersPage() {
                               </AlertDialogContent>
                             </AlertDialog>
                           </>
-                        )}
-                        {isCancelled && (
-                          <Button variant="outline" size="sm" onClick={() => handleRedoOrder(order)}>
-                            <RefreshCw className="size-4 mr-1" /> Refazer Pedido
-                          </Button>
                         )}
                       </CardFooter>
                     </Card>

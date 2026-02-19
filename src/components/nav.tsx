@@ -1,4 +1,3 @@
-
 'use client';
 
 import { usePathname } from 'next/navigation';
@@ -21,7 +20,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/button';
-import { useUser, useAuth, useFirestore, useDoc } from '@/firebase';
+import { useUser, useAuth, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { initiateSignOut } from '@/firebase/non-blocking-login';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from './ui/skeleton';
@@ -39,7 +38,11 @@ function UserNav() {
     const auth = useAuth();
     const firestore = useFirestore();
 
-    const { data: profile } = useDoc(user ? doc(firestore, 'users', user.uid) : null);
+    const profileRef = useMemoFirebase(() => 
+        (user && firestore) ? doc(firestore, 'users', user.uid) : null,
+        [user, firestore]
+    );
+    const { data: profile } = useDoc(profileRef);
 
     const handleLogout = () => {
         if (auth) {
@@ -53,40 +56,44 @@ function UserNav() {
 
     if (!user) {
         return (
-            <Tooltip delayDuration={0}>
-                <TooltipTrigger asChild>
-                    <Button asChild variant="ghost" size="icon">
-                        <Link href="/login" aria-label="Login">
-                            <LogIn className="h-5 w-5" />
-                        </Link>
-                    </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                    <p>Login</p>
-                </TooltipContent>
-            </Tooltip>
+            <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button asChild variant="ghost" size="icon">
+                            <Link href="/login" aria-label="Login">
+                                <LogIn className="h-5 w-5" />
+                            </Link>
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>Login</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
         )
     }
 
     return (
         <DropdownMenu>
-            <Tooltip delayDuration={0}>
-                <TooltipTrigger asChild>
-                    <DropdownMenuTrigger asChild>
-                         <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                            <Avatar className="h-10 w-10">
-                                <AvatarImage src={user.photoURL || undefined} alt={user.displayName || 'Avatar do usuário'} />
-                                <AvatarFallback>
-                                    {user.displayName ? user.displayName.charAt(0).toUpperCase() : <User />}
-                                </AvatarFallback>
-                            </Avatar>
-                        </Button>
-                    </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent>
-                    <p>Meu Perfil</p>
-                </TooltipContent>
-            </Tooltip>
+            <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                             <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                                <Avatar className="h-10 w-10">
+                                    <AvatarImage src={user.photoURL || undefined} alt={user.displayName || 'Avatar do usuário'} />
+                                    <AvatarFallback>
+                                        {user.displayName ? user.displayName.charAt(0).toUpperCase() : <User />}
+                                    </AvatarFallback>
+                                </Avatar>
+                            </Button>
+                        </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>Meu Perfil</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
             <DropdownMenuContent className="w-56" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
@@ -100,7 +107,7 @@ function UserNav() {
                 {profile?.isAdmin && (
                   <>
                     <DropdownMenuItem asChild>
-                        <Link href="/admin/requests">
+                        <Link href="/admin/requests" className="cursor-pointer">
                             <ShieldCheck className="mr-2 h-4 w-4" />
                             <span>Administração</span>
                         </Link>
@@ -108,7 +115,7 @@ function UserNav() {
                     <DropdownMenuSeparator />
                   </>
                 )}
-                <DropdownMenuItem onClick={handleLogout}>
+                <DropdownMenuItem onClick={handleLogout} className="text-destructive cursor-pointer">
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Sair</span>
                 </DropdownMenuItem>
@@ -123,25 +130,27 @@ export function Nav() {
   return (
     <nav className="flex flex-1 items-center justify-around">
       {mainLinks.map((link) => (
-        <Tooltip key={link.href} delayDuration={0}>
-          <TooltipTrigger asChild>
-            <Link
-              href={link.href}
-              className={cn(
-                buttonVariants({ 
-                  variant: pathname === link.href ? "secondary" : "ghost", 
-                  size: "icon" 
-                }),
-              )}
-              aria-label={link.label}
-            >
-              <link.icon className="h-5 w-5" />
-            </Link>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>{link.label}</p>
-          </TooltipContent>
-        </Tooltip>
+        <TooltipProvider key={link.href} delayDuration={0}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href={link.href}
+                className={cn(
+                  buttonVariants({ 
+                    variant: pathname === link.href ? "secondary" : "ghost", 
+                    size: "icon" 
+                  }),
+                )}
+                aria-label={link.label}
+              >
+                <link.icon className="h-5 w-5" />
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{link.label}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       ))}
       <UserNav />
     </nav>

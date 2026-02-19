@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
-import { CheckCircle2, XCircle, AlertTriangle, User, Mail, Calendar, ShieldAlert, Package } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertTriangle, User, Mail, Calendar, ShieldAlert } from 'lucide-react';
 import type { CustomRequest, UserProfile } from '@/lib/types';
 
 export default function AdminRequestsPage() {
@@ -105,19 +105,23 @@ export default function AdminRequestsPage() {
               </CardHeader>
               <CardContent className="p-6">
                 <div className="space-y-4">
-                  {request.items.map((item, idx) => (
-                    <div key={idx} className="flex gap-4 items-center">
-                      <div className="size-16 relative rounded overflow-hidden bg-muted">
-                        <Image src={item.imageUrl} alt={item.productName} fill className="object-cover" />
+                  {request.items && request.items.length > 0 ? (
+                    request.items.map((item, idx) => (
+                      <div key={idx} className="flex gap-4 items-center">
+                        <div className="size-16 relative rounded overflow-hidden bg-muted">
+                          <Image src={item.imageUrl} alt={item.productName} fill className="object-cover" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-bold">{item.productName}</p>
+                          <p className="text-xs text-muted-foreground">{item.selectedSize} | {item.selectedColor} | {item.selectedMaterial}</p>
+                          <p className="text-sm">Qtd: {item.quantity}</p>
+                        </div>
+                        <p className="font-semibold">R$ {(item.unitPriceAtOrder * item.quantity).toFixed(2).replace('.', ',')}</p>
                       </div>
-                      <div className="flex-1">
-                        <p className="font-bold">{item.productName}</p>
-                        <p className="text-xs text-muted-foreground">{item.selectedSize} | {item.selectedColor} | {item.selectedMaterial}</p>
-                        <p className="text-sm">Qtd: {item.quantity}</p>
-                      </div>
-                      <p className="font-semibold">R$ {(item.unitPriceAtOrder * item.quantity).toFixed(2).replace('.', ',')}</p>
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    <div className="text-sm italic text-muted-foreground">Esta solicitação não possui itens detalhados (formato antigo).</div>
+                  )}
                 </div>
                 <Separator className="my-6" />
                 <div className="flex justify-between items-center">

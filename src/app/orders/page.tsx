@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Truck, PackageSearch, LogIn, XCircle, MapPin, ShoppingBag, Clock, ClipboardList } from 'lucide-react';
+import { Truck, PackageSearch, LogIn, XCircle, ShoppingBag, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
@@ -68,7 +68,7 @@ export default function OrdersPage() {
   };
 
   const handleAddToCartRequest = (request: CustomRequest) => {
-    if (!user || !firestore) return;
+    if (!user || !firestore || !request.items) return;
     
     const requestRef = doc(firestore, 'custom_requests', request.id);
     updateDocumentNonBlocking(requestRef, { status: 'AddedToCart', updatedAt: serverTimestamp() });
@@ -90,7 +90,7 @@ export default function OrdersPage() {
             selectedColor: item.selectedColor,
             selectedMaterial: item.selectedMaterial,
             unitPriceAtAddition: item.unitPriceAtOrder,
-            readyMade: true, // Now it acts as ready-made since it's approved and ready for payment
+            readyMade: true, 
             selected: true,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -163,17 +163,21 @@ export default function OrdersPage() {
                         </div>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {request.items.map((item, idx) => (
-                          <div key={idx} className="flex gap-3 items-center bg-muted/30 p-2 rounded">
-                            <div className="size-12 relative rounded overflow-hidden shrink-0">
-                              <Image src={item.imageUrl} alt={item.productName} fill className="object-cover" />
+                        {request.items && request.items.length > 0 ? (
+                          request.items.map((item, idx) => (
+                            <div key={idx} className="flex gap-3 items-center bg-muted/30 p-2 rounded">
+                              <div className="size-12 relative rounded overflow-hidden shrink-0">
+                                <Image src={item.imageUrl} alt={item.productName} fill className="object-cover" />
+                              </div>
+                              <div className="text-xs">
+                                <p className="font-bold line-clamp-1">{item.productName}</p>
+                                <p className="text-muted-foreground">{item.selectedSize} | {item.selectedColor}</p>
+                              </div>
                             </div>
-                            <div className="text-xs">
-                              <p className="font-bold line-clamp-1">{item.productName}</p>
-                              <p className="text-muted-foreground">{item.selectedSize} | {item.selectedColor}</p>
-                            </div>
-                          </div>
-                        ))}
+                          ))
+                        ) : (
+                          <div className="text-xs italic text-muted-foreground col-span-full">Solicitação de item único (formato antigo).</div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -201,8 +205,8 @@ export default function OrdersPage() {
                           </div>
                         </CardHeader>
                         <CardContent className="p-4 pt-0">
-                          <div className="space-y-2">
-                            {order.items.map(item => (
+                          <div className="space-y-2 mt-2">
+                            {order.items && order.items.map(item => (
                               <div key={item.productId} className="flex gap-3 items-center">
                                 <div className="size-10 relative rounded overflow-hidden flex-shrink-0">
                                   <Image src={item.imageUrl} alt={item.productName} fill className="object-cover" />

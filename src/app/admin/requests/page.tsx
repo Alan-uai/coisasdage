@@ -1,23 +1,22 @@
 
 'use client';
 
-import { useState } from 'react';
-import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, useDoc } from '@/firebase';
+import { useUser, useFirestore, useCollection, useMemoFirebase, useDoc, updateDocumentNonBlocking } from '@/firebase';
 import { collection, query, orderBy, limit, doc, serverTimestamp } from 'firebase/firestore';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { CheckCircle2, XCircle, AlertTriangle, User, Mail, Calendar, ShieldAlert } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { CheckCircle2, XCircle, AlertTriangle, User, Mail, Calendar, ShieldAlert, Package } from 'lucide-react';
 import type { CustomRequest, UserProfile } from '@/lib/types';
 
 export default function AdminRequestsPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
 
-  // Fetch the user's profile to check for admin status
   const profileRef = useMemoFirebase(
     () => (user && firestore ? doc(firestore, 'users', user.uid) : null),
     [user, firestore]
@@ -49,18 +48,12 @@ export default function AdminRequestsPage() {
     );
   }
 
-  // Access check
   if (!user || !profile?.isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-4">
         <ShieldAlert className="size-16 text-destructive mb-4" />
         <h1 className="text-3xl font-bold font-headline">Acesso Negado</h1>
-        <p className="text-muted-foreground mt-2 max-w-md">
-          Esta área é restrita apenas para administradores da Artesã Aconchegante.
-        </p>
-        <Button asChild className="mt-6">
-          <Link href="/">Voltar ao Início</Link>
-        </Button>
+        <Button asChild className="mt-6"><Link href="/">Voltar ao Início</Link></Button>
       </div>
     );
   }
@@ -68,8 +61,8 @@ export default function AdminRequestsPage() {
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-8">
       <header>
-        <h1 className="text-4xl font-bold tracking-tight font-headline">Gerenciar Solicitações Sob Demanda</h1>
-        <p className="text-muted-foreground mt-2">Aprove ou conteste pedidos personalizados feitos pelos clientes.</p>
+        <h1 className="text-4xl font-bold tracking-tight font-headline">Avaliar Solicitações</h1>
+        <p className="text-muted-foreground mt-2">Revise os combos de produtos solicitados sob demanda.</p>
       </header>
 
       <main className="grid grid-cols-1 gap-6">
@@ -79,66 +72,71 @@ export default function AdminRequestsPage() {
             <Skeleton className="h-32 w-full" />
           </div>
         ) : (!requests || requests.length === 0) ? (
-          <Card className="text-center py-12">
-            <CardContent>
-              <AlertTriangle className="size-12 mx-auto text-muted-foreground mb-4" />
-              <p className="text-lg font-medium">Nenhuma solicitação encontrada.</p>
-            </CardContent>
-          </Card>
+          <div className="text-center py-20 border-2 border-dashed rounded-lg">
+            <AlertTriangle className="size-12 mx-auto text-muted-foreground mb-4" />
+            <p className="text-lg font-medium">Nenhuma solicitação pendente.</p>
+          </div>
         ) : (
           requests.map((request) => (
-            <Card key={request.id} className="overflow-hidden">
-              <div className="flex flex-col md:flex-row">
-                <div className="w-full md:w-48 bg-muted relative min-h-[150px]">
-                  <Image
-                    src={request.imageUrl}
-                    alt={request.productName}
-                    fill
-                    className="object-cover"
-                  />
-                </div>
-                <div className="flex-1 p-6">
-                  <div className="flex flex-col sm:flex-row justify-between gap-4">
+            <Card key={request.id} className="overflow-hidden border-primary/10">
+              <CardHeader className="bg-muted/30 pb-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-primary/10 p-2 rounded-full"><User className="size-5 text-primary" /></div>
                     <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge variant={
-                          request.status === 'Approved' ? 'default' : 
-                          request.status === 'Contested' ? 'destructive' : 'secondary'
-                        }>
-                          {request.status === 'Pending' ? 'Pendente' : 
-                           request.status === 'Approved' ? 'Aprovado' : 
-                           request.status === 'Contested' ? 'Contestado' : 'No Carrinho'}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Calendar className="size-3" />
-                          {request.createdAt?.toDate().toLocaleDateString()}
-                        </span>
-                      </div>
-                      <h3 className="text-xl font-bold font-headline">{request.productName}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {request.selectedSize} / {request.selectedColor} / {request.selectedMaterial}
-                      </p>
-                    </div>
-                    <div className="text-sm border-l pl-4 border-primary/20">
-                      <p className="font-semibold flex items-center gap-1"><User className="size-4" /> {request.userName}</p>
-                      <p className="text-muted-foreground flex items-center gap-1"><Mail className="size-4" /> {request.userEmail}</p>
+                      <CardTitle className="text-lg">{request.userName}</CardTitle>
+                      <CardDescription className="flex items-center gap-1"><Mail className="size-3" /> {request.userEmail}</CardDescription>
                     </div>
                   </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <Badge variant={
+                      request.status === 'Approved' ? 'default' : 
+                      request.status === 'Contested' ? 'destructive' : 'secondary'
+                    }>
+                      {request.status === 'Pending' ? 'Pendente' : 
+                       request.status === 'Approved' ? 'Aprovado' : 
+                       request.status === 'Contested' ? 'Contestado' : 'Adicionado'}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Calendar className="size-3" /> {request.createdAt?.toDate().toLocaleDateString()}
+                    </span>
+                  </div>
                 </div>
-                <div className="p-6 bg-muted/30 flex flex-col justify-center gap-2 border-l">
-                  <p className="text-lg font-bold text-center mb-2">R$ {request.finalPrice.toFixed(2).replace('.', ',')}</p>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="space-y-4">
+                  {request.items.map((item, idx) => (
+                    <div key={idx} className="flex gap-4 items-center">
+                      <div className="size-16 relative rounded overflow-hidden bg-muted">
+                        <Image src={item.imageUrl} alt={item.productName} fill className="object-cover" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-bold">{item.productName}</p>
+                        <p className="text-xs text-muted-foreground">{item.selectedSize} | {item.selectedColor} | {item.selectedMaterial}</p>
+                        <p className="text-sm">Qtd: {item.quantity}</p>
+                      </div>
+                      <p className="font-semibold">R$ {(item.unitPriceAtOrder * item.quantity).toFixed(2).replace('.', ',')}</p>
+                    </div>
+                  ))}
+                </div>
+                <Separator className="my-6" />
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Valor Total Estimado</p>
+                    <p className="text-2xl font-bold text-primary">R$ {request.finalPrice.toFixed(2).replace('.', ',')}</p>
+                  </div>
                   {request.status === 'Pending' && (
-                    <>
+                    <div className="flex gap-2">
                       <Button size="sm" onClick={() => handleStatusUpdate(request.id, 'Approved')}>
-                        <CheckCircle2 className="size-4 mr-2" /> Aprovar
+                        <CheckCircle2 className="size-4 mr-2" /> Aprovar Combo
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => handleStatusUpdate(request.id, 'Contested')}>
                         <XCircle className="size-4 mr-2" /> Contestar
                       </Button>
-                    </>
+                    </div>
                   )}
                 </div>
-              </div>
+              </CardContent>
             </Card>
           ))
         )}

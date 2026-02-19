@@ -1,7 +1,8 @@
+
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
+import { useState } from 'react';
+import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, addDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
 import { collection, query, orderBy, limit, doc, serverTimestamp, where } from 'firebase/firestore';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -10,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Truck, PackageSearch, LogIn, XCircle, RefreshCw, MapPin, ShoppingBag, Clock } from 'lucide-react';
+import { Truck, PackageSearch, LogIn, XCircle, MapPin, ShoppingBag, Clock, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
@@ -24,20 +25,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Input } from '@/components/ui/input';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { addressSchema } from '@/app/checkout/form-schema';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import type { Order, CustomRequest } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -50,39 +37,11 @@ const statusMap = {
   Cancelled: { text: 'Cancelado', value: 0, variant: 'destructive' as const },
 } as const;
 
-function OrderCardSkeleton() {
-  return (
-    <Card className="mb-4">
-      <CardHeader>
-        <div className="flex justify-between">
-          <div className="space-y-2">
-            <Skeleton className="h-6 w-32" />
-            <Skeleton className="h-4 w-48" />
-          </div>
-          <Skeleton className="h-6 w-24 rounded-full" />
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="flex gap-4">
-          <Skeleton className="h-[80px] w-[120px] rounded-md" />
-          <div className="flex-1 space-y-2">
-            <Skeleton className="h-5 w-4/5" />
-            <Skeleton className="h-4 w-3/5" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 export default function OrdersPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
   const router = useRouter();
-
-  const [addressDialogOpen, setAddressDialogOpen] = useState(false);
-  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
 
   const ordersQuery = useMemoFirebase(
     () => (user && firestore ? query(collection(firestore, 'users', user.uid, 'orders'), orderBy('orderDate', 'desc'), limit(20)) : null),
@@ -110,68 +69,47 @@ export default function OrdersPage() {
 
   const handleAddToCartRequest = (request: CustomRequest) => {
     if (!user || !firestore) return;
+    
     const requestRef = doc(firestore, 'custom_requests', request.id);
     updateDocumentNonBlocking(requestRef, { status: 'AddedToCart', updatedAt: serverTimestamp() });
     
     const cartRef = doc(firestore, 'users', user.uid, 'carts', 'main');
     setDocumentNonBlocking(cartRef, { userId: user.uid, updatedAt: serverTimestamp() }, { merge: true });
     
-    const cartItemData = {
-      cartId: 'main',
-      productId: request.productId,
-      productGroupId: request.productGroupId,
-      productName: `[Sob Demanda] ${request.productName}`,
-      imageUrl: request.imageUrl,
-      quantity: 1,
-      selectedSize: request.selectedSize,
-      selectedColor: request.selectedColor,
-      selectedMaterial: request.selectedMaterial,
-      unitPriceAtAddition: request.finalPrice,
-      selected: true,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    };
     const cartItemsRef = collection(firestore, 'users', user.uid, 'carts', 'main', 'items');
-    addDocumentNonBlocking(cartItemsRef, cartItemData);
-    toast({ title: "Pronto para pagamento!" });
+    
+    request.items.forEach(item => {
+        addDocumentNonBlocking(cartItemsRef, {
+            cartId: 'main',
+            productId: item.productId,
+            productGroupId: item.productGroupId,
+            productName: `[Aprovado] ${item.productName}`,
+            imageUrl: item.imageUrl,
+            quantity: item.quantity,
+            selectedSize: item.selectedSize,
+            selectedColor: item.selectedColor,
+            selectedMaterial: item.selectedMaterial,
+            unitPriceAtAddition: item.unitPriceAtOrder,
+            readyMade: true, // Now it acts as ready-made since it's approved and ready for payment
+            selected: true,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
+    });
+
+    toast({ title: "Produtos aprovados adicionados ao carrinho!" });
     router.push('/cart');
   };
 
-  const addressForm = useForm<z.infer<typeof addressSchema>>({
-    resolver: zodResolver(addressSchema),
-    values: editingOrder ? {
-        cpf: editingOrder.shippingAddress.cpf,
-        streetName: editingOrder.shippingAddress.streetName,
-        streetNumber: editingOrder.shippingAddress.streetNumber,
-        zipCode: editingOrder.shippingAddress.zipCode,
-        city: editingOrder.shippingAddress.city,
-        state: editingOrder.shippingAddress.state,
-    } : undefined,
-  });
-
-  const onAddressSubmit = (values: z.infer<typeof addressSchema>) => {
-    if (!user || !firestore || !editingOrder) return;
-    const orderRef = doc(firestore, 'users', user.uid, 'orders', editingOrder.id);
-    updateDocumentNonBlocking(orderRef, { shippingAddress: values, updatedAt: serverTimestamp() });
-    toast({ title: "Endereço Atualizado" });
-    setAddressDialogOpen(false);
-  };
-
   if (isUserLoading) {
-    return (
-      <div className="p-4 sm:p-8 space-y-6">
-        <Skeleton className="h-10 w-64" />
-        <OrderCardSkeleton />
-      </div>
-    );
+    return <div className="p-8 space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-32 w-full" /></div>;
   }
 
   if (!user) {
     return (
-      <div className="flex flex-col flex-1 items-center justify-center text-center p-8">
+      <div className="flex flex-col flex-1 items-center justify-center p-8 text-center">
         <LogIn className="size-16 text-muted-foreground mb-4" />
         <h1 className="text-3xl font-bold font-headline">Acesse sua Conta</h1>
-        <p className="text-muted-foreground mt-2">Conecte-se para ver seus pedidos e solicitações.</p>
         <Button asChild className="mt-6"><Link href="/login">Fazer Login</Link></Button>
       </div>
     );
@@ -180,54 +118,62 @@ export default function OrdersPage() {
   const hasNoData = !isOrdersLoading && !isRequestsLoading && (!orders || orders.length === 0) && (!requests || requests.length === 0);
 
   return (
-    <div className="flex flex-col min-h-screen p-4 sm:p-6 lg:p-8">
-      <header className="mb-8">
-        <h1 className="text-4xl font-bold tracking-tight font-headline">Meus Pedidos</h1>
+    <div className="flex flex-col min-h-screen p-4 sm:p-6 lg:p-8 space-y-8">
+      <header>
+        <h1 className="text-4xl font-bold font-headline">Meus Pedidos</h1>
         <p className="text-muted-foreground mt-2">Acompanhe suas compras e solicitações personalizadas.</p>
       </header>
 
-      <main className="flex-1 space-y-8">
+      <main className="flex-1 space-y-12">
         {hasNoData ? (
           <div className="flex flex-col items-center justify-center text-center py-20 border-2 border-dashed rounded-lg">
             <PackageSearch className="size-16 text-muted-foreground mb-4" />
             <h2 className="text-2xl font-bold font-headline">Nada por aqui ainda</h2>
-            <p className="text-muted-foreground mt-2">Explore nosso catálogo e comece suas encomendas!</p>
             <Button asChild className="mt-6"><Link href="/">Ver Catálogo</Link></Button>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-10">
             {requests && requests.length > 0 && (
               <section className="space-y-4">
                 <h2 className="text-xl font-bold flex items-center gap-2 text-primary">
-                  <Clock className="size-5" /> Sob Demanda (Em Análise)
+                  <ClipboardList className="size-5" /> Sob Demanda (Em Análise)
                 </h2>
                 {requests.map(request => (
                   <Card key={request.id} className={cn(request.status === 'AddedToCart' && "opacity-60")}>
-                    <CardContent className="p-4 flex flex-col sm:flex-row items-center gap-4">
-                      <div className="size-20 relative rounded-md overflow-hidden bg-muted">
-                        <Image src={request.imageUrl} alt={request.productName} fill className="object-cover" />
-                      </div>
-                      <div className="flex-1 text-center sm:text-left">
-                         <div className="mb-1">
+                    <CardContent className="p-4">
+                      <div className="flex flex-col sm:flex-row justify-between gap-4 mb-4">
+                        <div>
                           <Badge variant={
                             request.status === 'Approved' ? 'default' : 
                             request.status === 'Contested' ? 'destructive' : 'secondary'
                           }>
                             {request.status === 'Pending' ? 'Em Análise pela Artesã' : 
-                             request.status === 'Approved' ? 'Aprovado' : 
-                             request.status === 'Contested' ? 'Não disponível agora' : 'No Carrinho'}
+                             request.status === 'Approved' ? 'Aprovado para Pagamento' : 
+                             request.status === 'Contested' ? 'Não disponível' : 'No Carrinho'}
                           </Badge>
+                          <p className="text-xs text-muted-foreground mt-1">Solicitado em {request.createdAt?.toDate().toLocaleDateString()}</p>
                         </div>
-                        <h4 className="font-bold">{request.productName}</h4>
-                        <p className="text-sm text-muted-foreground">{request.selectedSize} | {request.selectedColor}</p>
+                        <div className="text-right">
+                          <p className="font-bold text-xl text-primary">R$ {request.finalPrice.toFixed(2).replace('.', ',')}</p>
+                          {request.status === 'Approved' && (
+                            <Button size="sm" onClick={() => handleAddToCartRequest(request)} className="mt-2">
+                              <ShoppingBag className="size-4 mr-2" /> Pagar Agora
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-center sm:text-right">
-                        <p className="font-bold text-lg text-primary">R$ {request.finalPrice.toFixed(2).replace('.', ',')}</p>
-                        {request.status === 'Approved' && (
-                          <Button size="sm" onClick={() => handleAddToCartRequest(request)} className="mt-2">
-                            <ShoppingBag className="size-4 mr-2" /> Pagar Agora
-                          </Button>
-                        )}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {request.items.map((item, idx) => (
+                          <div key={idx} className="flex gap-3 items-center bg-muted/30 p-2 rounded">
+                            <div className="size-12 relative rounded overflow-hidden shrink-0">
+                              <Image src={item.imageUrl} alt={item.productName} fill className="object-cover" />
+                            </div>
+                            <div className="text-xs">
+                              <p className="font-bold line-clamp-1">{item.productName}</p>
+                              <p className="text-muted-foreground">{item.selectedSize} | {item.selectedColor}</p>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </CardContent>
                   </Card>
@@ -240,53 +186,44 @@ export default function OrdersPage() {
                 <h2 className="text-xl font-bold flex items-center gap-2 text-primary">
                   <Truck className="size-5" /> Compras e Entregas
                 </h2>
-                {orders.map(order => {
-                  const statusInfo = statusMap[order.status];
-                  const isCancelled = order.status === 'Cancelled';
-                  return (
-                    <Card key={order.id} className={cn(isCancelled && "opacity-75 bg-muted/30")}>
-                      <CardHeader className="p-4 pb-2">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <CardTitle className="text-lg">Pedido #{order.id.substring(0,6)}</CardTitle>
-                            <CardDescription>{order.orderDate?.toDate().toLocaleDateString('pt-BR')}</CardDescription>
-                          </div>
-                          {statusInfo && <Badge variant={statusInfo.variant}>{statusInfo.text}</Badge>}
-                        </div>
-                      </CardHeader>
-                      <CardContent className="p-4 pt-0">
-                        <div className="space-y-2">
-                          {order.items.map(item => (
-                            <div key={item.productId} className="flex gap-3 items-center">
-                              <div className="size-12 relative rounded overflow-hidden flex-shrink-0">
-                                <Image src={item.imageUrl} alt={item.productName} fill className="object-cover" />
-                              </div>
-                              <div className="text-sm">
-                                <p className="font-medium line-clamp-1">{item.productName}</p>
-                                <p className="text-muted-foreground text-xs">Qtd: {item.quantity} | {item.selectedSize}</p>
-                              </div>
+                <div className="grid gap-4">
+                  {orders.map(order => {
+                    const statusInfo = statusMap[order.status];
+                    return (
+                      <Card key={order.id} className={cn(order.status === 'Cancelled' && "opacity-75 bg-muted/30")}>
+                        <CardHeader className="p-4 pb-2">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <CardTitle className="text-lg">Pedido #{order.id.substring(0,6)}</CardTitle>
+                              <CardDescription>{order.orderDate?.toDate().toLocaleDateString()}</CardDescription>
                             </div>
-                          ))}
-                        </div>
-                        <Separator className="my-3" />
-                        <div className="flex justify-between items-center text-sm">
-                           <span className="text-muted-foreground flex items-center gap-1">
-                             <MapPin className="size-3" /> {order.shippingAddress.city}, {order.shippingAddress.state}
-                           </span>
-                           <span className="font-bold">Total: R$ {order.totalAmount.toFixed(2).replace('.', ',')}</span>
-                        </div>
-                        {statusInfo && !isCancelled && statusInfo.value > 0 && (
-                          <div className="mt-3">
-                            <Progress value={statusInfo.value} className="h-1.5" />
+                            {statusInfo && <Badge variant={statusInfo.variant}>{statusInfo.text}</Badge>}
                           </div>
-                        )}
-                      </CardContent>
-                      <CardFooter className="p-2 px-4 bg-muted/30 rounded-b-lg justify-end gap-2">
-                        {(order.status === 'Processing' || order.status === 'Crafting') && (
-                          <>
-                            <Button variant="ghost" size="sm" onClick={() => { setEditingOrder(order); setAddressDialogOpen(true); }}>
-                              <MapPin className="size-4 mr-1" /> Mudar Endereço
-                            </Button>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0">
+                          <div className="space-y-2">
+                            {order.items.map(item => (
+                              <div key={item.productId} className="flex gap-3 items-center">
+                                <div className="size-10 relative rounded overflow-hidden flex-shrink-0">
+                                  <Image src={item.imageUrl} alt={item.productName} fill className="object-cover" />
+                                </div>
+                                <div className="text-xs">
+                                  <p className="font-medium line-clamp-1">{item.productName}</p>
+                                  <p className="text-muted-foreground">Qtd: {item.quantity}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <Separator className="my-3" />
+                          <div className="flex justify-between items-center text-sm font-bold">
+                             <span>Total: R$ {order.totalAmount.toFixed(2).replace('.', ',')}</span>
+                          </div>
+                          {statusInfo && order.status !== 'Cancelled' && statusInfo.value > 0 && (
+                            <Progress value={statusInfo.value} className="h-1.5 mt-3" />
+                          )}
+                        </CardContent>
+                        <CardFooter className="p-2 px-4 bg-muted/30 rounded-b-lg justify-end">
+                          {(order.status === 'Processing' || order.status === 'Crafting') && (
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
@@ -296,7 +233,7 @@ export default function OrdersPage() {
                               <AlertDialogContent>
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>Cancelar Pedido?</AlertDialogTitle>
-                                  <AlertDialogDescription>Esta ação registrará sua desistência e o estorno será processado.</AlertDialogDescription>
+                                  <AlertDialogDescription>Essa ação notificará a artesã e o estorno será processado.</AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Voltar</AlertDialogCancel>
@@ -304,53 +241,17 @@ export default function OrdersPage() {
                                 </AlertDialogFooter>
                               </AlertDialogContent>
                             </AlertDialog>
-                          </>
-                        )}
-                      </CardFooter>
-                    </Card>
-                  )
-                })}
+                          )}
+                        </CardFooter>
+                      </Card>
+                    );
+                  })}
+                </div>
               </section>
             )}
           </div>
         )}
       </main>
-
-      <Dialog open={addressDialogOpen} onOpenChange={setAddressDialogOpen}>
-        <DialogContent className="sm:max-w-[450px]">
-          <DialogHeader>
-            <DialogTitle>Alterar Endereço</DialogTitle>
-            <DialogDescription>Atualize o destino para o pedido #{editingOrder?.id.substring(0,6)}.</DialogDescription>
-          </DialogHeader>
-          <Form {...addressForm}>
-            <form onSubmit={addressForm.handleSubmit(onAddressSubmit)} className="space-y-4">
-              <FormField control={addressForm.control} name="cpf" render={({ field }) => (
-                <FormItem><FormLabel>CPF</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
-              )}/>
-              <div className="grid grid-cols-2 gap-4">
-                <FormField control={addressForm.control} name="zipCode" render={({ field }) => (
-                  <FormItem><FormLabel>CEP</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
-                )}/>
-                <FormField control={addressForm.control} name="state" render={({ field }) => (
-                  <FormItem><FormLabel>UF</FormLabel><FormControl><Input {...field} maxLength={2} /></FormControl></FormItem>
-                )}/>
-              </div>
-              <FormField control={addressForm.control} name="streetName" render={({ field }) => (
-                <FormItem><FormLabel>Rua</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
-              )}/>
-              <div className="grid grid-cols-2 gap-4">
-                <FormField control={addressForm.control} name="streetNumber" render={({ field }) => (
-                  <FormItem><FormLabel>Número</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
-                )}/>
-                <FormField control={addressForm.control} name="city" render={({ field }) => (
-                  <FormItem><FormLabel>Cidade</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
-                )}/>
-              </div>
-              <DialogFooter><Button type="submit">Salvar Alterações</Button></DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

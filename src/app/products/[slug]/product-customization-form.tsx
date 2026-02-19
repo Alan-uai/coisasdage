@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -10,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { ShoppingBag, ClipboardList, Loader2 } from 'lucide-react';
+import { ShoppingBag, Loader2, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useUser, useFirestore, addDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
@@ -54,7 +55,7 @@ function ProductCustomizationFormComponent({
   const { user } = useUser();
   const firestore = useFirestore();
   const router = useRouter();
-  const [isRequesting, setIsRequesting] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
 
   const currentVariant = useMemo(() => {
     const sizeToMatch = selectedSize === 'Padrão' ? (product.size || 'Padrão') : selectedSize;
@@ -80,69 +81,35 @@ function ProductCustomizationFormComponent({
       return;
     }
 
-    if (isReady) {
-      const cartRef = doc(firestore, 'users', user.uid, 'carts', 'main');
-      setDocumentNonBlocking(cartRef, { userId: user.uid, updatedAt: serverTimestamp() }, { merge: true });
-      
-      const cartItemData = {
-        cartId: 'main',
-        productId: currentVariant?.id || product.id,
-        productGroupId: product.groupId,
-        productName: product.name,
-        imageUrl: selectedImageUrl,
-        quantity: 1,
-        selectedSize,
-        selectedColor,
-        selectedMaterial,
-        unitPriceAtAddition: currentPrice,
-        selected: true,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
+    setIsAdding(true);
+    const cartRef = doc(firestore, 'users', user.uid, 'carts', 'main');
+    setDocumentNonBlocking(cartRef, { userId: user.uid, updatedAt: serverTimestamp() }, { merge: true });
+    
+    const cartItemData = {
+      cartId: 'main',
+      productId: currentVariant?.id || product.id,
+      productGroupId: product.groupId,
+      productName: product.name,
+      imageUrl: selectedImageUrl,
+      quantity: 1,
+      selectedSize,
+      selectedColor,
+      selectedMaterial,
+      unitPriceAtAddition: currentPrice,
+      readyMade: !!isReady,
+      selected: true,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
 
-      const cartItemsRef = collection(firestore, 'users', user.uid, 'carts', 'main', 'items');
-      addDocumentNonBlocking(cartItemsRef, cartItemData);
+    const cartItemsRef = collection(firestore, 'users', user.uid, 'carts', 'main', 'items');
+    addDocumentNonBlocking(cartItemsRef, cartItemData);
 
-      toast({
-        title: "Adicionado ao Carrinho!",
-        description: `${product.name} foi adicionado ao seu carrinho.`,
-      });
-      router.push('/cart');
-    } else {
-      setIsRequesting(true);
-      try {
-        const requestsRef = collection(firestore, 'custom_requests');
-        const requestData = {
-          userId: user.uid,
-          userName: user.displayName || 'Cliente',
-          userEmail: user.email || '',
-          productId: currentVariant?.id || product.id,
-          productGroupId: product.groupId,
-          productName: product.name,
-          imageUrl: selectedImageUrl,
-          selectedSize,
-          selectedColor,
-          selectedMaterial,
-          basePrice: currentPrice,
-          finalPrice: currentPrice,
-          status: 'Pending',
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        };
-
-        addDocumentNonBlocking(requestsRef, requestData);
-
-        toast({
-          title: "Solicitação Enviada!",
-          description: "Sua solicitação sob demanda foi enviada para aprovação da artesã.",
-        });
-        router.push('/orders');
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setIsRequesting(false);
-      }
-    }
+    toast({
+      title: "Adicionado ao Carrinho!",
+      description: `${product.name} foi para o seu carrinho.`,
+    });
+    router.push('/cart');
   };
 
   const hasColorOptions = product.options.colors.length > 1 || (product.options.colors.length === 1 && product.options.colors[0] !== 'Padrão');
@@ -224,19 +191,15 @@ function ProductCustomizationFormComponent({
         </div>
       )}
 
-      <Button type="submit" size="lg" className="w-full md:w-auto mt-4" disabled={isRequesting}>
-        {isReady ? (
-          <>
-            <ShoppingBag className="mr-2 h-5 w-5" />
-            Adicionar ao Carrinho
-          </>
-        ) : (
-          <>
-            {isRequesting ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <ClipboardList className="mr-2 h-5 w-5" />}
-            Solicitar Orçamento (Sob Demanda)
-          </>
-        )}
+      <Button type="submit" size="lg" className="w-full md:w-auto mt-4" disabled={isAdding}>
+        {isAdding ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <ShoppingBag className="mr-2 h-5 w-5" />}
+        {isReady ? "Adicionar ao Carrinho" : "Adicionar para Solicitação"}
       </Button>
+      {!isReady && (
+        <p className="text-xs text-muted-foreground flex items-center gap-1">
+          <Info className="size-3" /> Este item será analisado antes do pagamento.
+        </p>
+      )}
     </form>
   );
 }

@@ -2,71 +2,54 @@
 {
   "entities": {
     "UserProfile": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "UserProfile",
       "type": "object",
-      "description": "Represents the profile information for a user in the Artesã Aconchegante e-commerce application.",
+      "description": "Represents the profile information for a user.",
       "properties": {
-        "displayName": {
-          "type": "string",
-          "description": "The user's display name."
-        },
-        "email": {
-          "type": "string",
-          "description": "The user's email address, used for verification.",
-          "format": "email"
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Timestamp when the user profile was created.",
-          "format": "date-time"
-        },
-        "isAdmin": {
-          "type": "boolean",
-          "description": "Whether the user has administrative privileges."
-        }
+        "displayName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "isAdmin": { "type": "boolean" }
       },
-      "required": [
-        "displayName",
-        "email",
-        "createdAt"
-      ]
+      "required": ["displayName", "email", "createdAt"]
     },
     "CustomRequest": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "CustomRequest",
       "type": "object",
-      "description": "Represents a user's request for a non-ready-made product that requires admin approval.",
+      "description": "A bundle of items requested by a user for review.",
       "properties": {
         "id": { "type": "string" },
         "userId": { "type": "string" },
         "userName": { "type": "string" },
         "userEmail": { "type": "string" },
-        "productId": { "type": "string" },
-        "productGroupId": { "type": "string" },
-        "productName": { "type": "string" },
-        "imageUrl": { "type": "string", "format": "uri" },
-        "selectedSize": { "type": "string" },
-        "selectedColor": { "type": "string" },
-        "selectedMaterial": { "type": "string" },
-        "basePrice": { "type": "number" },
-        "finalPrice": { "type": "number" },
-        "status": { 
-          "type": "string", 
-          "enum": ["Pending", "Approved", "Contested", "AddedToCart"] 
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "productId": { "type": "string" },
+              "productName": { "type": "string" },
+              "imageUrl": { "type": "string" },
+              "quantity": { "type": "number" },
+              "unitPriceAtOrder": { "type": "number" },
+              "selectedSize": { "type": "string" },
+              "selectedColor": { "type": "string" },
+              "selectedMaterial": { "type": "string" }
+            }
+          }
         },
+        "totalBasePrice": { "type": "number" },
+        "finalPrice": { "type": "number" },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Contested", "AddedToCart"] },
         "adminNotes": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["userId", "productId", "status", "createdAt"]
+      "required": ["userId", "items", "status", "createdAt"]
     }
   },
   "auth": {
-    "providers": [
-      "password",
-      "google.com"
-    ]
+    "providers": ["password", "google.com"]
   },
   "firestore": {
     "structure": [
@@ -83,7 +66,7 @@
         "definition": {
           "entityName": "CustomRequest",
           "schema": { "$ref": "#/backend/entities/CustomRequest" },
-          "description": "Global collection for on-demand product requests, manageable by admins and viewable by the requester."
+          "description": "Bundled on-demand requests for admin approval."
         }
       }
     ]

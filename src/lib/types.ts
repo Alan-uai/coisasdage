@@ -48,26 +48,6 @@ export type Product = {
   variants: ProductVariant[];
 };
 
-export type CustomRequest = {
-  id: string;
-  userId: string;
-  userName: string;
-  userEmail: string;
-  productId: string;
-  productGroupId: string;
-  productName: string;
-  imageUrl: string;
-  selectedSize: string;
-  selectedColor: string;
-  selectedMaterial: string;
-  basePrice: number;
-  finalPrice: number;
-  status: 'Pending' | 'Approved' | 'Contested' | 'AddedToCart';
-  adminNotes?: string;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-};
-
 export type OrderItemSummary = {
   productId: string;
   productGroupId: string;
@@ -78,6 +58,21 @@ export type OrderItemSummary = {
   selectedSize: string;
   selectedColor: string;
   selectedMaterial: string;
+  readyMade?: boolean;
+};
+
+export type CustomRequest = {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  items: OrderItemSummary[];
+  totalBasePrice: number;
+  finalPrice: number;
+  status: 'Pending' | 'Approved' | 'Contested' | 'AddedToCart';
+  adminNotes?: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 };
 
 export type Address = {
@@ -118,6 +113,7 @@ export type CartItem = {
   selectedColor: string;
   selectedMaterial: string;
   unitPriceAtAddition: number;
+  readyMade: boolean;
   selected?: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;

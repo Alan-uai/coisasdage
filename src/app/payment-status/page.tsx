@@ -1,12 +1,12 @@
-
 'use client';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { CheckCircle2, XCircle, AlertCircle, Info } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Suspense } from 'react';
 
-export default function PaymentStatusPage() {
+function PaymentStatusContent() {
     const searchParams = useSearchParams();
     const status = searchParams.get('status');
     const paymentId = searchParams.get('payment_id');
@@ -46,15 +46,17 @@ export default function PaymentStatusPage() {
                     <CardTitle className="text-2xl font-bold mt-4">{currentStatus.title}</CardTitle>
                 </CardHeader>
                 <CardContent className="text-center space-y-6">
-                    <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg space-y-2 text-blue-800 text-sm text-left">
-                        <div className="flex items-center gap-2 font-bold mb-1">
-                            <Info className="size-5 shrink-0" />
-                            <span>Dados para Homologação (Go Live)</span>
+                    {(paymentId || (merchantOrderId && merchantOrderId !== 'undefined')) && (
+                        <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg space-y-2 text-blue-800 text-sm text-left">
+                            <div className="flex items-center gap-2 font-bold mb-1">
+                                <Info className="size-5 shrink-0" />
+                                <span>Dados para Homologação (Go Live)</span>
+                            </div>
+                            {paymentId && <p><strong>ID do Pagamento:</strong> {paymentId}</p>}
+                            {merchantOrderId && merchantOrderId !== 'undefined' && <p><strong>ID da Ordem (Merchant Order):</strong> {merchantOrderId}</p>}
+                            <p className="text-xs italic opacity-80 pt-1">Use esses IDs no formulário do Mercado Pago.</p>
                         </div>
-                        {paymentId && <p><strong>ID do Pagamento:</strong> {paymentId}</p>}
-                        {merchantOrderId && merchantOrderId !== 'undefined' && <p><strong>ID da Ordem (Merchant Order):</strong> {merchantOrderId}</p>}
-                        <p className="text-xs italic opacity-80 pt-1">Use esses IDs no formulário do Mercado Pago.</p>
-                    </div>
+                    )}
 
                     <p className="text-muted-foreground">{currentStatus.description}</p>
                     <Button asChild className="w-full">
@@ -65,5 +67,17 @@ export default function PaymentStatusPage() {
                 </CardContent>
             </Card>
         </div>
+    );
+}
+
+export default function PaymentStatusPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex flex-1 items-center justify-center p-4">
+                <div className="animate-pulse text-muted-foreground">Carregando status...</div>
+            </div>
+        }>
+            <PaymentStatusContent />
+        </Suspense>
     );
 }

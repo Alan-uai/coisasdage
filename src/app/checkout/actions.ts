@@ -1,11 +1,10 @@
-
 'use server';
 
 import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
 import { z } from 'zod';
 import { addressSchema } from './form-schema';
+import { headers } from 'next/headers';
 
-// Define a serializable type for items passed from client to server action
 export type PreferenceCartItem = {
     id: string;
     productName: string;
@@ -35,9 +34,6 @@ type PaymentResult = {
     error?: string;
 };
 
-/**
- * Creates a preference to initialize the Payment Brick.
- */
 export async function createPreference(
     userId: string,
     userEmail: string,
@@ -49,29 +45,29 @@ export async function createPreference(
     const accessToken = process.env.MP_ACCESS_TOKEN;
     
     if (!accessToken) {
-        return { error: 'Token de acesso não configurado no servidor (.env).' };
+        return { error: 'Token de acesso não configurado no servidor.' };
     }
 
-    if (!cartItems || cartItems.length === 0) {
-        return { error: 'O carrinho está vazio.' };
-    }
-    
     try {
         const client = new MercadoPagoConfig({ accessToken });
         const preference = new Preference(client);
 
-        const items = cartItems.map(item => ({
-            id: item.id,
-            title: item.productName,
-            description: `${item.selectedColor} / ${item.selectedSize}`,
-            quantity: item.quantity,
-            currency_id: 'BRL',
-            unit_price: item.unitPriceAtAddition,
-        }));
-        
+        // Get the host for the notification URL
+        const headersList = await headers();
+        const host = headersList.get('host');
+        const protocol = host?.includes('localhost') ? 'http' : 'https';
+        const notificationUrl = `${protocol}://${host}/api/webhooks/mercadopago`;
+
         const response = await preference.create({
             body: {
-                items: items,
+                items: cartItems.map(item => ({
+                    id: item.id,
+                    title: item.productName,
+                    description: `${item.selectedColor} / ${item.selectedSize}`,
+                    quantity: item.quantity,
+                    currency_id: 'BRL',
+                    unit_price: item.unitPriceAtAddition,
+                })),
                 payer: {
                     email: userEmail,
                     name: userName?.split(' ')[0] || 'Cliente',
@@ -80,33 +76,22 @@ export async function createPreference(
                         type: 'CPF',
                         number: addressData.cpf.replace(/\D/g, ''),
                     },
-                    address: {
-                        street_name: addressData.streetName,
-                        street_number: parseInt(addressData.streetNumber, 10),
-                        zip_code: addressData.zipCode.replace(/\D/g, ''),
-                    }
                 },
                 external_reference: orderId,
+                notification_url: notificationUrl,
                 statement_descriptor: "ARTESAACONCHEG",
-                binary_mode: false,
             }
         });
         
-        if (!response.id) {
-            throw new Error('ID da preferência não retornado pela API.');
-        }
+        if (!response.id) throw new Error('Falha ao gerar ID da preferência.');
 
         return { preferenceId: response.id };
-
     } catch (error: any) {
-        console.error('Mercado Pago preference error:', error);
-        return { error: `Erro ao iniciar pagamento: ${error.message || 'Erro desconhecido'}` };
+        console.error('Preference creation error:', error);
+        return { error: `Erro ao iniciar pagamento: ${error.message}` };
     }
 }
 
-/**
- * Processes the payment using the Checkout API (v1/payments).
- */
 export async function processPayment(
     paymentData: any, 
     orderId: string, 
@@ -116,7 +101,7 @@ export async function processPayment(
     const accessToken = process.env.MP_ACCESS_TOKEN;
     
     if (!accessToken) {
-        return { success: false, error: 'Token de acesso não configurado no servidor (.env).' };
+        return { success: false, error: 'Token não configurado.' };
     }
 
     try {
@@ -127,21 +112,13 @@ export async function processPayment(
             body: {
                 ...paymentData, 
                 transaction_amount: Number(amount.toFixed(2)), 
-                description: `Pedido ${orderId} - Artesã Aconchegante`,
+                description: `Pedido ${orderId}`,
                 external_reference: orderId,
-                payer: {
-                    ...paymentData.payer,
-                    email: userEmail,
-                },
+                payer: { ...paymentData.payer, email: userEmail },
             }
         });
 
-        const poi = response.point_of_interaction;
-        const qrCode = poi?.transaction_data?.qr_code;
-        const qrCodeBase64 = poi?.transaction_data?.qr_code_base64;
-
-        // Extract merchant order ID if available in the response
-        // Sometimes it's inside the 'order' object, sometimes it's returned as 'merchant_order_id'
+        // Try to get the Merchant Order ID (the "ORD..." one)
         const merchantOrderId = response.order?.id || (response as any).merchant_order_id;
 
         return {
@@ -150,23 +127,11 @@ export async function processPayment(
             status_detail: response.status_detail,
             payment_id: response.id,
             merchant_order_id: merchantOrderId,
-            qr_code: qrCode,
-            qr_code_base64: qrCodeBase64,
+            qr_code: response.point_of_interaction?.transaction_data?.qr_code,
+            qr_code_base64: response.point_of_interaction?.transaction_data?.qr_code_base64,
         };
     } catch (error: any) {
-        console.error('Mercado Pago payment processing error:', error);
-        
-        let errorMessage = 'Erro ao processar o pagamento.';
-        
-        if (error.message?.includes('Unauthorized use of live credentials') || error.status === 401 || error.status === 403) {
-            errorMessage = 'Sua conta do Mercado Pago ainda não foi homologada para usar chaves de Produção (APP_USR). Por favor, use as chaves de Teste (TEST) ou preencha o formulário de "Go Live" no painel do Mercado Pago.';
-        } else {
-            errorMessage = error.message || (error.cause && error.cause[0]?.description) || errorMessage;
-        }
-
-        return { 
-            success: false, 
-            error: errorMessage
-        };
+        console.error('Payment processing error:', error);
+        return { success: false, error: error.message || 'Erro ao processar pagamento.' };
     }
 }

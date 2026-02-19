@@ -19,7 +19,10 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() && 
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+        (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == "true"
+        );
     }
 
     /* =============================
@@ -40,7 +43,7 @@ service cloud.firestore {
       allow create, update: if isOwner(userId);
       
       match /{allSubcollections=**} {
-        allow read, write: if isOwner(userId);
+        allow read, write: if isOwner(userId) || isAdmin();
       }
     }
 
@@ -49,13 +52,11 @@ service cloud.firestore {
     ============================== */
 
     match /custom_requests/{requestId} {
-      // Permite listagem se o usuário for o dono dos documentos ou se for admin.
-      // O Firestore valida automaticamente o filtro 'where' da sua página contra o auth.uid.
+      // Regra de listagem otimizada para o dono do pedido
       allow list: if isAuthenticated() && (
         resource.data.userId == request.auth.uid || isAdmin()
       );
       
-      // Permite leitura individual para o dono ou admin
       allow get: if isAuthenticated() && (
         resource.data.userId == request.auth.uid || isAdmin()
       );
@@ -74,8 +75,7 @@ service cloud.firestore {
     ============================== */
     
     match /products/{productId} {
-      allow get: if true;
-      allow list: if true;
+      allow get, list: if true;
       allow write: if false;
     }
     

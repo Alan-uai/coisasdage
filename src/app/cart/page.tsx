@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { LogIn, ShoppingBag, Trash2, Plus, Minus, ArrowRight, ClipboardList, AlertCircle } from 'lucide-react';
+import { LogIn, ShoppingBag, Trash2, Plus, Minus, ArrowRight, ClipboardList, AlertCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { CartItem } from '@/lib/types';
 import { cn } from '@/lib/utils';

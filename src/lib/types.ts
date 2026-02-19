@@ -1,3 +1,4 @@
+
 import type { Timestamp } from 'firebase/firestore';
 
 export type ProductVariant = {
@@ -10,7 +11,7 @@ export type ProductVariant = {
 };
 
 export type Product = {
-  id: string; // The ID of the main product
+  id: string;
   groupId: string;
   isMain?: boolean;
   name: string;
@@ -18,29 +19,49 @@ export type Product = {
   price: number;
   minPrice: number;
   maxPrice: number;
-  imageUrl: string; // The default/main image URL
+  imageUrl: string;
   imageHint: string;
   category: string;
   readyMade?: boolean;
   primaryColor?: string;
-  size?: string; // The specific size of the main product variant
+  size?: string;
   sizeRangeText?: string;
-  options: { // All possible options for the group
+  options: {
     sizes: string[];
     colors: string[];
     materials: string[];
   };
-  availability?: { // Which options are currently available
+  availability?: {
     sizes: string[];
     colors: string[];
     materials: string[];
   };
-  variants: ProductVariant[]; // All variants in the group
+  variants: ProductVariant[];
+};
+
+export type CustomRequest = {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  productId: string;
+  productGroupId: string;
+  productName: string;
+  imageUrl: string;
+  selectedSize: string;
+  selectedColor: string;
+  selectedMaterial: string;
+  basePrice: number;
+  finalPrice: number;
+  status: 'Pending' | 'Approved' | 'Contested' | 'AddedToCart';
+  adminNotes?: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 };
 
 export type OrderItemSummary = {
   productId: string;
-  productGroupId: string; // Added to facilitate re-ordering and linking
+  productGroupId: string;
   productName: string;
   imageUrl: string;
   quantity: number;
@@ -67,7 +88,7 @@ export type Order = {
   status: 'Processing' | 'Crafting' | 'Shipped' | 'Delivered' | 'Cancelled';
   items: OrderItemSummary[];
   shippingAddress: Address;
-  billingAddressId?: string; // Optional for now
+  billingAddressId?: string;
   trackingNumber?: string;
   estimatedDeliveryDate?: Timestamp;
   createdAt: Timestamp;
@@ -77,7 +98,7 @@ export type Order = {
 };
 
 export type CartItem = {
-  id: string; // The firestore document ID
+  id: string;
   cartId: string;
   productId: string;
   productGroupId: string;
@@ -88,7 +109,7 @@ export type CartItem = {
   selectedColor: string;
   selectedMaterial: string;
   unitPriceAtAddition: number;
-  selected?: boolean; // New field for selection
+  selected?: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 };

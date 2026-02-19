@@ -1,11 +1,13 @@
+
 'use client';
 
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutGrid, Package, Palette, ShoppingBag, HelpCircle, User, LogIn, LogOut } from 'lucide-react';
+import { LayoutGrid, Package, Palette, ShoppingBag, HelpCircle, User, LogIn, LogOut, ClipboardList, ShieldCheck } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
+  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
@@ -19,14 +21,16 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/button';
-import { useUser, useAuth } from '@/firebase';
+import { useUser, useAuth, useFirestore, useDoc } from '@/firebase';
 import { initiateSignOut } from '@/firebase/non-blocking-login';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from './ui/skeleton';
+import { doc } from 'firebase/firestore';
 
 const mainLinks = [
   { href: '/', label: 'Catálogo', icon: LayoutGrid },
   { href: '/orders', label: 'Meus Pedidos', icon: Package },
+  { href: '/my-requests', label: 'Sob Demanda', icon: ClipboardList },
   { href: '/design', label: 'Design IA', icon: Palette },
   { href: '/cart', label: 'Carrinho', icon: ShoppingBag },
   { href: '/faq', label: 'Dúvidas', icon: HelpCircle },
@@ -35,6 +39,9 @@ const mainLinks = [
 function UserNav() {
     const { user, isUserLoading } = useUser();
     const auth = useAuth();
+    const firestore = useFirestore();
+
+    const { data: profile } = useDoc(user ? doc(firestore, 'users', user.uid) : null);
 
     const handleLogout = () => {
         if (auth) {
@@ -92,6 +99,17 @@ function UserNav() {
                     </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                {profile?.isAdmin && (
+                  <>
+                    <DropdownMenuItem asChild>
+                        <Link href="/admin/requests">
+                            <ShieldCheck className="mr-2 h-4 w-4" />
+                            <span>Administração</span>
+                        </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 <DropdownMenuItem onClick={handleLogout}>
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Sair</span>

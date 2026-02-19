@@ -1,3 +1,4 @@
+
 rules_version = '2';
 
 service cloud.firestore {
@@ -14,87 +15,57 @@ service cloud.firestore {
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
-    
-    function isExistingOwner(userId) {
-      return isOwner(userId) && resource != null;
-    }
-    
-    function isOwnedData(userId) {
-      return request.resource.data.userId == userId;
-    }
-    
-    function isOwnershipImmutable() {
-      return request.resource.data.userId == resource.data.userId;
+
+    // Basic admin check - in a real app, this would be a custom claim or a lookup.
+    // For this prototype, we'll check if the UserProfile document has isAdmin: true.
+    function isAdmin() {
+      return isAuthenticated() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true
+      );
     }
 
     function isSafeRead() {
-      // Ensure queries are limited for performance and security.
-      return request.query.limit != null && request.query.limit <= 20;
+      return request.query.limit != null && request.query.limit <= 40;
     }
 
     /* =============================
         GLOBAL BLOCK
     ============================== */
     
-    // By default, deny all reads and writes.
     match /{document=**} {
       allow read, write: if false;
     }
 
     /* =============================
-        USER DATA & SUBCOLLECTIONS
+        USER PROFILES
     ============================== */
 
     match /users/{userId} {
-
-      // A user can access their own profile.
-      allow get, create, update: if isOwner(userId);
-      allow delete: if false;
-
-      // --- ADDRESSES ---
-      match /addresses/{addressId} {
-        allow get: if isOwner(userId);
-        allow list: if isOwner(userId) && isSafeRead();
-        allow create: if isOwner(userId) && isOwnedData(userId);
-        allow update, delete: if isOwner(userId);
+      allow get: if isAuthenticated();
+      allow list: if isAdmin();
+      allow create, update: if isOwner(userId);
+      
+      // Allow subcollections to be handled by their specific rules
+      match /{allSubcollections=**} {
+        allow read, write: if isOwner(userId);
       }
+    }
 
-      // --- CARTS ---
-      match /carts/{cartId} {
-        allow get: if isOwner(userId);
-        allow list: if isOwner(userId) && isSafeRead();
-        allow create: if isOwner(userId) && isOwnedData(userId);
-        allow update, delete: if isOwner(userId);
-        
-        match /items/{cartItemId} {
-          allow get: if isOwner(userId);
-          allow list: if isOwner(userId) && isSafeRead();
-          allow create, update, delete: if isOwner(userId);
-        }
-      }
+    /* =============================
+        CUSTOM REQUESTS (On Demand)
+    ============================== */
 
-      // --- ORDERS ---
-      match /orders/{orderId} {
-        // Separated get and list to avoid isSafeRead failing on single doc listeners
-        allow get: if isOwner(userId);
-        allow list: if isOwner(userId) && isSafeRead();
-        
-        allow create: if isOwner(userId) && isOwnedData(userId);
-        
-        // Allow owner to update order details (payment status, IDs, address)
-        allow update: if isOwner(userId);
-        
-        // Allow owner to delete order (used when redoing a cancelled order)
-        allow delete: if isOwner(userId);
-
-        match /items/{orderItemId} {
-          allow get: if isOwner(userId);
-          allow list: if isOwner(userId) && isSafeRead();
-          allow create: if isOwner(userId);
-          allow update: if false;
-          allow delete: if isOwner(userId);
-        }
-      }
+    match /custom_requests/{requestId} {
+      // Users can see their own requests, Admins can see all
+      allow get: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isAuthenticated() && (request.query.filters.userId == request.auth.uid || isAdmin());
+      
+      // Any authenticated user can create a request for themselves
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      
+      // Admins can update status/price, Users can update if it's theirs (e.g. mark as AddedToCart)
+      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
     }
     
     /* =============================
@@ -106,10 +77,6 @@ service cloud.firestore {
       allow list: if isSafeRead();
       allow write: if false;
     }
-    
-    /* =============================
-        WRITE-ONLY COLLECTIONS
-    ============================== */
     
     match /security_logs/{logId} {
       allow create: if isAuthenticated();

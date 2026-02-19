@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -7,9 +8,9 @@ import type { Product } from '@/lib/types';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
-// Renders a color swatch, handling single colors and various multi-color combinations.
 const renderColorSwatch = (color: string, primaryColor?: string): JSX.Element => {
     const colorHexMap: { [key: string]: string } = {
         'preto': '#262626',
@@ -35,91 +36,49 @@ const renderColorSwatch = (color: string, primaryColor?: string): JSX.Element =>
     };
 
     const getHex = (c: string) => colorHexMap[c.toLowerCase().trim()];
-    
-    // Get colors from the 'color' option string (e.g., "Verde e Branco")
     const optionColors = color.split(' e ').map(c => c.trim().toLowerCase()).filter(Boolean);
-    
     let allColorNames: string[] = [];
-
-    // Add primary color if it exists and is not already in the option colors
     if (primaryColor && !optionColors.includes(primaryColor.toLowerCase())) {
         allColorNames.push(primaryColor.toLowerCase());
     }
-    
-    // Add the option colors
     allColorNames.push(...optionColors);
-
-    // Remove duplicates, get hex codes, and limit to 3 for the swatch
-    const finalHexParts = [...new Set(allColorNames)]
-                            .map(getHex)
-                            .filter((c): c is string => !!c)
-                            .slice(0, 3);
-    
-    if (finalHexParts.length === 0) {
-        // Fallback for unknown colors to prevent errors
-        return <div className="w-full h-full rounded-full bg-gray-200" />;
-    }
-
+    const finalHexParts = [...new Set(allColorNames)].map(getHex).filter((c): c is string => !!c).slice(0, 3);
+    if (finalHexParts.length === 0) return <div className="w-full h-full rounded-full bg-gray-200" />;
     let style: React.CSSProperties;
     switch (finalHexParts.length) {
-        case 3:
-            style = { background: `linear-gradient(135deg, ${finalHexParts[0]} 33%, ${finalHexParts[1]} 33%, ${finalHexParts[1]} 66%, ${finalHexParts[2]} 66%)` };
-            break;
-        case 2:
-            style = { background: `linear-gradient(135deg, ${finalHexParts[0]} 50%, ${finalHexParts[1]} 50%)` };
-            break;
-        default: // case 1
-            style = { backgroundColor: finalHexParts[0] };
-            break;
+        case 3: style = { background: `linear-gradient(135deg, ${finalHexParts[0]} 33%, ${finalHexParts[1]} 33%, ${finalHexParts[1]} 66%, ${finalHexParts[2]} 66%)` }; break;
+        case 2: style = { background: `linear-gradient(135deg, ${finalHexParts[0]} 50%, ${finalHexParts[1]} 50%)` }; break;
+        default: style = { backgroundColor: finalHexParts[0] }; break;
     }
-    
-    // Add a border for light colors (like white or off-white) to make them visible on light backgrounds
     const hasLightColor = allColorNames.some(c => c.includes('branco') || c.includes('cru'));
-    const className = cn(
-        "w-full h-full rounded-full",
-        hasLightColor && "border border-gray-300"
-    );
-    
-    return <div className={className} style={style} />;
+    return <div className={cn("w-full h-full rounded-full", hasLightColor && "border border-gray-300")} style={style} />;
 }
 
-
 export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product: Product, isReadyMadeCarousel?: boolean }) => {
-    // Find the main variant to determine the initial active color.
     const mainVariant = product.variants.find(v => v.id === product.id);
     const initialActiveColor = mainVariant?.color;
-
     const [activeImageUrl, setActiveImageUrl] = useState(product.imageUrl);
     const [activeColor, setActiveColor] = useState<string | undefined>(initialActiveColor);
     const [activePrice, setActivePrice] = useState(product.price);
-    const [activeSizeIndex, setActiveSizeIndex] = useState(-1); // -1 is the default/main product
-
+    const [activeSizeIndex, setActiveSizeIndex] = useState(-1);
 
     const handleColorChange = (color: string) => {
         const variant = product.variants.find(v => v.color === color) || product;
-        
         setActiveImageUrl(variant.imageUrl);
         setActivePrice(variant.price || product.price);
         setActiveColor(color);
-        setActiveSizeIndex(-1); // Reset size cycle when color changes
+        setActiveSizeIndex(-1);
     };
 
     const cycleableSizes = useMemo(() => {
         const sizes = product.options.sizes.filter(s => s.toLowerCase() !== 'padrão');
-        const sizeValues = sizes.map(s => parseInt(s, 10)).filter(n => !isNaN(n));
-        if (sizeValues.length === sizes.length && sizeValues.length > 0) {
-            return sizes.sort((a,b) => parseInt(a, 10) - parseInt(b, 10));
-        }
         return sizes;
     }, [product.options.sizes]);
 
     const handleSizeCycle = () => {
         if (cycleableSizes.length === 0) return;
-        
         const nextSizeIndex = activeSizeIndex + 1;
-
         if (nextSizeIndex >= cycleableSizes.length) {
-            // Reset to default main product view
             setActiveSizeIndex(-1);
             setActiveImageUrl(product.imageUrl);
             setActivePrice(product.price);
@@ -127,7 +86,6 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
         } else {
             setActiveSizeIndex(nextSizeIndex);
             const size = cycleableSizes[nextSizeIndex];
-            // Find first available variant for this size
             const variant = product.variants.find(v => v.size === size);
             if (variant) {
                 setActiveImageUrl(variant.imageUrl);
@@ -137,37 +95,27 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
         }
     };
 
-
     const colors = product.options.colors.filter(c => c !== 'Padrão');
-    const hasColorVariants = colors.length > 0;
-    
-    const availableColors = product.availability?.colors;
-    const sortedColors = [...colors].sort((a, b) => {
-        const aIsAvailable = availableColors ? availableColors.includes(a) : true;
-        const bIsAvailable = availableColors ? availableColors.includes(b) : true;
-        if (aIsAvailable === bIsAvailable) return 0;
-        return aIsAvailable ? -1 : 1;
-    });
-
-    const MAX_SWATCHES = 5;
-    const visibleColors = sortedColors.slice(0, MAX_SWATCHES);
-    const remainingColorsCount = sortedColors.length - MAX_SWATCHES;
-    
+    const sortedColors = [...colors];
+    const visibleColors = sortedColors.slice(0, 5);
+    const remainingColorsCount = sortedColors.length - 5;
     const productUrl = `/products/${product.groupId}`;
     const productLink = activeColor ? `${productUrl}?color=${encodeURIComponent(activeColor)}` : productUrl;
 
-    let priceText;
-    if (activeSizeIndex > -1) {
-        priceText = `R$ ${activePrice.toFixed(2).replace('.', ',')}`;
-    } else if (!isReadyMadeCarousel && product.minPrice !== product.maxPrice) {
+    let priceText = `R$ ${activePrice.toFixed(2).replace('.', ',')}`;
+    if (!isReadyMadeCarousel && product.minPrice !== product.maxPrice && activeSizeIndex === -1) {
         priceText = `R$ ${product.minPrice.toFixed(2).replace('.', ',')} - R$ ${product.maxPrice.toFixed(2).replace('.', ',')}`;
-    } else {
-        priceText = `R$ ${activePrice.toFixed(2).replace('.', ',')}`;
     }
 
-
     return (
-        <Card className="overflow-hidden flex flex-col group h-full">
+        <Card className="overflow-hidden flex flex-col group h-full relative">
+            {!product.readyMade && (
+                <div className="absolute top-2 right-2 z-10">
+                    <Badge variant="secondary" className="bg-primary text-primary-foreground shadow-sm">
+                        Sob Demanda
+                    </Badge>
+                </div>
+            )}
             <CardHeader className="p-0">
                 <Link href={productLink} className="block overflow-hidden">
                     <Image
@@ -176,8 +124,7 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
                         width={600}
                         height={400}
                         className="object-cover w-full aspect-[3/2] group-hover:scale-105 transition-transform duration-300"
-                        data-ai-hint={product.imageHint}
-                        key={activeImageUrl} // Force re-render for animations on src change
+                        key={activeImageUrl}
                     />
                 </Link>
             </CardHeader>
@@ -199,72 +146,48 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
                                     </Tooltip>
                                 </TooltipProvider>
                             ) : <div />}
-
                             {product.size && product.size !== 'Padrão' && (
                                 <span className="text-xs text-muted-foreground font-semibold">{product.size}</span>
                             )}
                         </div>
                     ) : (
                         <>
-                            {hasColorVariants ? (
-                                <TooltipProvider delayDuration={100}>
-                                    <div className="flex items-center gap-2">
-                                        {visibleColors.map(color => {
-                                            const isAvailable = availableColors ? availableColors.includes(color) : true;
-                                            return (
-                                                <Tooltip key={color}>
-                                                    <TooltipTrigger asChild>
-                                                        <button
-                                                            onClick={() => isAvailable && handleColorChange(color)}
-                                                            className={cn(
-                                                                "w-5 h-5 rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-all",
-                                                                activeColor === color ? 'ring-2 ring-primary ring-offset-1' : 'hover:ring-1 hover:ring-muted-foreground',
-                                                                !isAvailable && 'opacity-40 cursor-not-allowed'
-                                                            )}
-                                                            aria-label={`Mudar para cor ${color}`}
-                                                            disabled={!isAvailable}
-                                                        >
-                                                            {renderColorSwatch(color, product.primaryColor)}
-                                                        </button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
-                                                        <p>{product.primaryColor && product.primaryColor.toLowerCase() !== color.toLowerCase() ? `${product.primaryColor} e ${color}` : color}</p>
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                            )
-                                        })}
-                                        {remainingColorsCount > 0 && (
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Link href={`/products/${product.groupId}`} className="flex items-center justify-center w-6 h-6 rounded-full bg-muted text-muted-foreground text-xs font-bold border hover:bg-accent">
-                                                        +{remainingColorsCount}
-                                                    </Link>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    <p>{remainingColorsCount} mais cores</p>
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        )}
-                                    </div>
-                                </TooltipProvider>
-                            ) : <div />}
-                            
+                            <div className="flex items-center gap-2">
+                                {visibleColors.map(color => (
+                                    <TooltipProvider key={color} delayDuration={100}>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <button
+                                                    onClick={() => handleColorChange(color)}
+                                                    className={cn(
+                                                        "w-5 h-5 rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-all",
+                                                        activeColor === color ? 'ring-2 ring-primary ring-offset-1' : 'hover:ring-1 hover:ring-muted-foreground'
+                                                    )}
+                                                >
+                                                    {renderColorSwatch(color, product.primaryColor)}
+                                                </button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p>{product.primaryColor && product.primaryColor.toLowerCase() !== color.toLowerCase() ? `${product.primaryColor} e ${color}` : color}</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                ))}
+                                {remainingColorsCount > 0 && (
+                                    <Link href={productUrl} className="text-xs font-bold text-muted-foreground">+{remainingColorsCount}</Link>
+                                )}
+                            </div>
                             {product.sizeRangeText && (
-                                <button 
-                                    onClick={handleSizeCycle}
-                                    disabled={cycleableSizes.length === 0}
-                                    className="text-xs text-muted-foreground font-semibold hover:text-foreground transition-colors text-right disabled:pointer-events-none disabled:opacity-50"
-                                >
+                                <button onClick={handleSizeCycle} className="text-xs text-muted-foreground font-semibold">
                                     {activeSizeIndex > -1 ? cycleableSizes[activeSizeIndex] : product.sizeRangeText}
                                 </button>
                             )}
                         </>
                     )}
                 </div>
-
                 <div className="flex-1">
                     <h2 className="text-xl font-bold font-headline">{product.name}</h2>
-                    <p className="text-base leading-relaxed whitespace-pre-wrap">{product.description}</p>
+                    <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p>
                 </div>
                 <div className="flex justify-between items-center mt-4">
                     <p className="text-lg font-semibold">{priceText}</p>

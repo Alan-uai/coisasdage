@@ -140,18 +140,32 @@ function ProductCustomizationFormComponent({
   const hasSizeOptions = product.options.sizes.length > 1 || (product.options.sizes.length === 1 && product.options.sizes[0] !== 'Padrão');
   const hasMaterialOptions = product.options.materials.length > 1 || (product.options.materials.length === 1 && product.options.materials[0] !== 'Padrão');
 
+  // Check overall availability to show options as disabled
+  const globallyAvailableSizes = product.availability?.sizes || product.options.sizes;
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {hasSizeOptions && (
         <div className="space-y-3">
           <Label className="text-base font-semibold">Tamanho</Label>
           <RadioGroup value={selectedSize} onValueChange={setSelectedSize} className="flex flex-wrap gap-x-4 gap-y-2">
-            {product.options.sizes.map((size) => (
-              <div key={size} className="flex items-center">
-                <RadioGroupItem value={size} id={`size-${size}`} />
-                <Label htmlFor={`size-${size}`} className="ml-2 cursor-pointer text-sm">{size}</Label>
-              </div>
-            ))}
+            {product.options.sizes.map((size) => {
+              const isAvailable = globallyAvailableSizes.includes(size);
+              return (
+                <div key={size} className={cn("flex items-center", !isAvailable && "opacity-40")}>
+                  <RadioGroupItem value={size} id={`size-${size}`} disabled={!isAvailable} />
+                  <Label 
+                    htmlFor={`size-${size}`} 
+                    className={cn(
+                      "ml-2 text-sm", 
+                      isAvailable ? "cursor-pointer" : "cursor-not-allowed line-through"
+                    )}
+                  >
+                    {size}
+                  </Label>
+                </div>
+              );
+            })}
           </RadioGroup>
         </div>
       )}
@@ -160,12 +174,23 @@ function ProductCustomizationFormComponent({
         <div className="space-y-3">
           <Label className="text-base font-semibold">Cor</Label>
            <RadioGroup value={selectedColor} onValueChange={setSelectedColor} className="flex flex-wrap gap-x-4 gap-y-2">
-            {product.options.colors.map((color) => (
-              <div key={color} className="flex items-center">
-                <RadioGroupItem value={color} id={`color-${color}`} />
-                <Label htmlFor={`color-${color}`} className="ml-2 cursor-pointer text-sm">{color}</Label>
-              </div>
-            ))}
+            {product.options.colors.map((color) => {
+              const isAvailable = availableColorsForCurrentSize.includes(color);
+              return (
+                <div key={color} className={cn("flex items-center", !isAvailable && "opacity-40")}>
+                  <RadioGroupItem value={color} id={`color-${color}`} disabled={!isAvailable} />
+                  <Label 
+                    htmlFor={`color-${color}`} 
+                    className={cn(
+                      "ml-2 text-sm", 
+                      isAvailable ? "cursor-pointer" : "cursor-not-allowed line-through"
+                    )}
+                  >
+                    {color}
+                  </Label>
+                </div>
+              );
+            })}
           </RadioGroup>
         </div>
       )}
@@ -178,9 +203,14 @@ function ProductCustomizationFormComponent({
               <SelectValue placeholder="Selecione um material" />
             </SelectTrigger>
             <SelectContent>
-              {product.options.materials.map((material) => (
-                <SelectItem key={material} value={material}>{material}</SelectItem>
-              ))}
+              {product.options.materials.map((material) => {
+                const isAvailable = availableMaterialsForCurrentSelection.includes(material);
+                return (
+                  <SelectItem key={material} value={material} disabled={!isAvailable}>
+                    {material} {!isAvailable && '(Indisponível)'}
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         </div>
@@ -239,11 +269,17 @@ export function ProductClientPage({ product }: { product: Product }) {
   const [selectedMaterial, setSelectedMaterial] = useState<string>(() => getFirstAvailable(product.options.materials, availableMaterialsForCurrentSelection));
 
   useEffect(() => {
-    if (!availableColorsForCurrentSize.includes(selectedColor)) setSelectedColor(availableColorsForCurrentSize[0] || product.options.colors[0]);
+    if (!availableColorsForCurrentSize.includes(selectedColor)) {
+      const firstAvailable = availableColorsForCurrentSize[0] || product.options.colors[0];
+      if (firstAvailable) setSelectedColor(firstAvailable);
+    }
   }, [availableColorsForCurrentSize, selectedColor, product.options.colors]);
   
   useEffect(() => {
-    if (!availableMaterialsForCurrentSelection.includes(selectedMaterial)) setSelectedMaterial(availableMaterialsForCurrentSelection[0] || product.options.materials[0]);
+    if (!availableMaterialsForCurrentSelection.includes(selectedMaterial)) {
+      const firstAvailable = availableMaterialsForCurrentSelection[0] || product.options.materials[0];
+      if (firstAvailable) setSelectedMaterial(firstAvailable);
+    }
   }, [availableMaterialsForCurrentSelection, selectedMaterial, product.options.materials]);
 
   useEffect(() => {

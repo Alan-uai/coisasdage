@@ -153,26 +153,31 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
                     ) : (
                         <>
                             <div className="flex items-center gap-2">
-                                {visibleColors.map(color => (
-                                    <TooltipProvider key={color} delayDuration={100}>
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <button
-                                                    onClick={() => handleColorChange(color)}
-                                                    className={cn(
-                                                        "w-5 h-5 rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-all",
-                                                        activeColor === color ? 'ring-2 ring-primary ring-offset-1' : 'hover:ring-1 hover:ring-muted-foreground'
-                                                    )}
-                                                >
-                                                    {renderColorSwatch(color, product.primaryColor)}
-                                                </button>
-                                            </TooltipTrigger>
-                                            <TooltipContent>
-                                                <p>{product.primaryColor && product.primaryColor.toLowerCase() !== color.toLowerCase() ? `${product.primaryColor} e ${color}` : color}</p>
-                                            </TooltipContent>
-                                        </Tooltip>
-                                    </TooltipProvider>
-                                ))}
+                                {visibleColors.map(color => {
+                                    const isAvailable = !product.availability?.colors || product.availability.colors.includes(color);
+                                    return (
+                                        <TooltipProvider key={color} delayDuration={100}>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <button
+                                                        onClick={() => isAvailable && handleColorChange(color)}
+                                                        disabled={!isAvailable}
+                                                        className={cn(
+                                                            "w-5 h-5 rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-all",
+                                                            activeColor === color ? 'ring-2 ring-primary ring-offset-1' : 'hover:ring-1 hover:ring-muted-foreground',
+                                                            !isAvailable && "opacity-30 grayscale cursor-not-allowed border border-dashed border-muted-foreground/50"
+                                                        )}
+                                                    >
+                                                        {renderColorSwatch(color, product.primaryColor)}
+                                                    </button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                    <p>{product.primaryColor && product.primaryColor.toLowerCase() !== color.toLowerCase() ? `${product.primaryColor} e ${color}` : color} {!isAvailable && '(Indisponível)'}</p>
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        </TooltipProvider>
+                                    );
+                                })}
                                 {remainingColorsCount > 0 && (
                                     <Link href={productUrl} className="text-xs font-bold text-muted-foreground">+{remainingColorsCount}</Link>
                                 )}

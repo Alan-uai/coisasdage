@@ -63,7 +63,7 @@ export type Order = {
   userId: string;
   orderDate: Timestamp;
   totalAmount: number;
-  status: 'Processing' | 'Crafting' | 'Shipped' | 'Delivered';
+  status: 'Processing' | 'Crafting' | 'Shipped' | 'Delivered' | 'Cancelled';
   items: OrderItemSummary[];
   shippingAddress: Address;
   billingAddressId?: string; // Optional for now
@@ -71,6 +71,8 @@ export type Order = {
   estimatedDeliveryDate?: Timestamp;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  paymentId?: string | number;
+  merchantOrderId?: string;
 };
 
 export type CartItem = {
@@ -85,6 +87,7 @@ export type CartItem = {
   selectedColor: string;
   selectedMaterial: string;
   unitPriceAtAddition: number;
+  selected?: boolean; // New field for selection
   createdAt: Timestamp;
   updatedAt: Timestamp;
 };

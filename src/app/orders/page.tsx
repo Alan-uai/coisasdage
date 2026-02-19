@@ -1,24 +1,37 @@
 'use client';
 
-import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, limit } from 'firebase/firestore';
+import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
+import { collection, query, orderBy, limit, doc, serverTimestamp } from 'firebase/firestore';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Label } from '@/components/ui/label';
-import { Truck, PackageSearch, LogIn } from 'lucide-react';
+import { Truck, PackageSearch, LogIn, XCircle, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import type { Order } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
 
 const statusMap = {
-  Processing: { text: 'Processando', value: 25, variant: 'secondary' },
-  Crafting: { text: 'Em Produção', value: 50, variant: 'default' },
-  Shipped: { text: 'Enviado', value: 75, variant: 'default' },
-  Delivered: { text: 'Entregue', value: 100, variant: 'outline' },
+  Processing: { text: 'Processando', value: 25, variant: 'secondary' as const },
+  Crafting: { text: 'Em Produção', value: 50, variant: 'default' as const },
+  Shipped: { text: 'Enviado', value: 75, variant: 'default' as const },
+  Delivered: { text: 'Entregue', value: 100, variant: 'outline' as const },
+  Cancelled: { text: 'Cancelado', value: 0, variant: 'destructive' as const },
 } as const;
 
 
@@ -55,6 +68,7 @@ function OrderCardSkeleton() {
 export default function OrdersPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
+  const { toast } = useToast();
 
   const ordersQuery = useMemoFirebase(
     () => (user && firestore ? query(collection(firestore, 'users', user.uid, 'orders'), orderBy('orderDate', 'desc'), limit(20)) : null),
@@ -62,6 +76,19 @@ export default function OrdersPage() {
   );
 
   const { data: orders, isLoading: isOrdersLoading } = useCollection<Order>(ordersQuery);
+
+  const handleCancelOrder = (orderId: string) => {
+    if (!user || !firestore) return;
+    const orderRef = doc(firestore, 'users', user.uid, 'orders', orderId);
+    updateDocumentNonBlocking(orderRef, { 
+      status: 'Cancelled',
+      updatedAt: serverTimestamp()
+    });
+    toast({
+      title: "Pedido Cancelado",
+      description: "Sua desistência foi registrada com sucesso.",
+    });
+  };
 
   if (isUserLoading) {
     return (
@@ -118,8 +145,10 @@ export default function OrdersPage() {
         ) : (
           (orders || []).map((order) => {
             const statusInfo = statusMap[order.status];
+            const canCancel = order.status === 'Processing' || order.status === 'Crafting';
+
             return (
-              <Card key={order.id}>
+              <Card key={order.id} className={cn(order.status === 'Cancelled' && "opacity-75 bg-muted/30")}>
                 <CardHeader>
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
                     <div>
@@ -135,36 +164,45 @@ export default function OrdersPage() {
                   <div className="space-y-4">
                     {order.items?.map(item => (
                        <div key={item.productId} className="flex flex-col sm:flex-row gap-4">
-                         <Link href={`/products/${item.productId}`} className="block flex-shrink-0">
+                         <div className="block flex-shrink-0">
                            <Image
                              src={item.imageUrl}
                              alt={item.productName}
-                             width={150}
-                             height={100}
-                             className="rounded-md object-cover aspect-[3/2]"
+                             width={120}
+                             height={80}
+                             className="rounded-md object-cover aspect-[3/2] size-24"
                            />
-                         </Link>
+                         </div>
                          <div className="flex-1">
-                           <Link href={`/products/${item.productId}`} className="font-semibold hover:underline">{item.productName}</Link>
-                           <p className="text-sm text-muted-foreground">Quantidade: {item.quantity}</p>
-                           <p className="text-sm font-semibold">R$ {(item.unitPriceAtOrder * item.quantity).toFixed(2).replace('.', ',')}</p>
+                           <h4 className="font-semibold">{item.productName}</h4>
+                           <p className="text-sm text-muted-foreground">Qtd: {item.quantity} | {item.selectedSize} | {item.selectedColor}</p>
+                           <p className="text-sm font-bold text-primary">R$ {(item.unitPriceAtOrder * item.quantity).toFixed(2).replace('.', ',')}</p>
                          </div>
                        </div>
                     ))}
                   </div>
 
                   <Separator className="my-4" />
-                   <p className="text-right font-bold text-lg mb-4">Total: R$ {order.totalAmount.toFixed(2).replace('.', ',')}</p>
+                   <div className="flex justify-between items-center">
+                    <div className="text-sm text-muted-foreground">
+                        {order.status === 'Cancelled' ? (
+                            <div className="flex items-center gap-1 text-destructive">
+                                <XCircle className="size-4" />
+                                <span>Pedido cancelado pelo cliente</span>
+                            </div>
+                        ) : order.trackingNumber ? (
+                            <div className="flex items-center gap-2 text-primary">
+                                <Truck className="size-4" />
+                                <span>Rastreio: <span className="font-mono font-bold">{order.trackingNumber}</span></span>
+                            </div>
+                        ) : (
+                            <span>Aguardando produção...</span>
+                        )}
+                    </div>
+                    <p className="font-bold text-lg">Total: R$ {order.totalAmount.toFixed(2).replace('.', ',')}</p>
+                   </div>
                   
-                  {order.trackingNumber && (
-                        <div className="flex items-center gap-2 mt-2 text-sm text-primary">
-                            <Truck className="size-4" />
-                            <span className="font-medium">Rastreamento:</span>
-                            <a href="#" className="font-mono hover:underline">{order.trackingNumber}</a>
-                        </div>
-                    )}
-
-                  {statusInfo && (
+                  {statusInfo && order.status !== 'Cancelled' && (
                     <>
                       <Separator className="my-4" />
                       <div>
@@ -180,6 +218,32 @@ export default function OrdersPage() {
                     </>
                   )}
                 </CardContent>
+                {canCancel && (
+                    <CardFooter className="justify-end bg-muted/50 py-3 rounded-b-lg">
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                                    <XCircle className="size-4 mr-2" />
+                                    Desistir do Pedido
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Deseja realmente cancelar este pedido?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        Esta ação registrará sua desistência. Se o pagamento já foi aprovado, entraremos em contato para o processo de estorno.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Voltar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleCancelOrder(order.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                        Confirmar Cancelamento
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    </CardFooter>
+                )}
               </Card>
             );
           })
@@ -188,3 +252,5 @@ export default function OrdersPage() {
     </div>
   );
 }
+
+import { cn } from '@/lib/utils';

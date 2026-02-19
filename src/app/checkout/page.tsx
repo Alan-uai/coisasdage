@@ -2,7 +2,7 @@
 import { useMemo } from 'react';
 import Link from 'next/link';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, limit } from 'firebase/firestore';
+import { collection, query, limit, where } from 'firebase/firestore';
 import type { CartItem } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { LogIn, ShoppingBag } from 'lucide-react';
@@ -22,8 +22,13 @@ export default function CheckoutPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
 
+  // Only fetch items that were selected in the cart
   const cartItemsQuery = useMemoFirebase(
-    () => (user && firestore ? query(collection(firestore, 'users', user.uid, 'carts', 'main', 'items'), limit(20)) : null),
+    () => (user && firestore ? query(
+        collection(firestore, 'users', user.uid, 'carts', 'main', 'items'), 
+        where('selected', '!=', false),
+        limit(20)
+    ) : null),
     [user, firestore]
   );
   const { data: cartItems, isLoading: isCartLoading } = useCollection<CartItem>(cartItemsQuery);
@@ -56,10 +61,10 @@ export default function CheckoutPage() {
         return (
             <div className="flex flex-col flex-1 items-center justify-center text-center p-4 col-span-full">
                 <ShoppingBag className="size-16 text-muted-foreground" />
-                <h1 className="text-4xl font-bold tracking-tight font-headline mt-6">Seu carrinho está vazio</h1>
-                <p className="text-muted-foreground mt-2">Adicione itens ao seu carrinho antes de prosseguir para o checkout.</p>
+                <h1 className="text-4xl font-bold tracking-tight font-headline mt-6">Nenhum item selecionado</h1>
+                <p className="text-muted-foreground mt-2">Volte ao carrinho e selecione os itens que deseja comprar.</p>
                 <Button asChild className="mt-6">
-                    <Link href="/">Voltar ao Catálogo</Link>
+                    <Link href="/cart">Voltar ao Carrinho</Link>
                 </Button>
             </div>
         );

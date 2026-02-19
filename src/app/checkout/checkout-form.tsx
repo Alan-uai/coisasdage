@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useFirestore, setDocumentNonBlocking, updateDocumentNonBlocking, useDoc, useMemoFirebase } from '@/firebase';
+import { useFirestore, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useDoc, useMemoFirebase } from '@/firebase';
 import { collection, doc, serverTimestamp } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, Copy, AlertCircle, QrCode, Loader2, Info } from 'lucide-react';
@@ -57,6 +57,14 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
             state: '',
         },
     });
+
+    const clearPaidCartItems = useCallback(() => {
+        if (!user || !firestore || cartItems.length === 0) return;
+        cartItems.forEach(item => {
+            const itemRef = doc(firestore, 'users', user.uid, 'carts', 'main', 'items', item.id);
+            deleteDocumentNonBlocking(itemRef);
+        });
+    }, [user, firestore, cartItems]);
 
     async function onSubmit(values: z.infer<typeof addressSchema>) {
         if (!user || cartItems.length === 0 || !user.email || !firestore) {
@@ -136,6 +144,9 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
             const result = await processPayment(finalPaymentData, orderId, user.email, subtotal);
 
             if (result.success) {
+                // Clear the cart items since payment was initiated/confirmed
+                clearPaidCartItems();
+
                 if (result.payment_id) {
                     const orderRef = doc(firestore, 'users', user.uid, 'orders', orderId);
                     updateDocumentNonBlocking(orderRef, { 
@@ -163,7 +174,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
             console.error('Payment processing error:', e);
             setError('Erro ao finalizar o pagamento.');
         }
-    }, [orderId, user.email, firestore, router, subtotal]);
+    }, [orderId, user.email, firestore, router, subtotal, clearPaidCartItems]);
 
     useEffect(() => {
         if (preferenceId && !pixData && !brickRendered.current) {

@@ -16,6 +16,7 @@ export type ProductVariant = {
   material?: string;
   imageUrl: string;
   price?: number;
+  readyMade?: boolean;
 };
 
 export type Product = {

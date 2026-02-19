@@ -56,6 +56,17 @@ function ProductCustomizationFormComponent({
   const router = useRouter();
   const [isRequesting, setIsRequesting] = useState(false);
 
+  const currentVariant = useMemo(() => {
+    const sizeToMatch = selectedSize === 'Padrão' ? (product.size || 'Padrão') : selectedSize;
+    return product.variants.find(v => 
+      (v.size || product.size || 'Padrão') === sizeToMatch &&
+      (v.color === selectedColor || !v.color) &&
+      (v.material === selectedMaterial || !v.material)
+    );
+  }, [selectedSize, selectedColor, selectedMaterial, product]);
+
+  const isReady = currentVariant ? currentVariant.readyMade : product.readyMade;
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -69,14 +80,13 @@ function ProductCustomizationFormComponent({
       return;
     }
 
-    if (product.readyMade) {
-      // Normal flow: Add to Cart
+    if (isReady) {
       const cartRef = doc(firestore, 'users', user.uid, 'carts', 'main');
       setDocumentNonBlocking(cartRef, { userId: user.uid, updatedAt: serverTimestamp() }, { merge: true });
       
       const cartItemData = {
         cartId: 'main',
-        productId: product.id,
+        productId: currentVariant?.id || product.id,
         productGroupId: product.groupId,
         productName: product.name,
         imageUrl: selectedImageUrl,
@@ -99,7 +109,6 @@ function ProductCustomizationFormComponent({
       });
       router.push('/cart');
     } else {
-      // Custom flow: Request Quote (Admin approval)
       setIsRequesting(true);
       try {
         const requestsRef = collection(firestore, 'custom_requests');
@@ -107,7 +116,7 @@ function ProductCustomizationFormComponent({
           userId: user.uid,
           userName: user.displayName || 'Cliente',
           userEmail: user.email || '',
-          productId: product.id,
+          productId: currentVariant?.id || product.id,
           productGroupId: product.groupId,
           productName: product.name,
           imageUrl: selectedImageUrl,
@@ -127,7 +136,7 @@ function ProductCustomizationFormComponent({
           title: "Solicitação Enviada!",
           description: "Sua solicitação sob demanda foi enviada para aprovação da artesã.",
         });
-        router.push('/my-requests');
+        router.push('/orders');
       } catch (e) {
         console.error(e);
       } finally {
@@ -140,8 +149,14 @@ function ProductCustomizationFormComponent({
   const hasSizeOptions = product.options.sizes.length > 1 || (product.options.sizes.length === 1 && product.options.sizes[0] !== 'Padrão');
   const hasMaterialOptions = product.options.materials.length > 1 || (product.options.materials.length === 1 && product.options.materials[0] !== 'Padrão');
 
-  // Check overall availability to show options as disabled
   const globallyAvailableSizes = product.availability?.sizes || product.options.sizes;
+
+  const sortedDisplayColors = useMemo(() => {
+    const all = product.options.colors;
+    const available = all.filter(c => availableColorsForCurrentSize.includes(c));
+    const unavailable = all.filter(c => !availableColorsForCurrentSize.includes(c));
+    return [...available, ...unavailable];
+  }, [product.options.colors, availableColorsForCurrentSize]);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -161,7 +176,7 @@ function ProductCustomizationFormComponent({
                       isAvailable ? "cursor-pointer" : "cursor-not-allowed line-through"
                     )}
                   >
-                    {size}
+                    {size} {!isAvailable && '(Indisponível)'}
                   </Label>
                 </div>
               );
@@ -174,7 +189,7 @@ function ProductCustomizationFormComponent({
         <div className="space-y-3">
           <Label className="text-base font-semibold">Cor</Label>
            <RadioGroup value={selectedColor} onValueChange={setSelectedColor} className="flex flex-wrap gap-x-4 gap-y-2">
-            {product.options.colors.map((color) => {
+            {sortedDisplayColors.map((color) => {
               const isAvailable = availableColorsForCurrentSize.includes(color);
               return (
                 <div key={color} className={cn("flex items-center", !isAvailable && "opacity-40")}>
@@ -186,7 +201,7 @@ function ProductCustomizationFormComponent({
                       isAvailable ? "cursor-pointer" : "cursor-not-allowed line-through"
                     )}
                   >
-                    {color}
+                    {color} {!isAvailable && '(Indisponível)'}
                   </Label>
                 </div>
               );
@@ -206,7 +221,7 @@ function ProductCustomizationFormComponent({
               {product.options.materials.map((material) => {
                 const isAvailable = availableMaterialsForCurrentSelection.includes(material);
                 return (
-                  <SelectItem key={material} value={material} disabled={!isAvailable}>
+                  <SelectItem key={material} value={material} disabled={!isAvailable} className={cn(!isAvailable && "opacity-40")}>
                     {material} {!isAvailable && '(Indisponível)'}
                   </SelectItem>
                 );
@@ -217,7 +232,7 @@ function ProductCustomizationFormComponent({
       )}
 
       <Button type="submit" size="lg" className="w-full md:w-auto mt-4" disabled={isRequesting}>
-        {product.readyMade ? (
+        {isReady ? (
           <>
             <ShoppingBag className="mr-2 h-5 w-5" />
             Adicionar ao Carrinho
@@ -306,11 +321,22 @@ export function ProductClientPage({ product }: { product: Product }) {
     else { setSelectedImageUrl(product.imageUrl); setCurrentPrice(product.price); }
   }, [selectedColor, selectedSize, selectedMaterial, product]);
 
+  const currentVariant = useMemo(() => {
+    const sizeToMatch = selectedSize === 'Padrão' ? (product.size || 'Padrão') : selectedSize;
+    return product.variants.find(v => 
+      (v.size || product.size || 'Padrão') === sizeToMatch &&
+      (v.color === selectedColor || !v.color) &&
+      (v.material === selectedMaterial || !v.material)
+    ) || null;
+  }, [selectedSize, selectedColor, selectedMaterial, product]);
+
+  const isReady = currentVariant ? currentVariant.readyMade : product.readyMade;
+
   return (
     <div className="flex flex-col min-h-screen p-4 sm:p-6 lg:p-8">
       <main className="flex-1">
         <div className="grid md:grid-cols-2 gap-8 lg:gap-12 max-w-6xl mx-auto">
-          <div className="overflow-hidden rounded-lg">
+          <div className="overflow-hidden rounded-lg relative">
             <Image
               src={selectedImageUrl}
               alt={product.name}
@@ -320,6 +346,13 @@ export function ProductClientPage({ product }: { product: Product }) {
               key={selectedImageUrl}
               priority
             />
+            {!isReady && (
+              <div className="absolute top-4 right-4 z-10">
+                <Badge variant="secondary" className="bg-primary text-primary-foreground shadow-lg px-4 py-1 text-sm">
+                  Sob Demanda
+                </Badge>
+              </div>
+            )}
           </div>
           <div className="flex flex-col">
             <h1 className="text-3xl lg:text-4xl font-bold font-headline">{product.name}</h1>

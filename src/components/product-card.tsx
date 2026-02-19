@@ -62,6 +62,11 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
     const [activePrice, setActivePrice] = useState(product.price);
     const [activeSizeIndex, setActiveSizeIndex] = useState(-1);
 
+    const cycleableSizes = useMemo(() => {
+        const sizes = product.options.sizes.filter(s => s.toLowerCase() !== 'padrão');
+        return sizes;
+    }, [product.options.sizes]);
+
     const handleColorChange = (color: string) => {
         const variant = product.variants.find(v => v.color === color) || product;
         setActiveImageUrl(variant.imageUrl);
@@ -69,11 +74,6 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
         setActiveColor(color);
         setActiveSizeIndex(-1);
     };
-
-    const cycleableSizes = useMemo(() => {
-        const sizes = product.options.sizes.filter(s => s.toLowerCase() !== 'padrão');
-        return sizes;
-    }, [product.options.sizes]);
 
     const handleSizeCycle = () => {
         if (cycleableSizes.length === 0) return;
@@ -95,12 +95,27 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
         }
     };
 
-    const colors = product.options.colors.filter(c => c !== 'Padrão');
-    const sortedColors = [...colors];
+    const sortedColors = useMemo(() => {
+        const colors = product.options.colors.filter(c => c !== 'Padrão');
+        const available = colors.filter(c => !product.availability?.colors || product.availability.colors.includes(c));
+        const unavailable = colors.filter(c => product.availability?.colors && !product.availability.colors.includes(c));
+        return [...available, ...unavailable];
+    }, [product.options.colors, product.availability?.colors]);
+
     const visibleColors = sortedColors.slice(0, 5);
     const remainingColorsCount = sortedColors.length - 5;
     const productUrl = `/products/${product.groupId}`;
     const productLink = activeColor ? `${productUrl}?color=${encodeURIComponent(activeColor)}` : productUrl;
+
+    const currentVariant = useMemo(() => {
+        const size = activeSizeIndex > -1 ? cycleableSizes[activeSizeIndex] : undefined;
+        return product.variants.find(v => 
+            (!activeColor || v.color === activeColor) && 
+            (!size || v.size === size)
+        ) || null;
+    }, [activeColor, activeSizeIndex, product, cycleableSizes]);
+
+    const isReady = currentVariant ? currentVariant.readyMade : product.readyMade;
 
     let priceText = `R$ ${activePrice.toFixed(2).replace('.', ',')}`;
     if (!isReadyMadeCarousel && product.minPrice !== product.maxPrice && activeSizeIndex === -1) {
@@ -109,7 +124,7 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
 
     return (
         <Card className="overflow-hidden flex flex-col group h-full relative">
-            {!product.readyMade && (
+            {!isReady && !isReadyMadeCarousel && (
                 <div className="absolute top-2 right-2 z-10">
                     <Badge variant="secondary" className="bg-primary text-primary-foreground shadow-sm">
                         Sob Demanda
@@ -161,11 +176,10 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
                                                 <TooltipTrigger asChild>
                                                     <button
                                                         onClick={() => isAvailable && handleColorChange(color)}
-                                                        disabled={!isAvailable}
                                                         className={cn(
                                                             "w-5 h-5 rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-all",
                                                             activeColor === color ? 'ring-2 ring-primary ring-offset-1' : 'hover:ring-1 hover:ring-muted-foreground',
-                                                            !isAvailable && "opacity-30 grayscale cursor-not-allowed border border-dashed border-muted-foreground/50"
+                                                            !isAvailable && "opacity-30 cursor-not-allowed border border-dashed border-muted-foreground/50"
                                                         )}
                                                     >
                                                         {renderColorSwatch(color, product.primaryColor)}

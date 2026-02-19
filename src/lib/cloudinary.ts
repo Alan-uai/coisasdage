@@ -1,3 +1,4 @@
+
 'use server';
 
 import { v2 as cloudinary } from 'cloudinary';
@@ -173,6 +174,7 @@ export async function getProducts(): Promise<Product[]> {
             material: p.material,
             imageUrl: p.imageUrl,
             price: p.price,
+            readyMade: p.readyMade,
         }));
         
         const allPrices = group.map(p => p.price).filter(p => p !== undefined && p > 0);
@@ -267,6 +269,7 @@ export async function getProducts(): Promise<Product[]> {
                       color: p.color,
                       size: p.size,
                       material: p.material,
+                      readyMade: true,
                     }],
                 };
                 consolidatedProducts.push(readyMadeVariantProduct);

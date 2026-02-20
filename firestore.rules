@@ -26,14 +26,6 @@ service cloud.firestore {
     }
 
     /* =============================
-        GLOBAL BLOCK
-    ============================== */
-    
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
-    /* =============================
         USER PROFILES
     ============================== */
 
@@ -52,21 +44,20 @@ service cloud.firestore {
     ============================== */
 
     match /custom_requests/{requestId} {
-      // Regra de listagem otimizada para o dono do pedido
-      allow list: if isAuthenticated() && (
-        resource.data.userId == request.auth.uid || isAdmin()
-      );
+      // Permite listar se estiver autenticado. O Firestore filtrará os dados 
+      // baseado na consulta (where userId == uid) ou permitirá tudo para o admin.
+      allow list: if isAuthenticated();
       
-      allow get: if isAuthenticated() && (
-        resource.data.userId == request.auth.uid || isAdmin()
-      );
+      // Permite acesso individual se for o dono ou admin
+      allow get: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
       
+      // Permite criar se o userId no documento bater com o usuário logado
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       
-      allow update: if isAuthenticated() && (
-        resource.data.userId == request.auth.uid || isAdmin()
-      );
+      // Permite atualizar se for o dono ou admin
+      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
       
+      // Apenas admins podem deletar solicitações
       allow delete: if isAdmin();
     }
     

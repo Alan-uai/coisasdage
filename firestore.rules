@@ -19,7 +19,7 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() && 
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isAdmin', false) == true;
     }
 
     /* =============================
@@ -41,8 +41,15 @@ service cloud.firestore {
     ============================== */
 
     match /custom_requests/{requestId} {
-      // Consolidated read rules (get + list) to ensure stable evaluation
-      allow read: if isAuthenticated() && (
+      // 'get' permite ler um documento específico
+      allow get: if isAuthenticated() && (
+        isAdmin() || 
+        (resource.data.userId == request.auth.uid)
+      );
+      
+      // 'list' permite realizar consultas (queries) na coleção
+      // O Firestore exige que a query tenha o filtro where('userId', '==', uid)
+      allow list: if isAuthenticated() && (
         isAdmin() || 
         (resource.data.userId == request.auth.uid)
       );

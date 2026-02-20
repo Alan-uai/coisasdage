@@ -25,16 +25,21 @@ export default function AdminRequestsPage() {
   );
   const { data: profile, isLoading: isProfileLoading } = useDoc<UserProfile>(profileRef);
 
-  // Efeito para verificar o admin de forma robusta antes de liberar qualquer query global
+  // Robustly verify admin status before allowing any global queries
   useEffect(() => {
     if (profile && profile.isAdmin) {
       setIsVerifiedAdmin(true);
     }
   }, [profile]);
 
-  // A query SÓ EXISTE se o admin estiver verificado. Caso contrário, é null e o hook não dispara.
+  // The query ONLY exists if the admin is verified. 
+  // This prevents the hook from firing before the user has the required permissions.
   const requestsQuery = useMemoFirebase(
-    () => (user && firestore && isVerifiedAdmin ? query(collectionGroup(firestore, 'custom_requests'), orderBy('createdAt', 'desc'), limit(50)) : null),
+    () => (user && firestore && isVerifiedAdmin ? query(
+      collectionGroup(firestore, 'custom_requests'), 
+      orderBy('createdAt', 'desc'), 
+      limit(50)
+    ) : null),
     [user, firestore, isVerifiedAdmin]
   );
 
@@ -49,7 +54,6 @@ export default function AdminRequestsPage() {
     });
   };
 
-  // Estado de carregamento inicial (Auth ou Perfil)
   if (isUserLoading || isProfileLoading) {
     return (
       <div className="p-8 space-y-8">
@@ -65,7 +69,6 @@ export default function AdminRequestsPage() {
     );
   }
 
-  // Se terminou de carregar e não é admin ou não está logado
   if (!user || !profile?.isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-4">

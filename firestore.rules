@@ -31,17 +31,23 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow create, update: if isOwner(userId);
       
-      // Subcoleções de usuário (orders e custom_requests)
-      match /{allSubcollections=**} {
+      // User-specific subcollections (orders and custom_requests)
+      // Users can manage their own, admins can manage everything
+      match /custom_requests/{requestId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+
+      match /orders/{orderId} {
         allow read, write: if isOwner(userId) || isAdmin();
       }
     }
 
     /* =============================
-        CUSTOM REQUESTS (CollectionGroup Rule)
+        COLLECTION GROUP RULES
     ============================== */
     
-    // Regra para permitir que o admin liste todas as solicitações via CollectionGroup query
+    // Explicit rule for collectionGroup queries on custom_requests
+    // This is required for admins to list all requests globally
     match /{path=**}/custom_requests/{requestId} {
       allow list: if isAdmin();
     }

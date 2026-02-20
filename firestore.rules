@@ -44,20 +44,23 @@ service cloud.firestore {
     ============================== */
 
     match /custom_requests/{requestId} {
-      // Permite listar se estiver autenticado. O Firestore filtrará os dados 
-      // baseado na consulta (where userId == uid) ou permitirá tudo para o admin.
-      allow list: if isAuthenticated();
+      // Regras separadas para garantir que o usuário comum não dependa de checagens de admin
+      // Isso resolve o erro de permissão na página de pedidos (/orders)
       
-      // Permite acesso individual se for o dono ou admin
+      // 1. Permite que o usuário liste suas próprias solicitações (Dono)
+      allow list: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // 2. Permite que o administrador liste tudo (Admin)
+      allow list: if isAdmin();
+      
+      // 3. Permite acesso individual para leitura
       allow get: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
       
-      // Permite criar se o userId no documento bater com o usuário logado
+      // 4. Permite criação apenas para o próprio usuário
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       
-      // Permite atualizar se for o dono ou admin
+      // 5. Atualização e deleção seguem as permissões de dono ou admin
       allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      
-      // Apenas admins podem deletar solicitações
       allow delete: if isAdmin();
     }
     

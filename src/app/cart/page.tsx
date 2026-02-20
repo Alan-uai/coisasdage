@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo, useState } from 'react';
@@ -15,8 +16,8 @@ import { useToast } from '@/hooks/use-toast';
 import type { CartItem } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
-// Constante com o número da artesã (Exemplo: 5511999999999)
-const WHATSAPP_NUMBER = "5511999999999";
+// O número agora é lido da variável de ambiente NEXT_PUBLIC_WHATSAPP_NUMBER definida no .env
+const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "5511999999999";
 
 function CartSkeleton() {
   return (
@@ -113,7 +114,7 @@ export default function CartPage() {
     // Abrir o WhatsApp
     window.open(whatsappUrl, '_blank');
 
-    // Remover itens do carrinho após enviar (opcional, para limpar a fila de solicitações)
+    // Remover itens do carrinho após enviar (para limpar a fila de solicitações já feitas)
     selectedItems.forEach(item => {
       const itemRef = doc(firestore, 'users', user.uid, 'carts', 'main', 'items', item.id);
       deleteDocumentNonBlocking(itemRef);

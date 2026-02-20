@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo, useState } from 'react';
@@ -96,7 +95,7 @@ export default function CartPage() {
     if (!user || selectedItems.length === 0) return;
     setIsSubmitting(true);
 
-    // Montar a mensagem do WhatsApp
+    // Montar a mensagem do WhatsApp incluindo links das imagens
     let message = `Olá! Tenho interesse em solicitar as seguintes peças sob demanda:\n\n`;
     
     selectedItems.forEach((item, index) => {
@@ -104,7 +103,8 @@ export default function CartPage() {
       message += `   - Quantidade: ${item.quantity}\n`;
       message += `   - Cor: ${item.selectedColor}\n`;
       message += `   - Tamanho: ${item.selectedSize}\n`;
-      message += `   - Material: ${item.selectedMaterial}\n\n`;
+      message += `   - Material: ${item.selectedMaterial}\n`;
+      message += `   - Foto: ${item.imageUrl}\n\n`;
     });
 
     message += `Pode me informar sobre a viabilidade e prazos? Muito obrigado(a)!`;
@@ -114,7 +114,7 @@ export default function CartPage() {
     // Abrir o WhatsApp
     window.open(whatsappUrl, '_blank');
 
-    // Remover itens do carrinho após enviar (para limpar a fila de solicitações já feitas)
+    // Remover itens do carrinho após enviar
     selectedItems.forEach(item => {
       const itemRef = doc(firestore, 'users', user.uid, 'carts', 'main', 'items', item.id);
       deleteDocumentNonBlocking(itemRef);

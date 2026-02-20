@@ -20,11 +20,11 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/button';
-import { useUser, useAuth, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { useUser, useAuth } from '@/firebase';
 import { initiateSignOut } from '@/firebase/non-blocking-login';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from './ui/skeleton';
-import { doc } from 'firebase/firestore';
+import { useMemo } from 'react';
 
 const mainLinks = [
   { href: '/', label: 'Catálogo', icon: LayoutGrid },
@@ -33,16 +33,15 @@ const mainLinks = [
   { href: '/faq', label: 'Dúvidas', icon: HelpCircle },
 ];
 
+const ADMIN_EMAILS = ['aymatsu00@gmail.com', 'hashiramanakamoto0@gmail.com'];
+
 function UserNav() {
     const { user, isUserLoading } = useUser();
     const auth = useAuth();
-    const firestore = useFirestore();
 
-    const profileRef = useMemoFirebase(() => 
-        (user && firestore) ? doc(firestore, 'users', user.uid) : null,
-        [user, firestore]
-    );
-    const { data: profile } = useDoc(profileRef);
+    const isAdmin = useMemo(() => {
+        return user?.email && ADMIN_EMAILS.includes(user.email);
+    }, [user]);
 
     const handleLogout = () => {
         if (auth) {
@@ -104,10 +103,10 @@ function UserNav() {
                     </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {profile?.isAdmin && (
+                {isAdmin && (
                   <>
                     <DropdownMenuItem asChild>
-                        <Link href="/admin/requests" className="cursor-pointer">
+                        <Link href="/admin" className="cursor-pointer">
                             <ShieldCheck className="mr-2 h-4 w-4" />
                             <span>Administração</span>
                         </Link>

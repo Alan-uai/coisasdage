@@ -1,6 +1,6 @@
 'use client';
 
-import { useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, useUser, useDoc } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, useUser } from '@/firebase';
 import { collectionGroup, query, orderBy, limit, doc, serverTimestamp } from 'firebase/firestore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -10,10 +10,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Check, X, Eye, Loader2 } from 'lucide-react';
-import { useState } from 'react';
-import type { CustomRequest, UserProfile } from '@/lib/types';
+import { Check, X, Eye } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import type { CustomRequest } from '@/lib/types';
 import Image from 'next/image';
+
+const ADMIN_EMAILS = ['aymatsu00@gmail.com', 'hashiramanakamoto0@gmail.com'];
 
 export function AdminRequests() {
   const { user } = useUser();
@@ -22,16 +24,13 @@ export function AdminRequests() {
   const [adminNotes, setAdminNotes] = useState('');
   const [finalPrice, setFinalPrice] = useState<string>('');
 
-  // Fetch profile to double check admin status before querying
-  const profileRef = useMemoFirebase(() => 
-    (user && firestore) ? doc(firestore, 'users', user.uid) : null,
-    [user, firestore]
-  );
-  const { data: profile } = useDoc<UserProfile>(profileRef);
+  const isAdmin = useMemo(() => {
+    return user?.email && ADMIN_EMAILS.includes(user.email);
+  }, [user]);
 
   const requestsQuery = useMemoFirebase(
-    () => (firestore && profile?.isAdmin ? query(collectionGroup(firestore, 'custom_requests'), orderBy('createdAt', 'desc'), limit(50)) : null),
-    [firestore, profile?.isAdmin]
+    () => (firestore && isAdmin ? query(collectionGroup(firestore, 'custom_requests'), orderBy('createdAt', 'desc'), limit(50)) : null),
+    [firestore, isAdmin]
   );
 
   const { data: requests, isLoading } = useCollection<CustomRequest>(requestsQuery);
@@ -52,8 +51,12 @@ export function AdminRequests() {
     setFinalPrice('');
   };
 
-  if (isLoading || !profile?.isAdmin) {
+  if (isLoading) {
     return <div className="space-y-4"><Skeleton className="h-10 w-full" /><Skeleton className="h-32 w-full" /></div>;
+  }
+
+  if (!isAdmin) {
+    return <div className="text-center py-12 text-destructive">Acesso restrito.</div>;
   }
 
   if (!requests || requests.length === 0) {

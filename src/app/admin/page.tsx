@@ -1,37 +1,33 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { useUser } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ShieldCheck, ClipboardList, ShoppingBag, Loader2 } from 'lucide-react';
 import { AdminRequests } from './admin-requests';
 import { AdminOrders } from './admin-orders';
-import type { UserProfile } from '@/lib/types';
+
+const ADMIN_EMAILS = ['aymatsu00@gmail.com', 'hashiramanakamoto0@gmail.com'];
 
 export default function AdminPage() {
   const { user, isUserLoading } = useUser();
-  const firestore = useFirestore();
   const router = useRouter();
 
-  // Fetch the user's profile to check if they are an admin
-  const profileRef = useMemoFirebase(() => 
-    (user && firestore) ? doc(firestore, 'users', user.uid) : null,
-    [user, firestore]
-  );
-  const { data: profile, isLoading: isProfileLoading } = useDoc<UserProfile>(profileRef);
+  const isAdmin = useMemo(() => {
+    return user?.email && ADMIN_EMAILS.includes(user.email);
+  }, [user]);
 
   useEffect(() => {
-    if (!isUserLoading && !isProfileLoading) {
-      if (!user || !profile?.isAdmin) {
+    if (!isUserLoading) {
+      if (!user || !isAdmin) {
         router.push('/');
       }
     }
-  }, [user, profile, isUserLoading, isProfileLoading, router]);
+  }, [user, isAdmin, isUserLoading, router]);
 
-  if (isUserLoading || isProfileLoading) {
+  if (isUserLoading) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
         <Loader2 className="size-8 animate-spin text-primary" />
@@ -39,8 +35,8 @@ export default function AdminPage() {
     );
   }
 
-  if (!user || !profile?.isAdmin) {
-    return null; // Redirecting via useEffect
+  if (!user || !isAdmin) {
+    return null;
   }
 
   return (

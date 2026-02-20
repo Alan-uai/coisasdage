@@ -2,7 +2,7 @@
 'use client';
 
 import { useUser, useFirestore, useCollection, useMemoFirebase, useDoc, updateDocumentNonBlocking } from '@/firebase';
-import { collection, query, orderBy, limit, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, collectionGroup, query, orderBy, limit, doc, serverTimestamp } from 'firebase/firestore';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -23,16 +23,17 @@ export default function AdminRequestsPage() {
   );
   const { data: profile, isLoading: isProfileLoading } = useDoc<UserProfile>(profileRef);
 
+  // Usa collectionGroup para buscar todas as solicitações em todas as subcoleções 'custom_requests'
   const requestsQuery = useMemoFirebase(
-    () => (user && firestore && profile?.isAdmin ? query(collection(firestore, 'custom_requests'), orderBy('createdAt', 'desc'), limit(50)) : null),
+    () => (user && firestore && profile?.isAdmin ? query(collectionGroup(firestore, 'custom_requests'), orderBy('createdAt', 'desc'), limit(50)) : null),
     [user, firestore, profile]
   );
 
   const { data: requests, isLoading: isRequestsLoading } = useCollection<CustomRequest>(requestsQuery);
 
-  const handleStatusUpdate = (requestId: string, status: 'Approved' | 'Contested') => {
+  const handleStatusUpdate = (requestId: string, userId: string, status: 'Approved' | 'Contested') => {
     if (!firestore) return;
-    const requestRef = doc(firestore, 'custom_requests', requestId);
+    const requestRef = doc(firestore, 'users', userId, 'custom_requests', requestId);
     updateDocumentNonBlocking(requestRef, { 
       status, 
       updatedAt: serverTimestamp() 
@@ -62,7 +63,7 @@ export default function AdminRequestsPage() {
     <div className="p-4 sm:p-6 lg:p-8 space-y-8">
       <header>
         <h1 className="text-4xl font-bold tracking-tight font-headline">Avaliar Solicitações</h1>
-        <p className="text-muted-foreground mt-2">Revise os combos de produtos solicitados sob demanda.</p>
+        <p className="text-muted-foreground mt-2">Revise os combos de produtos solicitados sob demanda de todos os clientes.</p>
       </header>
 
       <main className="grid grid-cols-1 gap-6">
@@ -120,7 +121,7 @@ export default function AdminRequestsPage() {
                       </div>
                     ))
                   ) : (
-                    <div className="text-sm italic text-muted-foreground">Esta solicitação não possui itens detalhados (formato antigo).</div>
+                    <div className="text-sm italic text-muted-foreground">Esta solicitação não possui itens detalhados.</div>
                   )}
                 </div>
                 <Separator className="my-6" />
@@ -131,10 +132,10 @@ export default function AdminRequestsPage() {
                   </div>
                   {request.status === 'Pending' && (
                     <div className="flex gap-2">
-                      <Button size="sm" onClick={() => handleStatusUpdate(request.id, 'Approved')}>
+                      <Button size="sm" onClick={() => handleStatusUpdate(request.id, request.userId, 'Approved')}>
                         <CheckCircle2 className="size-4 mr-2" /> Aprovar Combo
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => handleStatusUpdate(request.id, 'Contested')}>
+                      <Button size="sm" variant="outline" onClick={() => handleStatusUpdate(request.id, request.userId, 'Contested')}>
                         <XCircle className="size-4 mr-2" /> Contestar
                       </Button>
                     </div>

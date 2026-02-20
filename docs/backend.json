@@ -62,11 +62,11 @@
         }
       },
       {
-        "path": "/custom_requests/{requestId}",
+        "path": "/users/{userId}/custom_requests/{requestId}",
         "definition": {
           "entityName": "CustomRequest",
           "schema": { "$ref": "#/backend/entities/CustomRequest" },
-          "description": "Bundled on-demand requests for admin approval."
+          "description": "User specific on-demand requests for admin approval."
         }
       }
     ]

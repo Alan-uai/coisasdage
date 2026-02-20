@@ -28,7 +28,6 @@ export default function MyOrdersPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
 
-  // Busca pedidos confirmados (pagos ou em processamento)
   const ordersQuery = useMemoFirebase(
     () => (user && firestore ? query(
       collection(firestore, 'users', user.uid, 'orders'),
@@ -39,11 +38,9 @@ export default function MyOrdersPage() {
   );
   const { data: orders, isLoading: isOrdersLoading } = useCollection<Order>(ordersQuery);
 
-  // Busca solicitações sob demanda (em análise pela artesã)
   const requestsQuery = useMemoFirebase(
     () => (user && firestore ? query(
-      collection(firestore, 'custom_requests'),
-      where('userId', '==', user.uid),
+      collection(firestore, 'users', user.uid, 'custom_requests'),
       orderBy('createdAt', 'desc'),
       limit(20)
     ) : null),
@@ -98,6 +95,8 @@ export default function MyOrdersPage() {
         return <Badge variant="default" className="bg-green-600 hover:bg-green-700"><CheckCircle2 className="size-3 mr-1" /> Aprovado</Badge>;
       case 'Contested':
         return <Badge variant="destructive"><AlertCircle className="size-3 mr-1" /> Revisão Necessária</Badge>;
+      case 'AddedToCart':
+        return <Badge variant="default" className="bg-blue-600">Adicionado ao Carrinho</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }

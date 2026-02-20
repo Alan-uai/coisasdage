@@ -31,37 +31,21 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow create, update: if isOwner(userId);
       
+      // Subcoleções de usuário (orders e custom_requests)
       match /{allSubcollections=**} {
         allow read, write: if isOwner(userId) || isAdmin();
       }
     }
 
     /* =============================
-        CUSTOM REQUESTS (On Demand)
+        CUSTOM REQUESTS (CollectionGroup Rule)
     ============================== */
-
-    match /custom_requests/{requestId} {
-      // 'get' permite ler um documento específico
-      allow get: if isAuthenticated() && (
-        isAdmin() || 
-        (resource.data.userId == request.auth.uid)
-      );
-      
-      // 'list' permite realizar consultas (queries) na coleção
-      // O Firestore exige que a query tenha o filtro where('userId', '==', uid)
-      allow list: if isAuthenticated() && (
-        isAdmin() || 
-        (resource.data.userId == request.auth.uid)
-      );
-      
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAuthenticated() && (
-        isAdmin() || 
-        (resource.data.userId == request.auth.uid)
-      );
-      allow delete: if isAdmin();
-    }
     
+    // Regra para permitir que o admin liste todas as solicitações via CollectionGroup query
+    match /{path=**}/custom_requests/{requestId} {
+      allow list: if isAdmin();
+    }
+
     /* =============================
         PUBLIC COLLECTIONS
     ============================== */

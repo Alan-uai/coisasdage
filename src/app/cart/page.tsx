@@ -67,7 +67,6 @@ export default function CartPage() {
   const handleToggleSelection = (itemId: string, currentSelected: boolean, isReadyMade: boolean) => {
     if (!user || !firestore) return;
 
-    // Enforcement: Deselect all items of different type
     if (!currentSelected && selectedType && ((selectedType === 'ready' && !isReadyMade) || (selectedType === 'custom' && isReadyMade))) {
         toast({
             title: "Seleção Restrita",
@@ -98,7 +97,7 @@ export default function CartPage() {
     setIsSubmitting(true);
 
     try {
-        const requestsRef = collection(firestore, 'custom_requests');
+        const requestsRef = collection(firestore, 'users', user.uid, 'custom_requests');
         const requestData = {
             userId: user.uid,
             userName: user.displayName || 'Cliente',
@@ -124,7 +123,6 @@ export default function CartPage() {
 
         await addDocumentNonBlocking(requestsRef, requestData);
 
-        // Remove from cart
         selectedItems.forEach(item => {
             const itemRef = doc(firestore, 'users', user.uid, 'carts', 'main', 'items', item.id);
             deleteDocumentNonBlocking(itemRef);

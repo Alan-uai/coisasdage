@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Truck, PackageSearch, LogIn, XCircle, ShoppingBag, ClipboardList, Clock } from 'lucide-react';
+import { Truck, PackageSearch, LogIn, XCircle, ShoppingBag, ClipboardList, Clock, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
@@ -42,7 +42,7 @@ export default function OrdersPage() {
   const { toast } = useToast();
   const router = useRouter();
 
-  // Busca os pedidos finalizados (compras pagas)
+  // Queries only run when user is authenticated
   const ordersQuery = useMemoFirebase(
     () => (user && firestore ? query(
       collection(firestore, 'users', user.uid, 'orders'), 
@@ -51,9 +51,8 @@ export default function OrdersPage() {
     ) : null),
     [user, firestore]
   );
-  const { data: orders, isLoading: isOrdersLoading } = useCollection<Order>(ordersQuery);
+  const { data: orders, isLoading: isOrdersLoading, error: ordersError } = useCollection<Order>(ordersQuery);
 
-  // Busca as solicitações sob demanda (em análise ou aprovadas)
   const requestsQuery = useMemoFirebase(
     () => (user && firestore ? query(
       collection(firestore, 'custom_requests'), 
@@ -63,7 +62,7 @@ export default function OrdersPage() {
     ) : null),
     [user, firestore]
   );
-  const { data: requests, isLoading: isRequestsLoading } = useCollection<CustomRequest>(requestsQuery);
+  const { data: requests, isLoading: isRequestsLoading, error: requestsError } = useCollection<CustomRequest>(requestsQuery);
 
   const handleCancelOrder = (orderId: string) => {
     if (!user || !firestore) return;
@@ -75,7 +74,6 @@ export default function OrdersPage() {
   const handleAddToCartRequest = (request: CustomRequest) => {
     if (!user || !firestore || !request.items) return;
     
-    // Marca como adicionado ao carrinho para não repetir o botão
     const requestRef = doc(firestore, 'custom_requests', request.id);
     updateDocumentNonBlocking(requestRef, { status: 'AddedToCart', updatedAt: serverTimestamp() });
     
@@ -96,7 +94,7 @@ export default function OrdersPage() {
             selectedColor: item.selectedColor,
             selectedMaterial: item.selectedMaterial,
             unitPriceAtAddition: item.unitPriceAtOrder,
-            readyMade: true, // Agora ele é pronto para pagamento
+            readyMade: true,
             selected: true,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -124,6 +122,18 @@ export default function OrdersPage() {
         <h1 className="text-3xl font-bold font-headline">Acesse sua Conta</h1>
         <p className="text-muted-foreground mt-2">Você precisa estar logado para ver seus pedidos.</p>
         <Button asChild className="mt-6"><Link href="/login">Fazer Login</Link></Button>
+      </div>
+    );
+  }
+
+  // Handle potential permission errors gracefully
+  if (requestsError || ordersError) {
+    return (
+      <div className="p-8 flex flex-col items-center justify-center text-center">
+        <AlertCircle className="size-12 text-destructive mb-4" />
+        <h2 className="text-xl font-bold">Acesso restrito ou erro de conexão</h2>
+        <p className="text-muted-foreground">Não foi possível carregar seus dados. Tente atualizar a página.</p>
+        <Button onClick={() => window.location.reload()} variant="outline" className="mt-4">Recarregar</Button>
       </div>
     );
   }

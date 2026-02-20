@@ -19,10 +19,7 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() && 
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        (
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == "true"
-        );
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
     }
 
     /* =============================
@@ -44,22 +41,19 @@ service cloud.firestore {
     ============================== */
 
     match /custom_requests/{requestId} {
-      // Regras separadas para garantir que o usuário comum não dependa de checagens de admin
-      // Isso resolve o erro de permissão na página de pedidos (/orders)
+      // RULES FOR LISTING (Differentiated to avoid rule engine evaluation conflicts)
       
-      // 1. Permite que o usuário liste suas próprias solicitações (Dono)
+      // Allow user to list their own items. 
+      // This is the rule used by the /orders page.
       allow list: if isAuthenticated() && resource.data.userId == request.auth.uid;
       
-      // 2. Permite que o administrador liste tudo (Admin)
+      // Allow admin to list everything.
+      // This is the rule used by the /admin/requests page.
       allow list: if isAdmin();
       
-      // 3. Permite acesso individual para leitura
+      // Document-level access
       allow get: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      
-      // 4. Permite criação apenas para o próprio usuário
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      
-      // 5. Atualização e deleção seguem as permissões de dono ou admin
       allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
       allow delete: if isAdmin();
     }

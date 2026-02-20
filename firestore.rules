@@ -1,4 +1,3 @@
-
 rules_version = '2';
 
 service cloud.firestore {
@@ -31,14 +30,17 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow create, update: if isOwner(userId);
       
-      // User-specific subcollections (orders and custom_requests)
-      // Users can manage their own, admins can manage everything
+      // User-specific subcollections
       match /custom_requests/{requestId} {
-        allow read, write: if isOwner(userId) || isAdmin();
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId);
+        allow update, delete: if isAdmin() || isOwner(userId);
       }
 
       match /orders/{orderId} {
-        allow read, write: if isOwner(userId) || isAdmin();
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId);
+        allow update, delete: if isAdmin();
       }
     }
 
@@ -46,9 +48,12 @@ service cloud.firestore {
         COLLECTION GROUP RULES
     ============================== */
     
-    // Explicit rule for collectionGroup queries on custom_requests
-    // This is required for admins to list all requests globally
+    // Required for admins to list all requests and orders across all users
     match /{path=**}/custom_requests/{requestId} {
+      allow list: if isAdmin();
+    }
+    
+    match /{path=**}/orders/{orderId} {
       allow list: if isAdmin();
     }
 

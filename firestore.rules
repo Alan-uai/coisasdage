@@ -22,6 +22,21 @@ service cloud.firestore {
     }
 
     /* =============================
+        COLLECTION GROUP RULES
+        Must be at the top level to support collectionGroup queries.
+    ============================== */
+    
+    match /{path=**}/custom_requests/{requestId} {
+      allow list: if isAdmin();
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+    }
+    
+    match /{path=**}/orders/{orderId} {
+      allow list: if isAdmin();
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+    }
+
+    /* =============================
         USER PROFILES
     ============================== */
 
@@ -30,7 +45,7 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow create, update: if isOwner(userId);
       
-      // User-specific subcollections
+      // Specific rules for subcollections when accessed via direct path
       match /custom_requests/{requestId} {
         allow read: if isOwner(userId) || isAdmin();
         allow create: if isOwner(userId);
@@ -42,18 +57,6 @@ service cloud.firestore {
         allow create: if isOwner(userId);
         allow update, delete: if isAdmin();
       }
-    }
-
-    /* =============================
-        COLLECTION GROUP RULES
-    ============================== */
-    
-    match /{path=**}/custom_requests/{requestId} {
-      allow list: if isAdmin();
-    }
-    
-    match /{path=**}/orders/{orderId} {
-      allow list: if isAdmin();
     }
 
     /* =============================

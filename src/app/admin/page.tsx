@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -14,6 +14,7 @@ const ADMIN_EMAILS = ['aymatsu00@gmail.com', 'hashiramanakamoto0@gmail.com'];
 export default function AdminPage() {
   const { user, isUserLoading } = useUser();
   const router = useRouter();
+  const [isVerifiedAdmin, setIsVerifiedAdmin] = useState(false);
 
   const isAdmin = useMemo(() => {
     return user?.email && ADMIN_EMAILS.includes(user.email);
@@ -23,14 +24,21 @@ export default function AdminPage() {
     if (!isUserLoading) {
       if (!user || !isAdmin) {
         router.push('/');
+      } else {
+        // Give a small delay to ensure Firebase Auth token is synced with Firestore rules engine
+        const timer = setTimeout(() => setIsVerifiedAdmin(true), 500);
+        return () => clearTimeout(timer);
       }
     }
   }, [user, isAdmin, isUserLoading, router]);
 
-  if (isUserLoading) {
+  if (isUserLoading || (isAdmin && !isVerifiedAdmin)) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
-        <Loader2 className="size-8 animate-spin text-primary" />
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="size-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground animate-pulse">Verificando credenciais de artesã...</p>
+        </div>
       </div>
     );
   }

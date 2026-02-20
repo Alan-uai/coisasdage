@@ -1,23 +1,31 @@
 'use client';
 
-import { useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, useUser, useDoc } from '@/firebase';
 import { collectionGroup, query, orderBy, limit, doc, serverTimestamp } from 'firebase/firestore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Truck, Hammer, CheckCircle2, Clock, XCircle, Info, Eye } from 'lucide-react';
-import type { Order } from '@/lib/types';
+import { Truck, Hammer, CheckCircle2, Clock, XCircle, Info } from 'lucide-react';
+import type { Order, UserProfile } from '@/lib/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import Image from 'next/image';
 
 export function AdminOrders() {
+  const { user } = useUser();
   const firestore = useFirestore();
 
+  // Fetch profile to double check admin status before querying
+  const profileRef = useMemoFirebase(() => 
+    (user && firestore) ? doc(firestore, 'users', user.uid) : null,
+    [user, firestore]
+  );
+  const { data: profile } = useDoc<UserProfile>(profileRef);
+
   const ordersQuery = useMemoFirebase(
-    () => (firestore ? query(collectionGroup(firestore, 'orders'), orderBy('createdAt', 'desc'), limit(50)) : null),
-    [firestore]
+    () => (firestore && profile?.isAdmin ? query(collectionGroup(firestore, 'orders'), orderBy('createdAt', 'desc'), limit(50)) : null),
+    [firestore, profile?.isAdmin]
   );
 
   const { data: orders, isLoading } = useCollection<Order>(ordersQuery);
@@ -42,7 +50,7 @@ export function AdminOrders() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || !profile?.isAdmin) {
     return <div className="space-y-4"><Skeleton className="h-10 w-full" /><Skeleton className="h-32 w-full" /></div>;
   }
 

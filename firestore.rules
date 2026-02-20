@@ -48,7 +48,7 @@ service cloud.firestore {
         COLLECTION GROUP RULES
     ============================== */
     
-    // Required for admins to list all requests and orders across all users
+    // Explicitly allow admins to list all requests and orders globally
     match /{path=**}/custom_requests/{requestId} {
       allow list: if isAdmin();
     }

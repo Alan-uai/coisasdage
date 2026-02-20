@@ -1,6 +1,6 @@
 'use client';
 
-import { useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, useUser, useDoc } from '@/firebase';
 import { collectionGroup, query, orderBy, limit, doc, serverTimestamp } from 'firebase/firestore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -10,20 +10,28 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Check, X, Eye, Loader2, MessageSquareText } from 'lucide-react';
+import { Check, X, Eye, Loader2 } from 'lucide-react';
 import { useState } from 'react';
-import type { CustomRequest } from '@/lib/types';
+import type { CustomRequest, UserProfile } from '@/lib/types';
 import Image from 'next/image';
 
 export function AdminRequests() {
+  const { user } = useUser();
   const firestore = useFirestore();
   const [editingRequest, setEditingRequest] = useState<CustomRequest | null>(null);
   const [adminNotes, setAdminNotes] = useState('');
   const [finalPrice, setFinalPrice] = useState<string>('');
 
+  // Fetch profile to double check admin status before querying
+  const profileRef = useMemoFirebase(() => 
+    (user && firestore) ? doc(firestore, 'users', user.uid) : null,
+    [user, firestore]
+  );
+  const { data: profile } = useDoc<UserProfile>(profileRef);
+
   const requestsQuery = useMemoFirebase(
-    () => (firestore ? query(collectionGroup(firestore, 'custom_requests'), orderBy('createdAt', 'desc'), limit(50)) : null),
-    [firestore]
+    () => (firestore && profile?.isAdmin ? query(collectionGroup(firestore, 'custom_requests'), orderBy('createdAt', 'desc'), limit(50)) : null),
+    [firestore, profile?.isAdmin]
   );
 
   const { data: requests, isLoading } = useCollection<CustomRequest>(requestsQuery);
@@ -44,7 +52,7 @@ export function AdminRequests() {
     setFinalPrice('');
   };
 
-  if (isLoading) {
+  if (isLoading || !profile?.isAdmin) {
     return <div className="space-y-4"><Skeleton className="h-10 w-full" /><Skeleton className="h-32 w-full" /></div>;
   }
 

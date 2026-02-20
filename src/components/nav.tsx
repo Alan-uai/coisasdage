@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutGrid, Package, ShoppingBag, HelpCircle, User, LogIn, LogOut, ShieldCheck } from 'lucide-react';
+import { LayoutGrid, Package, ShoppingBag, HelpCircle, User, LogIn, LogOut } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -24,7 +24,6 @@ import { useUser, useAuth } from '@/firebase';
 import { initiateSignOut } from '@/firebase/non-blocking-login';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from './ui/skeleton';
-import { useMemo } from 'react';
 
 const mainLinks = [
   { href: '/', label: 'Catálogo', icon: LayoutGrid },
@@ -33,15 +32,9 @@ const mainLinks = [
   { href: '/faq', label: 'Dúvidas', icon: HelpCircle },
 ];
 
-const ADMIN_EMAILS = ['aymatsu00@gmail.com', 'hashiramanakamoto0@gmail.com'];
-
 function UserNav() {
     const { user, isUserLoading } = useUser();
     const auth = useAuth();
-
-    const isAdmin = useMemo(() => {
-        return user?.email && ADMIN_EMAILS.includes(user.email);
-    }, [user]);
 
     const handleLogout = () => {
         if (auth) {
@@ -103,17 +96,6 @@ function UserNav() {
                     </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {isAdmin && (
-                  <>
-                    <DropdownMenuItem asChild>
-                        <Link href="/admin" className="cursor-pointer">
-                            <ShieldCheck className="mr-2 h-4 w-4" />
-                            <span>Administração</span>
-                        </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                  </>
-                )}
                 <DropdownMenuItem onClick={handleLogout} className="text-destructive cursor-pointer">
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Sair</span>

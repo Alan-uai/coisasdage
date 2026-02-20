@@ -11,50 +11,21 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      return isAuthenticated() && (
-        request.auth.token.email == "aymatsu00@gmail.com" || 
-        request.auth.token.email == "hashiramanakamoto0@gmail.com"
-      );
-    }
-
     /* =============================
-        COLLECTION GROUP RULES
-        Crucial para permitir listagem global (Admin Dashboard)
-    ============================== */
-    
-    match /{path=**}/custom_requests/{requestId} {
-      allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == resource.data.userId);
-      allow write: if isAdmin();
-    }
-    
-    match /{path=**}/orders/{orderId} {
-      allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == resource.data.userId);
-      allow write: if isAdmin();
-    }
-
-    /* =============================
-        USER PROFILES
+        USER PROFILES & SUBCOLLECTIONS
     ============================== */
 
     match /users/{userId} {
       allow get: if isAuthenticated();
-      allow list: if isAdmin();
       allow create, update: if isAuthenticated() && request.auth.uid == userId;
       
-      // Regras específicas para subcoleções (acesso direto via path)
-      match /custom_requests/{requestId} {
-        allow read: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
-        allow create: if isAuthenticated() && request.auth.uid == userId;
-        allow update, delete: if isAdmin();
-      }
-
+      // Regras para pedidos (histórico do usuário)
       match /orders/{orderId} {
-        allow read: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
+        allow read: if isAuthenticated() && request.auth.uid == userId;
         allow create: if isAuthenticated() && request.auth.uid == userId;
-        allow update, delete: if isAdmin();
       }
       
+      // Carrinho de compras
       match /carts/{cartId} {
         allow read, write: if isAuthenticated() && request.auth.uid == userId;
         match /items/{itemId} {

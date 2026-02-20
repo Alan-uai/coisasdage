@@ -1,23 +1,22 @@
-
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, deleteDocumentNonBlocking, addDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
-import { collection, doc, query, limit, serverTimestamp } from 'firebase/firestore';
+import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
+import { collection, doc, query, limit } from 'firebase/firestore';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
 import { LogIn, ShoppingBag, Trash2, Plus, Minus, ArrowRight, ClipboardList, AlertCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { CartItem } from '@/lib/types';
 import { cn } from '@/lib/utils';
+
+// Constante com o número da artesã (Exemplo: 5511999999999)
+const WHATSAPP_NUMBER = "5511999999999";
 
 function CartSkeleton() {
   return (
@@ -92,52 +91,40 @@ export default function CartPage() {
     deleteDocumentNonBlocking(itemRef);
   };
 
-  const handleSubmitCustomRequest = async () => {
-    if (!user || !firestore || isSubmitting) return;
+  const handleSubmitCustomRequest = () => {
+    if (!user || selectedItems.length === 0) return;
     setIsSubmitting(true);
 
-    try {
-        const requestsRef = collection(firestore, 'users', user.uid, 'custom_requests');
-        const requestData = {
-            userId: user.uid,
-            userName: user.displayName || 'Cliente',
-            userEmail: user.email || '',
-            items: selectedItems.map(item => ({
-                productId: item.productId,
-                productGroupId: item.productGroupId,
-                productName: item.productName,
-                imageUrl: item.imageUrl,
-                quantity: item.quantity,
-                unitPriceAtOrder: item.unitPriceAtAddition,
-                selectedSize: item.selectedSize,
-                selectedColor: item.selectedColor,
-                selectedMaterial: item.selectedMaterial,
-                readyMade: false,
-            })),
-            totalBasePrice: subtotal,
-            finalPrice: subtotal,
-            status: 'Pending',
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-        };
+    // Montar a mensagem do WhatsApp
+    let message = `Olá! Tenho interesse em solicitar as seguintes peças sob demanda:\n\n`;
+    
+    selectedItems.forEach((item, index) => {
+      message += `${index + 1}. *${item.productName}*\n`;
+      message += `   - Quantidade: ${item.quantity}\n`;
+      message += `   - Cor: ${item.selectedColor}\n`;
+      message += `   - Tamanho: ${item.selectedSize}\n`;
+      message += `   - Material: ${item.selectedMaterial}\n\n`;
+    });
 
-        await addDocumentNonBlocking(requestsRef, requestData);
+    message += `Pode me informar sobre a viabilidade e prazos? Muito obrigado(a)!`;
 
-        selectedItems.forEach(item => {
-            const itemRef = doc(firestore, 'users', user.uid, 'carts', 'main', 'items', item.id);
-            deleteDocumentNonBlocking(itemRef);
-        });
+    const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
 
-        toast({
-            title: "Solicitação Enviada!",
-            description: "Seus pedidos sob demanda foram enviados para análise.",
-        });
-        router.push('/orders');
-    } catch (e) {
-        console.error(e);
-    } finally {
-        setIsSubmitting(false);
-    }
+    // Abrir o WhatsApp
+    window.open(whatsappUrl, '_blank');
+
+    // Remover itens do carrinho após enviar (opcional, para limpar a fila de solicitações)
+    selectedItems.forEach(item => {
+      const itemRef = doc(firestore, 'users', user.uid, 'carts', 'main', 'items', item.id);
+      deleteDocumentNonBlocking(itemRef);
+    });
+
+    toast({
+      title: "Redirecionando!",
+      description: "Sua solicitação foi enviada para o WhatsApp da artesã.",
+    });
+
+    setIsSubmitting(false);
   };
 
   if (isUserLoading || (user && isCartLoading)) {
@@ -220,7 +207,7 @@ export default function CartPage() {
           {customItems.length > 0 && (
             <section className="space-y-4">
               <h2 className="text-xl font-bold flex items-center gap-2">
-                <ClipboardList className="size-5 text-primary" /> Sob Demanda (Para Análise)
+                <ClipboardList className="size-5 text-primary" /> Sob Demanda (Conversar no WhatsApp)
               </h2>
               <div className="grid gap-4">{customItems.map(renderItem)}</div>
             </section>
@@ -240,14 +227,14 @@ export default function CartPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex justify-between font-bold text-xl text-primary">
-                <span>Total</span>
+                <span>Total Estimado</span>
                 <span>R$ {subtotal.toFixed(2).replace('.', ',')}</span>
               </div>
               
               {selectedType === 'custom' ? (
-                <Button className="w-full" size="lg" disabled={isSubmitting} onClick={handleSubmitCustomRequest}>
+                <Button className="w-full bg-green-600 hover:bg-green-700" size="lg" disabled={isSubmitting} onClick={handleSubmitCustomRequest}>
                   {isSubmitting ? <Loader2 className="animate-spin mr-2" /> : <ClipboardList className="mr-2" />}
-                  Enviar para Análise
+                  Solicitar via WhatsApp
                 </Button>
               ) : (
                 <Button asChild className="w-full" size="lg" disabled={selectedItems.length === 0}>
@@ -262,8 +249,8 @@ export default function CartPage() {
                   <AlertCircle className="size-4 shrink-0" />
                   <p>
                     {selectedType === 'custom' 
-                      ? "Ao enviar para análise, a artesã avaliará a viabilidade e prazo. Você será notificado para concluir o pagamento após a aprovação."
-                      : "Produtos de pronta entrega serão processados imediatamente após a confirmação do pagamento."
+                      ? "Ao solicitar via WhatsApp, você falará diretamente com a artesã para alinhar detalhes de cores, prazos e frete personalizado."
+                      : "Produtos de pronta entrega serão processados imediatamente após a confirmação do pagamento pelo Mercado Pago."
                     }
                   </p>
                 </div>

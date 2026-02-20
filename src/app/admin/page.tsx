@@ -25,8 +25,8 @@ export default function AdminPage() {
       if (!user || !isAdmin) {
         router.push('/');
       } else {
-        // Give a small delay to ensure Firebase Auth token is synced with Firestore rules engine
-        const timer = setTimeout(() => setIsVerifiedAdmin(true), 500);
+        // Garantir que o token de autenticação foi propagado antes de montar as queries
+        const timer = setTimeout(() => setIsVerifiedAdmin(true), 1000);
         return () => clearTimeout(timer);
       }
     }
@@ -37,7 +37,7 @@ export default function AdminPage() {
       <div className="flex h-[80vh] items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="size-8 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground animate-pulse">Verificando credenciais de artesã...</p>
+          <p className="text-sm text-muted-foreground animate-pulse">Autenticando acesso de artesã...</p>
         </div>
       </div>
     );
@@ -76,7 +76,7 @@ export default function AdminPage() {
               <CardDescription>Analise a viabilidade e defina o preço final para peças personalizadas.</CardDescription>
             </CardHeader>
             <CardContent>
-              <AdminRequests />
+              {isVerifiedAdmin && <AdminRequests />}
             </CardContent>
           </Card>
         </TabsContent>
@@ -88,7 +88,7 @@ export default function AdminPage() {
               <CardDescription>Atualize o status de produção e envie os códigos de rastreio.</CardDescription>
             </CardHeader>
             <CardContent>
-              <AdminOrders />
+              {isVerifiedAdmin && <AdminOrders />}
             </CardContent>
           </Card>
         </TabsContent>

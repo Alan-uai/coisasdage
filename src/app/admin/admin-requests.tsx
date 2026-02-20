@@ -42,7 +42,7 @@ export function AdminRequests() {
     updateDocumentNonBlocking(requestRef, {
       status,
       adminNotes: adminNotes || request.adminNotes || '',
-      finalPrice: finalPrice ? parseFloat(finalPrice) : request.finalPrice,
+      finalPrice: finalPrice ? parseFloat(finalPrice) : (request.finalPrice || request.totalBasePrice),
       updatedAt: serverTimestamp(),
     });
 
@@ -113,7 +113,7 @@ export function AdminRequests() {
                   if (open) {
                     setEditingRequest(request);
                     setAdminNotes(request.adminNotes || '');
-                    setFinalPrice(request.finalPrice.toString());
+                    setFinalPrice((request.finalPrice || request.totalBasePrice).toString());
                   } else {
                     setEditingRequest(null);
                   }

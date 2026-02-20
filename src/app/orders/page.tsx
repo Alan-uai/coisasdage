@@ -19,14 +19,21 @@ import {
   ChevronRight, 
   Truck, 
   Hammer,
-  ClipboardList
+  ClipboardList,
+  FileText,
+  Loader2
 } from 'lucide-react';
 import type { Order, CustomRequest } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { getMLShipmentLabel } from '@/lib/mercado-livre';
+import { useState } from 'react';
+import { useToast } from '@/hooks/use-toast';
 
 export default function MyOrdersPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
+  const { toast } = useToast();
+  const [isGeneratingLabel, setIsGeneratingLabel] = useState<string | null>(null);
 
   const ordersQuery = useMemoFirebase(
     () => (user && firestore ? query(
@@ -47,6 +54,36 @@ export default function MyOrdersPage() {
     [user, firestore]
   );
   const { data: requests, isLoading: isRequestsLoading } = useCollection<CustomRequest>(requestsQuery);
+
+  const handleDownloadLabel = async (shipmentId: string) => {
+    setIsGeneratingLabel(shipmentId);
+    try {
+      const result = await getMLShipmentLabel(shipmentId);
+      if (result.success && result.base64) {
+        const linkSource = `data:application/pdf;base64,${result.base64}`;
+        const downloadLink = document.createElement("a");
+        const fileName = `etiqueta-${shipmentId}.pdf`;
+        downloadLink.href = linkSource;
+        downloadLink.download = fileName;
+        downloadLink.click();
+        toast({ title: "Etiqueta gerada com sucesso!" });
+      } else {
+        toast({ 
+          variant: "destructive", 
+          title: "Erro ao gerar etiqueta", 
+          description: result.error 
+        });
+      }
+    } catch (error) {
+      toast({ 
+        variant: "destructive", 
+        title: "Erro inesperado", 
+        description: "Não foi possível processar a etiqueta." 
+      });
+    } finally {
+      setIsGeneratingLabel(null);
+    }
+  };
 
   if (isUserLoading) {
     return (
@@ -141,7 +178,21 @@ export default function MyOrdersPage() {
                             {order.items.length} {order.items.length === 1 ? 'item' : 'itens'}
                           </h3>
                         </div>
-                        {getOrderStatusBadge(order.status)}
+                        <div className="flex flex-col items-end gap-2">
+                          {getOrderStatusBadge(order.status)}
+                          {order.merchantOrderId && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-7 text-[10px]"
+                              disabled={isGeneratingLabel === order.merchantOrderId}
+                              onClick={() => handleDownloadLabel(order.merchantOrderId!)}
+                            >
+                              {isGeneratingLabel === order.merchantOrderId ? <Loader2 className="animate-spin size-3 mr-1" /> : <FileText className="size-3 mr-1" />}
+                              Etiqueta Mercado Envios
+                            </Button>
+                          )}
+                        </div>
                       </div>
                       
                       <div className="flex -space-x-2 overflow-hidden">
@@ -235,3 +286,4 @@ export default function MyOrdersPage() {
     </div>
   );
 }
+

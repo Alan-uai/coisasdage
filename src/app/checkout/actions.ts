@@ -37,17 +37,22 @@ type PaymentResult = {
 
 const WHAPI_TOKEN = process.env.WHAPI_TOKEN;
 const ARTESA_WPP = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "5511999999999";
+const GROUP_ID = process.env.WHATSAPP_GROUP_ID; // Credencial para o grupo "Pedidos"
 
 /**
- * Notifica a Artesã privadamente sobre uma nova solicitação.
+ * Notifica a Artesã sobre uma nova solicitação.
+ * Prioriza o envio para o grupo "Pedidos" se o ID estiver configurado.
  */
 export async function notifyAdminNewRequest(requestId: string, clientName: string, productName: string) {
     if (!WHAPI_TOKEN) return;
 
+    // Se houver um ID de grupo, envia para o grupo, caso contrário para o número privado
+    const destination = GROUP_ID || ARTESA_WPP;
+
     try {
         await axios.post('https://gate.whapi.cloud/messages/text', {
-            to: ARTESA_WPP,
-            body: `🧶 *Nova Solicitação Sob Demanda!*\n\nCliente: ${clientName}\nProduto: ${productName}\n\n*ID para Comando: #${requestId.toUpperCase()}*\n\n_Quando fechar o valor, responda aqui com:_ \n#${requestId.toUpperCase()} Aprovado [valor]`
+            to: destination,
+            body: `🧶 *Nova Solicitação Sob Demanda!*\n\nCliente: ${clientName}\nProduto: ${productName}\n\n*ID para Comando: #${requestId.toUpperCase()}*\n\n_Para aprovar, responda aqui com:_ \n#${requestId.toUpperCase()} Aprovado [dias de produção]`
         }, {
             headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` }
         });
@@ -87,7 +92,7 @@ export async function createPreference(
                     description: `${item.selectedColor} / ${item.selectedSize}`,
                     quantity: item.quantity,
                     currency_id: 'BRL',
-                    unit_price: item.unitPriceAtAddition,
+                    unit_price: item.unit_priceAtAddition,
                 })),
                 payer: {
                     email: userEmail,

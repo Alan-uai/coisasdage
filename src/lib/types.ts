@@ -1,3 +1,4 @@
+
 import type { Timestamp } from 'firebase/firestore';
 
 export type UserProfile = {
@@ -6,6 +7,7 @@ export type UserProfile = {
   email: string;
   createdAt: Timestamp;
   isAdmin?: boolean;
+  termsAccepted?: boolean;
 };
 
 export type SavedAddress = {

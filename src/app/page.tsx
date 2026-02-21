@@ -1,4 +1,5 @@
 
+
 import Link from 'next/link';
 import Image from 'next/image';
 import { getProducts, getLogoUrl } from '@/lib/cloudinary';
@@ -117,7 +118,7 @@ export default async function ProductsPage() {
         </main>
 
         <footer className="mt-20 pt-12 border-t border-primary/20 bg-primary text-primary-foreground -mx-4 sm:-mx-6 lg:-mx-8 px-8 py-12 rounded-t-3xl">
-          <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
+          <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
             <div className="space-y-6">
               <h3 className="text-xs uppercase tracking-widest opacity-70 font-bold">Redes Sociais</h3>
               <div className="flex gap-6">
@@ -142,6 +143,14 @@ export default async function ProductsPage() {
                   <MapPin className="size-5 text-accent" />
                   <span className="text-sm">{contactInfo.location}</span>
                 </div>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <h3 className="text-xs uppercase tracking-widest opacity-70 font-bold">Institucional</h3>
+              <div className="flex flex-col gap-3 text-sm">
+                <Link href="/terms" className="hover:underline">Termos e Condições</Link>
+                <Link href="/faq" className="hover:underline">Perguntas Frequentes (FAQ)</Link>
               </div>
             </div>
 

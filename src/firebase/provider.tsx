@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { DependencyList, createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
@@ -80,6 +81,7 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
                 email: firebaseUser.email,
                 createdAt: serverTimestamp(),
                 isAdmin: false, // Default to false, manually change in console
+                termsAccepted: false, // Force terms agreement on first login
               }, { merge: true });
             }
           });

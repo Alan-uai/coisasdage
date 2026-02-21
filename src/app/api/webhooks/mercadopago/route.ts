@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { MercadoPagoConfig, Payment } from 'mercadopago';
 import { initializeFirebase } from '@/firebase';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { automateShippingLabel } from '@/lib/mercado-livre';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,19 +38,27 @@ export async function POST(request: NextRequest) {
         merchantOrderId = paymentData.order?.id?.toString() || null;
       }
 
-      // If we have our combined reference (userId|orderId), we can update directly
+      // Se temos nossa referência combinada (userId|orderId), podemos atualizar diretamente
       if (externalReference && externalReference.includes('|')) {
         const [userId, orderId] = externalReference.split('|');
         const orderRef = doc(firestore, 'users', userId, 'orders', orderId);
         
+        const isApproved = status === 'approved';
+        
         await updateDoc(orderRef, {
           merchantOrderId: merchantOrderId || undefined,
           paymentId: paymentId || undefined,
-          status: status === 'approved' ? 'Crafting' : undefined,
+          status: isApproved ? 'Crafting' : undefined,
           updatedAt: serverTimestamp(),
         });
         
         console.log(`Successfully updated order ${orderId} via direct path`);
+
+        // AUTOMAÇÃO WHAPI CLOUD: Dispara envio de etiqueta se aprovado
+        if (isApproved && merchantOrderId) {
+            // Chamada não bloqueante para o webhook responder rápido
+            automateShippingLabel(merchantOrderId, orderId).catch(console.error);
+        }
       }
     }
 

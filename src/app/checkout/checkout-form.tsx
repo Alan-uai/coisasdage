@@ -18,7 +18,7 @@ import Image from 'next/image';
 import { useFirestore, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useMemoFirebase, useCollection } from '@/firebase';
 import { collection, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { QrCode, Loader2, MapPin, ClipboardList, ShoppingBag, ArrowRight, Truck, Calendar } from 'lucide-react';
+import { QrCode, Loader2, MapPin, ClipboardList, ShoppingBag, ArrowRight, Truck, Calendar, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -43,6 +43,8 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
     const [pixData, setPixData] = useState<{ qr_code: string, qr_code_base64: string } | null>(null);
     const [selectedAddressId, setSelectedAddressId] = useState<string>('');
     const [showAddressForm, setShowAddressForm] = useState(false);
+    const [hasAttemptedAutoInit, setHasAttemptedAutoInit] = useState(false);
+    
     const brickRendered = useRef(false);
     const firestore = useFirestore();
     const router = useRouter();
@@ -52,38 +54,45 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
       () => (user && firestore ? query(collection(firestore, 'users', user.uid, 'addresses'), orderBy('label')) : null),
       [user, firestore]
     );
-    const { data: savedAddresses } = useCollection<SavedAddress>(addressesQuery);
+    const { data: savedAddresses, isLoading: isAddressesLoading } = useCollection<SavedAddress>(addressesQuery);
 
     const form = useForm<z.infer<typeof addressSchema>>({
         resolver: zodResolver(addressSchema),
         defaultValues: { cpf: '', streetName: '', streetNumber: '', zipCode: '', city: '', state: '' },
     });
 
+    const currentAddress = useMemo(() => 
+      savedAddresses?.find(a => a.id === selectedAddressId) || savedAddresses?.find(a => a.isDefault) || savedAddresses?.[0]
+    , [savedAddresses, selectedAddressId]);
+
+    // Auto-initiate payment or WhatsApp flow if address exists
     useEffect(() => {
-      if (savedAddresses && savedAddresses.length > 0 && !selectedAddressId) {
-        const defaultAddr = savedAddresses.find(a => a.isDefault) || savedAddresses[0];
-        if (defaultAddr) {
-          setSelectedAddressId(defaultAddr.id);
-          setShowAddressForm(false);
-          form.reset({
-            cpf: defaultAddr.cpf,
-            streetName: defaultAddr.streetName,
-            streetNumber: defaultAddr.streetNumber,
-            zipCode: defaultAddr.zipCode,
-            city: defaultAddr.city,
-            state: defaultAddr.state,
-          });
+      if (currentAddress && !hasAttemptedAutoInit && !isLoading && !preferenceId && !orderId) {
+        setHasAttemptedAutoInit(true);
+        const values = {
+          cpf: currentAddress.cpf,
+          streetName: currentAddress.streetName,
+          streetNumber: currentAddress.streetNumber,
+          zipCode: currentAddress.zipCode,
+          city: currentAddress.city,
+          state: currentAddress.state,
+        };
+        form.reset(values);
+        // We only auto-submit if it's "ready" type (to show the brick)
+        // Custom requests still wait for the user to click "Solicitar" for confirmation
+        if (checkoutType === 'ready') {
+          onSubmit(values);
         }
-      } else if (savedAddresses && savedAddresses.length === 0) {
-        setShowAddressForm(true);
       }
-    }, [savedAddresses, form, selectedAddressId]);
+    }, [currentAddress, hasAttemptedAutoInit, isLoading, preferenceId, orderId, checkoutType, form]);
 
     const handleSelectAddress = (id: string) => {
       const addr = savedAddresses?.find(a => a.id === id);
       if (addr) {
         setSelectedAddressId(id);
         setShowAddressForm(false);
+        setPreferenceId(null); // Reset preference to force re-creation with new address
+        brickRendered.current = false;
         form.reset({
           cpf: addr.cpf,
           streetName: addr.streetName,
@@ -102,12 +111,6 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
             deleteDocumentNonBlocking(itemRef);
         });
     }, [user, firestore, cartItems]);
-
-    // Simulação de estimativa de frete
-    const shippingEstimate = useMemo(() => {
-      // Em produção aqui chamaria uma API de frete
-      return { days: 5, label: "Expresso (Mercado Envios)" };
-    }, []);
 
     async function onSubmit(values: z.infer<typeof addressSchema>) {
         if (!user || cartItems.length === 0 || !user.email || !firestore) return;
@@ -150,6 +153,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                 return;
             }
 
+            // For "Ready" made products
             const ordersRef = collection(firestore, 'users', user.uid, 'orders');
             const newOrderRef = doc(ordersRef);
             const generatedOrderId = newOrderRef.id;
@@ -250,24 +254,30 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
         );
     }
 
-    const currentAddress = savedAddresses?.find(a => a.id === selectedAddressId);
+    const isLoadingPage = isAddressesLoading || (isLoading && !preferenceId);
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto p-4">
+            {/* Left Column: Summary and Delivery Estimate */}
             <div className="space-y-6">
                 <Card className="shadow-lg">
                     <CardHeader>
                         <CardTitle className="font-headline text-2xl flex items-center gap-2">
                             {checkoutType === 'custom' ? <ClipboardList className="size-6 text-primary" /> : <ShoppingBag className="size-6 text-primary" />}
-                            Resumo
+                            Resumo do Pedido
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         {cartItems.map(item => (
                             <div key={item.id} className="flex justify-between items-center text-sm">
                                 <div className="flex items-center gap-3">
-                                    <Image src={item.imageUrl} alt={item.productName} width={40} height={40} className="rounded object-cover" />
-                                    <span>{item.productName} (x{item.quantity})</span>
+                                    <div className="size-12 relative rounded overflow-hidden bg-muted">
+                                      <Image src={item.imageUrl} alt={item.productName} fill className="object-cover" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                      <span className="font-bold">{item.productName}</span>
+                                      <span className="text-[10px] text-muted-foreground uppercase">{item.selectedSize} | {item.selectedColor}</span>
+                                    </div>
                                 </div>
                                 <span className="font-bold">R$ {(item.unitPriceAtAddition * item.quantity).toFixed(2)}</span>
                             </div>
@@ -279,78 +289,123 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                     </CardContent>
                 </Card>
 
-                {currentAddress && !showAddressForm && (
-                  <Card className="border-primary/20 bg-primary/5">
-                    <CardHeader className="py-4">
-                      <div className="flex justify-between items-center">
-                        <CardTitle className="text-sm uppercase font-bold text-primary flex items-center gap-2">
-                          <Truck className="size-4" /> Previsão de Entrega
-                        </CardTitle>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="text-sm space-y-2">
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Calendar className="size-4" />
-                        <span>{checkoutType === 'custom' ? 'Prazo de confecção + ' : ''} Chega em aprox. {shippingEstimate.days} dias úteis</span>
-                      </div>
-                      <p className="text-[10px] opacity-60">Enviado via {shippingEstimate.label}</p>
-                    </CardContent>
-                  </Card>
-                )}
+                <Card className="border-primary/10 bg-primary/5 shadow-sm">
+                  <CardHeader className="py-4">
+                    <CardTitle className="text-sm uppercase font-bold text-primary flex items-center gap-2">
+                      <Truck className="size-4" /> Previsão de Entrega
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm space-y-2">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Calendar className="size-4" />
+                      <span>{checkoutType === 'custom' ? 'Prazo de confecção + ' : ''} Chega em aprox. 5 dias úteis</span>
+                    </div>
+                    <p className="text-[10px] opacity-60">Enviado via Mercado Envios (Expresso)</p>
+                  </CardContent>
+                </Card>
             </div>
             
-            <Card className="shadow-lg min-h-[500px]">
+            {/* Right Column: Address and Payment */}
+            <Card className="shadow-xl min-h-[500px] border-primary/20">
                 <CardHeader>
-                    <CardTitle className="font-headline text-2xl">Dados de Entrega</CardTitle>
+                    <CardTitle className="font-headline text-2xl">Finalizar Encomenda</CardTitle>
+                    <CardDescription>Confirme o destino e escolha como pagar.</CardDescription>
                     {error && <div className="bg-destructive/10 text-destructive p-3 rounded text-xs mt-2">{error}</div>}
                 </CardHeader>
                 <CardContent>
-                    {preferenceId ? (
-                        <div id="paymentCard" className={cn("transition-opacity duration-300", !isBrickLoaded && "opacity-0")} />
+                    {isLoadingPage ? (
+                        <div className="flex flex-col items-center justify-center py-20 space-y-4">
+                          <Loader2 className="size-8 animate-spin text-primary" />
+                          <p className="text-sm text-muted-foreground">Preparando seu checkout...</p>
+                        </div>
                     ) : (
-                        <div className="space-y-6">
+                        <div className="space-y-8">
+                            {/* Address Summary / Selection */}
                             {!showAddressForm && currentAddress ? (
                                 <div className="space-y-4">
-                                    <div className="p-4 border rounded-lg bg-primary/5 flex items-start gap-4 relative group">
-                                        <MapPin className="size-5 text-primary mt-1" />
-                                        <div className="text-sm flex-1">
-                                            <p className="font-bold">{currentAddress.label}</p>
+                                    <div className="p-4 border rounded-xl bg-muted/30 relative group transition-all hover:border-primary/30">
+                                        <div className="flex justify-between items-start mb-2">
+                                          <span className="text-[10px] font-bold uppercase text-primary tracking-widest flex items-center gap-1">
+                                            <MapPin className="size-3" /> Entregar em
+                                          </span>
+                                          <Button variant="ghost" size="sm" onClick={() => setShowAddressForm(true)} className="h-6 text-[10px] px-2 gap-1">
+                                            <Pencil className="size-3" /> Alterar
+                                          </Button>
+                                        </div>
+                                        <div className="text-sm">
+                                            <p className="font-bold text-base">{currentAddress.label}</p>
                                             <p className="text-muted-foreground">{currentAddress.streetName}, {currentAddress.streetNumber}</p>
                                             <p className="text-muted-foreground">{currentAddress.city} - {currentAddress.state}</p>
                                         </div>
-                                        <Button variant="ghost" size="sm" onClick={() => setShowAddressForm(true)} className="h-7 text-xs">Trocar</Button>
                                     </div>
-                                    <Button onClick={form.handleSubmit(onSubmit)} disabled={isLoading} className="w-full h-14 text-lg font-bold">
-                                        {isLoading ? <Loader2 className="animate-spin mr-2" /> : checkoutType === 'custom' ? 'Solicitar no WhatsApp' : 'Ir para Pagamento'}
-                                        <ArrowRight className="ml-2 size-5" />
-                                    </Button>
+                                    
+                                    {/* Action or Payment Area */}
+                                    <div className="pt-4 space-y-6">
+                                      {checkoutType === 'custom' ? (
+                                        <div className="space-y-4">
+                                          <div className="bg-amber-50 p-4 rounded-lg border border-amber-200 text-xs text-amber-800">
+                                            <strong>Atenção:</strong> Como esta peça é feita sob medida, clicando abaixo você enviará seu endereço para a Gê e abrirá o WhatsApp para combinar os detalhes.
+                                          </div>
+                                          <Button onClick={form.handleSubmit(onSubmit)} disabled={isLoading} className="w-full h-16 text-xl font-bold rounded-xl shadow-lg shadow-primary/20">
+                                              {isLoading ? <Loader2 className="animate-spin mr-2" /> : 'Solicitar no WhatsApp'}
+                                              <ArrowRight className="ml-2 size-6" />
+                                          </Button>
+                                        </div>
+                                      ) : (
+                                        <div className="space-y-4">
+                                          <Label className="text-sm font-bold uppercase text-muted-foreground block mb-4">Meios de pagamento</Label>
+                                          {preferenceId ? (
+                                            <div id="paymentCard" className={cn("transition-opacity duration-300", !isBrickLoaded && "opacity-0")} />
+                                          ) : (
+                                            <Button onClick={form.handleSubmit(onSubmit)} disabled={isLoading} className="w-full h-14 font-bold text-lg">
+                                              {isLoading ? <Loader2 className="animate-spin mr-2" /> : 'Carregar Meios de Pagamento'}
+                                            </Button>
+                                          )}
+                                          {!isBrickLoaded && preferenceId && (
+                                            <div className="flex items-center justify-center p-8">
+                                              <Loader2 className="animate-spin text-primary" />
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
                                 </div>
                             ) : (
                                 <Form {...form}>
                                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                                        <div className="mb-6">
+                                          <h3 className="font-bold text-lg mb-2">Novo Endereço de Entrega</h3>
+                                          <p className="text-xs text-muted-foreground">Informe onde deseja receber sua peça artesanal.</p>
+                                        </div>
+
                                         {savedAddresses && savedAddresses.length > 0 && (
                                             <div className="space-y-2 mb-4">
                                                 <Label className="text-xs font-bold text-muted-foreground">Escolher Endereço Salvo</Label>
                                                 <Select value={selectedAddressId} onValueChange={handleSelectAddress}>
-                                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                                    <SelectTrigger><SelectValue placeholder="Selecione um endereço" /></SelectTrigger>
                                                     <SelectContent>
                                                         {savedAddresses.map(addr => <SelectItem key={addr.id} value={addr.id}>{addr.label}</SelectItem>)}
                                                     </SelectContent>
                                                 </Select>
                                             </div>
                                         )}
-                                        <FormField control={form.control} name="cpf" render={({ field }) => (<FormItem><FormLabel>CPF</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/>
+                                        
+                                        <FormField control={form.control} name="cpf" render={({ field }) => (<FormItem><FormLabel>CPF</FormLabel><FormControl><Input {...field} placeholder="000.000.000-00" /></FormControl><FormMessage /></FormItem>)}/>
                                         <div className="grid grid-cols-2 gap-4">
-                                            <FormField control={form.control} name="zipCode" render={({ field }) => (<FormItem><FormLabel>CEP</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/>
-                                            <FormField control={form.control} name="state" render={({ field }) => (<FormItem><FormLabel>UF</FormLabel><FormControl><Input {...field} maxLength={2} /></FormControl><FormMessage /></FormItem>)}/>
+                                            <FormField control={form.control} name="zipCode" render={({ field }) => (<FormItem><FormLabel>CEP</FormLabel><FormControl><Input {...field} placeholder="00000-000" /></FormControl><FormMessage /></FormItem>)}/>
+                                            <FormField control={form.control} name="state" render={({ field }) => (<FormItem><FormLabel>UF</FormLabel><FormControl><Input {...field} maxLength={2} placeholder="SP" /></FormControl><FormMessage /></FormItem>)}/>
                                         </div>
-                                        <FormField control={form.control} name="streetName" render={({ field }) => (<FormItem><FormLabel>Rua</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/>
+                                        <FormField control={form.control} name="streetName" render={({ field }) => (<FormItem><FormLabel>Rua</FormLabel><FormControl><Input {...field} placeholder="Ex: Av. das Flores" /></FormControl><FormMessage /></FormItem>)}/>
                                         <div className="grid grid-cols-2 gap-4">
-                                            <FormField control={form.control} name="streetNumber" render={({ field }) => (<FormItem><FormLabel>Número</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/>
-                                            <FormField control={form.control} name="city" render={({ field }) => (<FormItem><FormLabel>Cidade</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/>
+                                            <FormField control={form.control} name="streetNumber" render={({ field }) => (<FormItem><FormLabel>Número</FormLabel><FormControl><Input {...field} placeholder="123" /></FormControl><FormMessage /></FormItem>)}/>
+                                            <FormField control={form.control} name="city" render={({ field }) => (<FormItem><FormLabel>Cidade</FormLabel><FormControl><Input {...field} placeholder="Sua Cidade" /></FormControl><FormMessage /></FormItem>)}/>
                                         </div>
-                                        <Button type="submit" disabled={isLoading} className="w-full h-12">Confirmar</Button>
-                                        {savedAddresses && savedAddresses.length > 0 && <Button type="button" variant="ghost" onClick={() => setShowAddressForm(false)} className="w-full">Cancelar</Button>}
+                                        <Button type="submit" disabled={isLoading} className="w-full h-14 text-lg font-bold mt-6 shadow-lg shadow-primary/20">
+                                          {isLoading ? <Loader2 className="animate-spin mr-2" /> : 'Confirmar e Continuar'}
+                                        </Button>
+                                        {savedAddresses && savedAddresses.length > 0 && (
+                                          <Button type="button" variant="ghost" onClick={() => setShowAddressForm(false)} className="w-full">Voltar</Button>
+                                        )}
                                     </form>
                                 </Form>
                             )}

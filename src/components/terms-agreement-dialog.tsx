@@ -2,16 +2,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useUser, useFirestore, useDoc, updateDocumentNonBlocking } from '@/firebase';
+import { useUser, useFirestore, useDoc, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/badge'; // Wait, Badge is wrong for Dialog parts, fixing to Dialog components
 import { 
   Dialog as ShadDialog,
   DialogContent as ShadContent,
@@ -31,8 +23,12 @@ export function TermsAgreementDialog() {
   const [open, setOpen] = useState(false);
   const [isAccepting, setIsAccepting] = useState(false);
 
-  // Fetch the user's profile from Firestore
-  const profileRef = user ? doc(firestore, 'users', user.uid) : null;
+  // Memoize the profile document reference to prevent infinite re-renders
+  const profileRef = useMemoFirebase(
+    () => (user && firestore ? doc(firestore, 'users', user.uid) : null),
+    [user, firestore]
+  );
+  
   const { data: profile, isLoading } = useDoc<UserProfile>(profileRef);
 
   useEffect(() => {

@@ -1,3 +1,4 @@
+
 import Link from 'next/link';
 import Image from 'next/image';
 import { getProducts, getLogoUrl } from '@/lib/cloudinary';
@@ -23,6 +24,19 @@ export default async function ProductsPage() {
     acc[product.category].push(product);
     return acc;
   }, {} as Record<string, Product[]>);
+
+  // Configurações vindas do .env
+  const socialLinks = {
+    instagram: process.env.NEXT_PUBLIC_INSTAGRAM_URL || "#",
+    facebook: process.env.NEXT_PUBLIC_FACEBOOK_URL || "#",
+    twitter: process.env.NEXT_PUBLIC_TWITTER_URL || "#",
+  };
+
+  const contactInfo = {
+    email: process.env.NEXT_PUBLIC_CONTACT_EMAIL || "ola@coisasdage.com.br",
+    phone: process.env.NEXT_PUBLIC_CONTACT_PHONE || "+55 (11) 99999-9999",
+    location: process.env.NEXT_PUBLIC_LOCATION_TEXT || "Feito à mão no interior de SP",
+  };
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -107,9 +121,9 @@ export default async function ProductsPage() {
             <div className="space-y-6">
               <h3 className="text-xs uppercase tracking-widest opacity-70 font-bold">Redes Sociais</h3>
               <div className="flex gap-6">
-                <Link href="#" className="hover:opacity-80 transition-opacity"><Instagram className="size-6" /></Link>
-                <Link href="#" className="hover:opacity-80 transition-opacity"><Facebook className="size-6" /></Link>
-                <Link href="#" className="hover:opacity-80 transition-opacity"><Twitter className="size-6" /></Link>
+                <Link href={socialLinks.instagram} target="_blank" className="hover:opacity-80 transition-opacity"><Instagram className="size-6" /></Link>
+                <Link href={socialLinks.facebook} target="_blank" className="hover:opacity-80 transition-opacity"><Facebook className="size-6" /></Link>
+                <Link href={socialLinks.twitter} target="_blank" className="hover:opacity-80 transition-opacity"><Twitter className="size-6" /></Link>
               </div>
             </div>
 
@@ -118,15 +132,15 @@ export default async function ProductsPage() {
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <Mail className="size-5 text-accent" />
-                  <span className="text-sm">ola@coisasdage.com.br</span>
+                  <span className="text-sm">{contactInfo.email}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <Phone className="size-5 text-accent" />
-                  <span className="text-sm">+55 (11) 99999-9999</span>
+                  <span className="text-sm">{contactInfo.phone}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <MapPin className="size-5 text-accent" />
-                  <span className="text-sm">Feito à mão no interior de SP</span>
+                  <span className="text-sm">{contactInfo.location}</span>
                 </div>
               </div>
             </div>
@@ -137,7 +151,7 @@ export default async function ProductsPage() {
                 Cada peça é única, feita com cuidado e dedicação para levar aconchego ao seu lar.
               </p>
               <div className="pt-4 text-[10px] opacity-40">
-                © 2024 Coisas da Gê. Todos os direitos reservados.
+                © {new Date().getFullYear()} Coisas da Gê. Todos os direitos reservados.
               </div>
             </div>
           </div>

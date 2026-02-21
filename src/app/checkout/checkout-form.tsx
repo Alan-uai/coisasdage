@@ -66,12 +66,19 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
       savedAddresses?.find(a => a.id === selectedAddressId) || savedAddresses?.find(a => a.isDefault) || savedAddresses?.[0]
     , [savedAddresses, selectedAddressId]);
 
-    // Redireciona para o catálogo se o carrinho estiver vazio e não houver processo de pagamento ativo
+    // Redireciona para o catálogo apenas se o carrinho estiver vazio e o usuário não estiver em um processo ativo
     useEffect(() => {
-        if (!isCartLoading && !isLoading && cartItems.length === 0 && !pixData && !isFinished) {
+        const canRedirect = !isCartLoading && 
+                          !isLoading && 
+                          !preferenceId && 
+                          !pixData && 
+                          !isFinished && 
+                          cartItems.length === 0;
+
+        if (canRedirect) {
             router.replace('/');
         }
-    }, [cartItems, pixData, isFinished, isLoading, isCartLoading, router]);
+    }, [cartItems, pixData, isFinished, isLoading, isCartLoading, router, preferenceId]);
 
     // Sincroniza a seleção do endereço padrão quando carregado
     useEffect(() => {
@@ -81,9 +88,9 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
         }
     }, [savedAddresses, selectedAddressId]);
 
-    // Preenche o formulário e tenta auto-initiate
+    // Preenche o formulário e tenta auto-initiate para pronta entrega
     useEffect(() => {
-      if (currentAddress && !hasAttemptedAutoInit && !isLoading && !preferenceId && !orderId) {
+      if (currentAddress && !hasAttemptedAutoInit && !isLoading && !preferenceId && !orderId && !isFinished) {
         setHasAttemptedAutoInit(true);
         const values = {
           cpf: currentAddress.cpf,
@@ -94,11 +101,11 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
           state: currentAddress.state,
         };
         form.reset(values);
-        if (checkoutType === 'ready') {
+        if (checkoutType === 'ready' && cartItems.length > 0) {
           onSubmit(values);
         }
       }
-    }, [currentAddress, hasAttemptedAutoInit, isLoading, preferenceId, orderId, checkoutType, form]);
+    }, [currentAddress, hasAttemptedAutoInit, isLoading, preferenceId, orderId, checkoutType, form, cartItems, isFinished]);
 
     const handleSelectAddress = (id: string) => {
       const addr = savedAddresses?.find(a => a.id === id);
@@ -160,8 +167,8 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
                 }, { merge: true });
 
                 await notifyAdminNewRequest(generatedRequestId, user.displayName || 'Cliente', cartItems[0].productName);
-                clearPaidCartItems();
                 setIsFinished(true);
+                clearPaidCartItems();
 
                 const message = `Olá Gê! Acabei de solicitar um orçamento pelo site das peças: *${cartItems.map(i => i.productName).join(', ')}*. Aguardo seu retorno!`;
                 window.location.href = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
@@ -177,7 +184,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
                 userId: user.uid,
                 orderDate: serverTimestamp(),
                 totalAmount: subtotal,
-                status: 'Processing',
+                status: 'Processing', // Aguardando pagamento
                 shippingAddress: values,
                 items: cartItems.map(item => ({
                     productId: item.productId,
@@ -210,8 +217,8 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
             const finalPaymentData = paymentData.formData || paymentData;
             const result = await processPayment(finalPaymentData, orderId, user.email, subtotal);
             if (result.success) {
-                clearPaidCartItems();
                 setIsFinished(true);
+                clearPaidCartItems();
                 if (result.payment_id) {
                     const orderRef = doc(firestore, 'users', user.uid, 'orders', orderId);
                     updateDocumentNonBlocking(orderRef, { 
@@ -271,7 +278,8 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
 
     const isLoadingPage = isAddressesLoading || isCartLoading || (isLoading && !preferenceId);
 
-    if (!isCartLoading && cartItems.length === 0 && !pixData && !isFinished) return null;
+    // Se o checkout estiver sendo preparado ou itens estiverem carregando, não mostre nada para evitar flash
+    if (!isCartLoading && cartItems.length === 0 && !pixData && !isFinished && !isLoading) return null;
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto p-4">

@@ -1,9 +1,11 @@
+
 'use server';
 
 import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
 import { z } from 'zod';
 import { addressSchema } from './form-schema';
 import { headers } from 'next/headers';
+import axios from 'axios';
 
 export type PreferenceCartItem = {
     id: string;
@@ -33,6 +35,27 @@ type PaymentResult = {
     qr_code_base64?: string;
     error?: string;
 };
+
+const WHAPI_TOKEN = process.env.WHAPI_TOKEN;
+const ARTESA_WPP = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "5511999999999";
+
+/**
+ * Notifica a Artesã privadamente sobre uma nova solicitação.
+ */
+export async function notifyAdminNewRequest(requestId: string, clientName: string, productName: string) {
+    if (!WHAPI_TOKEN) return;
+
+    try {
+        await axios.post('https://gate.whapi.cloud/messages/text', {
+            to: ARTESA_WPP,
+            body: `🧶 *Nova Solicitação Sob Demanda!*\n\nCliente: ${clientName}\nProduto: ${productName}\n\n*ID para Comando: #${requestId.toUpperCase()}*\n\n_Quando fechar o valor, responda aqui com:_ \n#${requestId.toUpperCase()} Aprovado [valor]`
+        }, {
+            headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` }
+        });
+    } catch (e) {
+        console.error('Erro ao notificar admin via Whapi:', e);
+    }
+}
 
 export async function createPreference(
     userId: string,
@@ -76,7 +99,6 @@ export async function createPreference(
                         number: addressData.cpf.replace(/\D/g, ''),
                     },
                 },
-                // Combined reference to help the webhook find the document directly
                 external_reference: `${userId}|${orderId}`,
                 notification_url: notificationUrl,
                 statement_descriptor: "ARTESAACONCHEG",

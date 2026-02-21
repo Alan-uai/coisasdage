@@ -1,3 +1,4 @@
+
 'use client';
 
 import { usePathname } from 'next/navigation';
@@ -9,7 +10,6 @@ import {
   LogOut, 
   Package,
   MapIcon,
-  ShieldCheck,
   LayoutGrid
 } from 'lucide-react';
 import {
@@ -25,9 +25,6 @@ import { Button } from '@/components/ui/button';
 import { useUser, useAuth } from '@/firebase';
 import { initiateSignOut } from '@/firebase/non-blocking-login';
 import { Skeleton } from './ui/skeleton';
-import { useMemo } from 'react';
-
-const ADMIN_EMAILS = ['aymatsu00@gmail.com', 'hashiramanakamoto0@gmail.com'];
 
 export function Nav() {
   const { user, isUserLoading } = useUser();
@@ -38,10 +35,6 @@ export function Nav() {
     if (auth) initiateSignOut(auth);
   };
 
-  const isAdmin = useMemo(() => {
-    return user?.email && ADMIN_EMAILS.includes(user.email);
-  }, [user]);
-
   return (
     <div className="flex w-full items-center justify-around px-2 sm:px-6 max-w-2xl mx-auto">
       {/* Catalogue / Home */}
@@ -51,7 +44,7 @@ export function Nav() {
         </NextLink>
       </Button>
 
-      {/* My Orders - Now in Header */}
+      {/* My Orders */}
       <Button asChild variant="ghost" size="icon" title="Meus Pedidos" className={pathname === '/orders' ? 'bg-accent' : ''}>
         <NextLink href="/orders">
           <Package className="size-5 text-primary" />
@@ -88,11 +81,6 @@ export function Nav() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {isAdmin && (
-              <DropdownMenuItem asChild>
-                <NextLink href="/admin"><ShieldCheck className="mr-2 size-4" /> Painel da Artesã</NextLink>
-              </DropdownMenuItem>
-            )}
             <DropdownMenuItem asChild>
               <NextLink href="/settings/addresses"><MapIcon className="mr-2 size-4" /> Meus Endereços</NextLink>
             </DropdownMenuItem>

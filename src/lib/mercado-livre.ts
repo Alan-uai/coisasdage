@@ -1,10 +1,10 @@
+
 'use server';
 
 import axios from 'axios';
 
 /**
  * @fileOverview Integração robusta com Mercado Livre Envios e Automação Whapi Cloud.
- * Gerencia tokens, criação de envios, etiquetas e envio automático para WhatsApp.
  */
 
 const ML_API = "https://api.mercadolibre.com";
@@ -49,7 +49,6 @@ export async function getShipmentIdFromOrder(merchantOrderId: string) {
     const response = await axios.get(`${ML_API}/merchant_orders/${merchantOrderId}`, {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
-    // O Mercado Livre organiza envios em um array dentro da ordem do vendedor
     const shipmentId = response.data.shipments?.[0]?.id;
     return shipmentId?.toString() || null;
   } catch (error) {
@@ -87,39 +86,42 @@ export async function getMLShipmentLabel(shipmentId: string) {
 }
 
 /**
- * ENVIO AUTOMÁTICO PARA WHAPI CLOUD
  * Envia o PDF da etiqueta diretamente para o WhatsApp da artesã
  */
+export async function sendLabelToAdmin(labelBase64: string, orderId: string) {
+    if (!WHAPI_TOKEN) return;
+
+    try {
+        const shortId = orderId.slice(-6).toUpperCase();
+        await axios.post('https://gate.whapi.cloud/messages/document', {
+            to: ARTESA_WPP,
+            media: `data:application/pdf;base64,${labelBase64}`,
+            filename: `etiqueta-${shortId}.pdf`,
+            caption: `📦 *Etiqueta Gerada!*\nPedido: #${shortId}\n\n_Imprima e prepare o pacote._`
+        }, {
+            headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` }
+        });
+    } catch (e) {
+        console.error('Erro ao enviar etiqueta via Whapi:', e);
+    }
+}
+
+/**
+ * ENVIO AUTOMÁTICO PARA WHAPI CLOUD
+ */
 export async function automateShippingLabel(merchantOrderId: string, orderId: string) {
-  if (!WHAPI_TOKEN) {
-    console.error('Whapi Token não configurado no .env');
-    return;
-  }
+  if (!WHAPI_TOKEN) return;
 
   try {
-    // 1. Pega o Shipment ID real
     const shipmentId = await getShipmentIdFromOrder(merchantOrderId);
-    if (!shipmentId) throw new Error('Shipment ID não encontrado para esta ordem.');
+    if (!shipmentId) throw new Error('Shipment ID não encontrado.');
 
-    // 2. Pega a etiqueta em Base64
     const labelData = await getMLShipmentLabel(shipmentId);
-    if (!labelData.success || !labelData.base64) throw new Error('Falha ao gerar PDF da etiqueta.');
+    if (!labelData.success || !labelData.base64) throw new Error('Falha ao gerar PDF.');
 
-    // 3. Envia para Whapi Cloud
-    const shortOrderId = orderId.slice(-6).toUpperCase();
-    await axios.post('https://gate.whapi.cloud/messages/document', {
-      to: ARTESA_WPP,
-      media: `data:application/pdf;base64,${labelData.base64}`,
-      filename: `etiqueta-pedido-${shortOrderId}.pdf`,
-      caption: `📦 *Etiqueta Pronta!* \nPedido: #${shortOrderId}\nStatus: Pagamento Aprovado ✅\n\n_Imprima e cole no pacote._`
-    }, {
-      headers: { 
-        'Authorization': `Bearer ${WHAPI_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    await sendLabelToAdmin(labelData.base64, orderId);
 
-    console.log(`Etiqueta do pedido ${shortOrderId} enviada via Whapi.`);
+    console.log(`Etiqueta do pedido ${orderId} enviada via Whapi.`);
   } catch (error: any) {
     console.error('Falha na automação Whapi:', error.message);
   }

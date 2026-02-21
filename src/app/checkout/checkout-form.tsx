@@ -1,22 +1,24 @@
+
 'use client';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { User } from 'firebase/auth';
-import { createPreference, processPayment, type PreferenceCartItem } from './actions';
-import type { CartItem, Order, SavedAddress } from '@/lib/types';
+import { createPreference, processPayment, type PreferenceCartItem, notifyAdminNewRequest } from './actions';
+import type { CartItem, Order, SavedAddress, CustomRequest } from '@/lib/types';
 import { addressSchema } from './form-schema';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import Image from 'next/image';
 import { useFirestore, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useDoc, useMemoFirebase, useCollection } from '@/firebase';
 import { collection, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
-import { useRouter } from 'next/navigation';
-import { CheckCircle2, Copy, AlertCircle, QrCode, Loader2, Info, MapPin } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { CheckCircle2, Copy, AlertCircle, QrCode, Loader2, Info, MapPin, ClipboardList } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -27,7 +29,12 @@ declare global {
     }
 }
 
+const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "5511999999999";
+
 export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartItems: CartItem[], subtotal: number }) {
+    const searchParams = useSearchParams();
+    const checkoutType = searchParams.get('type') || 'ready';
+    
     const [preferenceId, setPreferenceId] = useState<string | null>(null);
     const [orderId, setOrderId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -39,7 +46,6 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
     const router = useRouter();
     const { toast } = useToast();
 
-    // Fetch saved addresses
     const addressesQuery = useMemoFirebase(
       () => (user && firestore ? query(collection(firestore, 'users', user.uid, 'addresses'), orderBy('label')) : null),
       [user, firestore]
@@ -58,7 +64,6 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
         },
     });
 
-    // Auto-fill form if there's a default address
     useEffect(() => {
       if (savedAddresses && savedAddresses.length > 0) {
         const defaultAddr = savedAddresses.find(a => a.isDefault) || savedAddresses[0];
@@ -107,16 +112,49 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
         setError(null);
 
         try {
-            const serializableCartItems: PreferenceCartItem[] = cartItems.map(item => ({
-                id: item.id,
-                productName: item.productName,
-                selectedColor: item.selectedColor,
-                selectedSize: item.selectedSize,
-                selectedMaterial: item.selectedMaterial,
-                quantity: item.quantity,
-                unitPriceAtAddition: item.unitPriceAtAddition,
-                imageUrl: item.imageUrl,
-            }));
+            if (checkoutType === 'custom') {
+                const requestsRef = collection(firestore, 'users', user.uid, 'custom_requests');
+                const newRequestRef = doc(requestsRef);
+                const generatedRequestId = newRequestRef.id;
+
+                await setDocumentNonBlocking(newRequestRef, {
+                    userId: user.uid,
+                    userName: user.displayName || 'Cliente',
+                    userEmail: user.email,
+                    status: 'Pending',
+                    totalBasePrice: subtotal,
+                    shippingAddress: values,
+                    items: cartItems.map(item => ({
+                        productId: item.productId,
+                        productName: item.productName,
+                        imageUrl: item.imageUrl,
+                        quantity: item.quantity,
+                        unitPriceAtOrder: item.unitPriceAtAddition,
+                        selectedSize: item.selectedSize,
+                        selectedColor: item.selectedColor,
+                        selectedMaterial: item.selectedMaterial,
+                    })),
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                }, { merge: true });
+
+                // Avisar a Artesã Silenciosamente via Whapi
+                await notifyAdminNewRequest(generatedRequestId, user.displayName || 'Cliente', cartItems[0].productName);
+
+                // Limpar carrinho
+                clearPaidCartItems();
+
+                // Montar mensagem HUMANA para o cliente
+                let message = `Olá Gê! Acabei de solicitar um orçamento no site.\n`;
+                message += `Tenho interesse em: *${cartItems.map(i => i.productName).join(', ')}*.\n`;
+                message += `Aguardando seu retorno!`;
+
+                const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+                
+                toast({ title: "Solicitação Enviada!", description: "Redirecionando para o WhatsApp da Gê." });
+                window.location.href = whatsappUrl;
+                return;
+            }
 
             const ordersRef = collection(firestore, 'users', user.uid, 'orders');
             const newOrderRef = doc(ordersRef);
@@ -148,7 +186,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                 user.uid, 
                 user.email, 
                 user.displayName, 
-                serializableCartItems, 
+                cartItems, 
                 values, 
                 generatedOrderId
             );
@@ -156,7 +194,6 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
             if (result.preferenceId) setPreferenceId(result.preferenceId);
             else setError(result.error || 'Não foi possível iniciar o pagamento.');
         } catch (e: any) {
-            console.error('Checkout error:', e);
             setError('Erro inesperado ao preparar seu pedido.');
         } finally {
             setIsLoading(false);
@@ -233,7 +270,12 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto p-4">
             <Card className="shadow-lg h-fit">
-                <CardHeader><CardTitle className="font-headline text-2xl">Resumo</CardTitle></CardHeader>
+                <CardHeader>
+                  <CardTitle className="font-headline text-2xl flex items-center gap-2">
+                    {checkoutType === 'custom' ? <ClipboardList className="size-6 text-primary" /> : null}
+                    {checkoutType === 'custom' ? 'Resumo da Solicitação' : 'Resumo da Compra'}
+                  </CardTitle>
+                </CardHeader>
                 <CardContent className="space-y-4">
                     {cartItems.map(item => (
                         <div key={item.id} className="flex justify-between items-center text-sm">
@@ -245,7 +287,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                         </div>
                     ))}
                     <div className="border-t pt-4 flex justify-between font-bold text-xl text-primary">
-                        <span>Total</span>
+                        <span>{checkoutType === 'custom' ? 'Valor Base' : 'Total'}</span>
                         <span>R$ {subtotal.toFixed(2)}</span>
                     </div>
                 </CardContent>
@@ -253,7 +295,8 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
             
             <Card className="shadow-lg min-h-[500px]">
                 <CardHeader>
-                    <CardTitle className="font-headline text-2xl">Dados de Entrega</CardTitle>
+                    <CardTitle className="font-headline text-2xl">Endereço de Entrega</CardTitle>
+                    <CardDescription>Necessário para calcular o frete no Mercado Livre.</CardDescription>
                     {error && <div className="bg-destructive/10 text-destructive p-3 rounded text-xs mt-2">{error}</div>}
                 </CardHeader>
                 <CardContent>
@@ -298,7 +341,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                                     )}/>
                                 </div>
                                 <Button type="submit" disabled={isLoading} className="w-full h-12">
-                                    {isLoading ? <Loader2 className="animate-spin mr-2" /> : 'Confirmar e Pagar'}
+                                    {isLoading ? <Loader2 className="animate-spin mr-2" /> : checkoutType === 'custom' ? 'Confirmar e Enviar para WhatsApp' : 'Confirmar e Pagar'}
                                 </Button>
                             </form>
                         </Form>

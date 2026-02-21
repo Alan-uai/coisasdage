@@ -2,8 +2,8 @@ import { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Artesã Aconchegante',
-    short_name: 'Aconchegante',
+    name: 'Coisas da Gê',
+    short_name: 'Coisas da Gê',
     description: 'Sua loja de tapetes e crochê personalizados e feitos à mão.',
     start_url: '/',
     display: 'standalone',

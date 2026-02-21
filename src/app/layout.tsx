@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from 'next';
-import Link from 'next/link';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { Nav } from '@/components/nav';
@@ -8,13 +7,13 @@ import { FirebaseClientProvider } from '@/firebase';
 import { TermsAgreementDialog } from '@/components/terms-agreement-dialog';
 
 export const metadata: Metadata = {
-  title: 'Artesã Aconchegante',
+  title: 'Coisas da Gê',
   description: 'Sua loja de tapetes e crochê personalizados.',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Artesã Aconchegante',
+    title: 'Coisas da Gê',
   },
   icons: {
     icon: [

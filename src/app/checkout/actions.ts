@@ -1,4 +1,3 @@
-
 'use server';
 
 import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
@@ -101,7 +100,7 @@ export async function createPreference(
                 },
                 external_reference: `${userId}|${orderId}`,
                 notification_url: notificationUrl,
-                statement_descriptor: "ARTESAACONCHEG",
+                statement_descriptor: "COISAS DAGE",
             }
         });
         

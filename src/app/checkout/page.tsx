@@ -1,13 +1,14 @@
+
 'use client';
 import { useMemo } from 'react';
-import Link from 'next/link';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, limit, where } from 'firebase/firestore';
 import type { CartItem } from '@/lib/types';
-import { Button } from '@/components/ui/button';
-import { LogIn, ShoppingBag } from 'lucide-react';
 import { CheckoutForm } from './checkout-form';
 import { Skeleton } from '@/components/ui/skeleton';
+import { LogIn } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 
 function CheckoutSkeleton() {
   return (
@@ -57,24 +58,16 @@ export default function CheckoutPage() {
         );
     }
 
-    if (!isCartLoading && (!cartItems || cartItems.length === 0)) {
-        return (
-            <div className="flex flex-col flex-1 items-center justify-center text-center p-4 col-span-full">
-                <ShoppingBag className="size-16 text-muted-foreground" />
-                <h1 className="text-4xl font-bold tracking-tight font-headline mt-6">Nenhum item selecionado</h1>
-                <p className="text-muted-foreground mt-2">Volte ao carrinho e selecione os itens que deseja comprar.</p>
-                <Button asChild className="mt-6">
-                    <Link href="/cart">Voltar ao Carrinho</Link>
-                </Button>
-            </div>
-        );
-    }
-
-    if (cartItems) {
-        return <CheckoutForm user={user} cartItems={cartItems} subtotal={subtotal} />;
-    }
-
-    return null;
+    // O CheckoutForm agora lida internamente com o estado vazio e redirecionamento
+    return (
+      <CheckoutForm 
+        user={user} 
+        cartItems={cartItems || []} 
+        subtotal={subtotal} 
+        isCartLoading={isCartLoading}
+        isAddressesLoading={false} // Passado pelo contexto se necessário, mas aqui deixamos simples
+      />
+    );
   };
 
   return (

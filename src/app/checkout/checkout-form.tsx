@@ -31,7 +31,7 @@ declare global {
 
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "5511999999999";
 
-export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartItems: CartItem[], subtotal: number }) {
+export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { user: User, cartItems: CartItem[], subtotal: number, isCartLoading: boolean }) {
     const searchParams = useSearchParams();
     const checkoutType = searchParams.get('type') || 'ready';
     
@@ -44,6 +44,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
     const [selectedAddressId, setSelectedAddressId] = useState<string>('');
     const [showAddressForm, setShowAddressForm] = useState(false);
     const [hasAttemptedAutoInit, setHasAttemptedAutoInit] = useState(false);
+    const [isFinished, setIsFinished] = useState(false);
     
     const brickRendered = useRef(false);
     const firestore = useFirestore();
@@ -65,7 +66,22 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
       savedAddresses?.find(a => a.id === selectedAddressId) || savedAddresses?.find(a => a.isDefault) || savedAddresses?.[0]
     , [savedAddresses, selectedAddressId]);
 
-    // Auto-initiate payment or WhatsApp flow if address exists
+    // Redireciona para o catálogo se o carrinho estiver vazio e não houver processo de pagamento ativo
+    useEffect(() => {
+        if (!isCartLoading && !isLoading && cartItems.length === 0 && !pixData && !isFinished) {
+            router.replace('/');
+        }
+    }, [cartItems, pixData, isFinished, isLoading, isCartLoading, router]);
+
+    // Sincroniza a seleção do endereço padrão quando carregado
+    useEffect(() => {
+        if (savedAddresses && savedAddresses.length > 0 && !selectedAddressId) {
+            const defaultAddr = savedAddresses.find(a => a.isDefault) || savedAddresses[0];
+            setSelectedAddressId(defaultAddr.id);
+        }
+    }, [savedAddresses, selectedAddressId]);
+
+    // Preenche o formulário e tenta auto-initiate
     useEffect(() => {
       if (currentAddress && !hasAttemptedAutoInit && !isLoading && !preferenceId && !orderId) {
         setHasAttemptedAutoInit(true);
@@ -78,8 +94,6 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
           state: currentAddress.state,
         };
         form.reset(values);
-        // We only auto-submit if it's "ready" type (to show the brick)
-        // Custom requests still wait for the user to click "Solicitar" for confirmation
         if (checkoutType === 'ready') {
           onSubmit(values);
         }
@@ -91,7 +105,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
       if (addr) {
         setSelectedAddressId(id);
         setShowAddressForm(false);
-        setPreferenceId(null); // Reset preference to force re-creation with new address
+        setPreferenceId(null);
         brickRendered.current = false;
         form.reset({
           cpf: addr.cpf,
@@ -147,13 +161,13 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
 
                 await notifyAdminNewRequest(generatedRequestId, user.displayName || 'Cliente', cartItems[0].productName);
                 clearPaidCartItems();
+                setIsFinished(true);
 
                 const message = `Olá Gê! Acabei de solicitar um orçamento pelo site das peças: *${cartItems.map(i => i.productName).join(', ')}*. Aguardo seu retorno!`;
                 window.location.href = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
                 return;
             }
 
-            // For "Ready" made products
             const ordersRef = collection(firestore, 'users', user.uid, 'orders');
             const newOrderRef = doc(ordersRef);
             const generatedOrderId = newOrderRef.id;
@@ -197,6 +211,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
             const result = await processPayment(finalPaymentData, orderId, user.email, subtotal);
             if (result.success) {
                 clearPaidCartItems();
+                setIsFinished(true);
                 if (result.payment_id) {
                     const orderRef = doc(firestore, 'users', user.uid, 'orders', orderId);
                     updateDocumentNonBlocking(orderRef, { 
@@ -254,11 +269,12 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
         );
     }
 
-    const isLoadingPage = isAddressesLoading || (isLoading && !preferenceId);
+    const isLoadingPage = isAddressesLoading || isCartLoading || (isLoading && !preferenceId);
+
+    if (!isCartLoading && cartItems.length === 0 && !pixData && !isFinished) return null;
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto p-4">
-            {/* Left Column: Summary and Delivery Estimate */}
             <div className="space-y-6">
                 <Card className="shadow-lg">
                     <CardHeader>
@@ -305,7 +321,6 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                 </Card>
             </div>
             
-            {/* Right Column: Address and Payment */}
             <Card className="shadow-xl min-h-[500px] border-primary/20">
                 <CardHeader>
                     <CardTitle className="font-headline text-2xl">Finalizar Encomenda</CardTitle>
@@ -320,7 +335,6 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                         </div>
                     ) : (
                         <div className="space-y-8">
-                            {/* Address Summary / Selection */}
                             {!showAddressForm && currentAddress ? (
                                 <div className="space-y-4">
                                     <div className="p-4 border rounded-xl bg-muted/30 relative group transition-all hover:border-primary/30">
@@ -339,7 +353,6 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                                         </div>
                                     </div>
                                     
-                                    {/* Action or Payment Area */}
                                     <div className="pt-4 space-y-6">
                                       {checkoutType === 'custom' ? (
                                         <div className="space-y-4">

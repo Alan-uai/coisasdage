@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Plus, Trash2, Home, Briefcase, Star, Check } from 'lucide-react';
+import { MapPin, Plus, Trash2, Home, Briefcase, Star, Pencil } from 'lucide-react';
 import type { SavedAddress } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -19,6 +19,7 @@ export default function AddressesPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
   const [isAdding, setIsAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     label: '',
@@ -36,19 +37,44 @@ export default function AddressesPage() {
   );
   const { data: addresses, isLoading } = useCollection<SavedAddress>(addressesQuery);
 
-  const handleAddAddress = () => {
+  const handleSaveAddress = () => {
     if (!user || !firestore) return;
-    const addrRef = collection(firestore, 'users', user.uid, 'addresses');
-    addDocumentNonBlocking(addrRef, { ...formData, isDefault: addresses?.length === 0 });
+
+    if (editingId) {
+      const addrRef = doc(firestore, 'users', user.uid, 'addresses', editingId);
+      updateDocumentNonBlocking(addrRef, formData);
+      toast({ title: "Sucesso!", description: "Endereço atualizado com sucesso." });
+    } else {
+      const addrRef = collection(firestore, 'users', user.uid, 'addresses');
+      addDocumentNonBlocking(addrRef, { ...formData, isDefault: addresses?.length === 0 });
+      toast({ title: "Sucesso!", description: "Endereço salvo com sucesso." });
+    }
+
     setIsAdding(false);
+    setEditingId(null);
     setFormData({ label: '', cpf: '', zipCode: '', streetName: '', streetNumber: '', city: '', state: '' });
-    toast({ title: "Sucesso!", description: "Endereço salvo com sucesso." });
+  };
+
+  const handleEdit = (addr: SavedAddress) => {
+    setFormData({
+      label: addr.label,
+      cpf: addr.cpf,
+      zipCode: addr.zipCode,
+      streetName: addr.streetName,
+      streetNumber: addr.streetNumber,
+      city: addr.city,
+      state: addr.state,
+    });
+    setEditingId(addr.id);
+    setIsAdding(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDelete = (id: string) => {
     if (!user || !firestore) return;
     const addrRef = doc(firestore, 'users', user.uid, 'addresses', id);
     deleteDocumentNonBlocking(addrRef);
+    toast({ title: "Endereço removido" });
   };
 
   const handleSetDefault = (id: string) => {
@@ -57,6 +83,13 @@ export default function AddressesPage() {
       const ref = doc(firestore, 'users', user.uid, 'addresses', addr.id);
       updateDocumentNonBlocking(ref, { isDefault: addr.id === id });
     });
+    toast({ title: "Endereço padrão atualizado" });
+  };
+
+  const resetForm = () => {
+    setIsAdding(false);
+    setEditingId(null);
+    setFormData({ label: '', cpf: '', zipCode: '', streetName: '', streetNumber: '', city: '', state: '' });
   };
 
   if (isUserLoading || isLoading) {
@@ -70,14 +103,16 @@ export default function AddressesPage() {
           <h1 className="text-4xl font-bold font-headline">Meus Endereços</h1>
           <p className="text-muted-foreground mt-2">Gerencie seus locais de entrega para um checkout rápido.</p>
         </div>
-        <Button onClick={() => setIsAdding(!isAdding)} variant={isAdding ? "ghost" : "default"}>
+        <Button onClick={() => isAdding ? resetForm() : setIsAdding(true)} variant={isAdding ? "ghost" : "default"}>
           {isAdding ? "Cancelar" : <><Plus className="mr-2 size-4" /> Novo Endereço</>}
         </Button>
       </header>
 
       {isAdding && (
         <Card className="border-primary/20 shadow-lg">
-          <CardHeader><CardTitle>Adicionar Novo</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>{editingId ? "Editar Endereço" : "Adicionar Novo"}</CardTitle>
+          </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2 col-span-full">
               <Label>Nome do Local (ex: Casa, Trabalho)</Label>
@@ -91,7 +126,7 @@ export default function AddressesPage() {
               <Label>CEP</Label>
               <Input value={formData.zipCode} onChange={e => setFormData({...formData, zipCode: e.target.value})} placeholder="00000-000" />
             </div>
-            <div className="space-y-2 col-span-full">
+            <div className="space-compatibility-2 col-span-full">
               <Label>Rua</Label>
               <Input value={formData.streetName} onChange={e => setFormData({...formData, streetName: e.target.value})} placeholder="Av. Principal" />
             </div>
@@ -106,7 +141,9 @@ export default function AddressesPage() {
                 <Input value={formData.state} onChange={e => setFormData({...formData, state: e.target.value})} placeholder="SP" className="w-20" />
               </div>
             </div>
-            <Button onClick={handleAddAddress} className="col-span-full mt-4">Salvar Endereço</Button>
+            <Button onClick={handleSaveAddress} className="col-span-full mt-4">
+              {editingId ? "Atualizar Endereço" : "Salvar Endereço"}
+            </Button>
           </CardContent>
         </Card>
       )}
@@ -122,6 +159,7 @@ export default function AddressesPage() {
                   {addr.isDefault && <Badge className="text-[10px] h-4">Padrão</Badge>}
                 </div>
                 <div className="flex gap-1">
+                  <Button variant="ghost" size="icon" onClick={() => handleEdit(addr)} title="Editar"><Pencil className="size-4" /></Button>
                   <Button variant="ghost" size="icon" onClick={() => handleSetDefault(addr.id)} title="Tornar Padrão"><Star className={cn("size-4", addr.isDefault && "fill-primary text-primary")} /></Button>
                   <Button variant="ghost" size="icon" onClick={() => handleDelete(addr.id)} className="text-destructive"><Trash2 className="size-4" /></Button>
                 </div>

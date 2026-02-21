@@ -1,15 +1,17 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeFirebase } from '@/firebase';
-import { collectionGroup, query, where, getDocs, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collectionGroup, query, where, getDocs, updateDoc, serverTimestamp } from 'firebase/firestore';
 import axios from 'axios';
-import { getMLShipmentLabel, sendLabelToAdmin } from '@/lib/mercado-livre';
 
 export const dynamic = 'force-dynamic';
 
 const ARTESA_WPP = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "5511999999999";
 const WHAPI_TOKEN = process.env.WHAPI_TOKEN;
 
+/**
+ * Webhook Whapi Cloud: O "Controle Remoto" via WhatsApp.
+ * Escuta comandos #ID STATUS enviados pela própria artesã para ela mesma.
+ */
 export async function POST(request: NextRequest) {
     if (!WHAPI_TOKEN) {
         return NextResponse.json({ error: 'Whapi Token not set' }, { status: 500 });
@@ -17,12 +19,19 @@ export async function POST(request: NextRequest) {
 
     try {
         const body = await request.json();
-        
-        // Whapi Cloud envia as mensagens em um array 'messages'
         const message = body.messages?.[0];
-        if (!message || !message.from_me || message.chat_id !== `${ARTESA_WPP}@s.whatsapp.net`) {
-            // Se não for uma mensagem enviada pela artesã para ela mesma, ignoramos
+
+        // 1. SEGURANÇA: Só aceita se a mensagem foi enviada pela artesã (from_me) 
+        // E de preferência no chat com ela mesma (chat_id contém o número dela)
+        if (!message || !message.from_me) {
             return NextResponse.json({ status: 'ignored' });
+        }
+
+        // Verifica se a mensagem foi enviada no chat pessoal ("Você")
+        // O chat_id da própria artesã na Whapi costuma ser o número dela + @s.whatsapp.net
+        const isAdminChat = message.chat_id.includes(ARTESA_WPP);
+        if (!isAdminChat) {
+            return NextResponse.json({ status: 'ignored: not admin chat' });
         }
 
         const text = message.text?.body?.trim();
@@ -30,7 +39,16 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ status: 'not a command' });
         }
 
-        // Regex para capturar: #ID STATUS [PREÇO]
+        // SIMULAÇÃO DE TESTE
+        if (text.toUpperCase() === '#TESTE APROVADO' || text.toUpperCase() === '#TESTE') {
+            await axios.post('https://gate.whapi.cloud/messages/text', {
+                to: ARTESA_WPP,
+                body: `✅ *Teste de Conexão Bem-Sucedido!*\n\nO sistema de controle remoto está pronto para processar seus comandos reais.`
+            }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
+            return NextResponse.json({ success: 'test' });
+        }
+
+        // Regex para capturar: #ID STATUS [VALOR]
         // Ex: #A1B2C3 Aprovado 150.00
         const match = text.match(/#(\w+)\s+(Aprovado|Recusado)(?:\s+([\d,.]+))?/i);
         if (!match) return NextResponse.json({ status: 'invalid format' });
@@ -41,43 +59,37 @@ export async function POST(request: NextRequest) {
 
         const { firestore } = initializeFirebase();
 
-        // Buscar a solicitação pelo ID curto (no Firestore os IDs são longos, mas usamos o ID total do documento)
-        // Como o usuário enviou um ID que enviamos via Whapi, ele será o ID do documento.
+        // Buscar a solicitação no Firestore usando o ID do documento
         const requestId = requestIdShort.toLowerCase();
-        
-        // Procurar em custom_requests
         const q = query(collectionGroup(firestore, 'custom_requests'));
         const querySnapshot = await getDocs(q);
         
         let targetDoc: any = null;
-        let userId: string = '';
 
         querySnapshot.forEach((d) => {
+            // Verifica se o ID do documento começa com o ID enviado (ID curto ou total)
             if (d.id.toLowerCase().startsWith(requestId)) {
                 targetDoc = d;
-                // O caminho do documento é users/{userId}/custom_requests/{requestId}
-                userId = d.ref.path.split('/')[1];
             }
         });
 
         if (!targetDoc) {
             await axios.post('https://gate.whapi.cloud/messages/text', {
                 to: ARTESA_WPP,
-                body: `❌ Pedido #${requestIdShort} não encontrado.`
+                body: `❌ Pedido *#${requestIdShort.toUpperCase()}* não encontrado no sistema.`
             }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
             return NextResponse.json({ error: 'Not found' });
         }
 
-        // Atualizar Firestore
+        // Atualizar Firestore com o novo status e preço
         await updateDoc(targetDoc.ref, {
             status,
-            finalPrice: finalPrice || targetDoc.data().totalBasePrice,
+            finalPrice: finalPrice || targetDoc.data().finalPrice || targetDoc.data().totalBasePrice,
             updatedAt: serverTimestamp()
         });
 
-        // Se foi aprovado, podemos disparar a criação de algo ou apenas avisar
-        let responseMessage = `✅ Pedido #${requestIdShort} atualizado para *${statusText}*!`;
-        if (finalPrice) responseMessage += `\nNovo valor: R$ ${finalPrice.toFixed(2)}`;
+        let responseMessage = `✅ Pedido *#${requestIdShort.toUpperCase()}* atualizado para *${statusText}*!`;
+        if (finalPrice) responseMessage += `\n💰 Valor Atualizado: R$ ${finalPrice.toFixed(2).replace('.', ',')}`;
 
         await axios.post('https://gate.whapi.cloud/messages/text', {
             to: ARTESA_WPP,

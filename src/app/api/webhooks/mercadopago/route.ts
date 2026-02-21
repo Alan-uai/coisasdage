@@ -21,6 +21,13 @@ export async function POST(request: NextRequest) {
     const topic = body.type || body.topic;
     const resourceId = body.data?.id || body.id;
 
+    // SIMULAÇÃO DE TESTE DO MERCADO PAGO
+    // Se o ID for o padrão de teste 123456, respondemos 200 OK imediatamente
+    if (resourceId === '123456' || resourceId === 123456) {
+        console.log('Mercado Pago URL Test (ID 123456) successful');
+        return NextResponse.json({ test: 'success' }, { status: 200 });
+    }
+
     if (topic === 'payment' || topic === 'merchant_order' || topic === 'order') {
       const client = new MercadoPagoConfig({ accessToken });
       

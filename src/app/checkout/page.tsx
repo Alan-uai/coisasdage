@@ -58,14 +58,13 @@ export default function CheckoutPage() {
         );
     }
 
-    // O CheckoutForm agora lida internamente com o estado vazio e redirecionamento
+    // O CheckoutForm agora lida internamente com o estado vazio para evitar redirecionamento durante o Pix
     return (
       <CheckoutForm 
         user={user} 
         cartItems={cartItems || []} 
         subtotal={subtotal} 
         isCartLoading={isCartLoading}
-        isAddressesLoading={false} // Passado pelo contexto se necessário, mas aqui deixamos simples
       />
     );
   };

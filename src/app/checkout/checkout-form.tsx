@@ -18,7 +18,7 @@ import Image from 'next/image';
 import { useFirestore, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useMemoFirebase, useCollection } from '@/firebase';
 import { collection, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { QrCode, Loader2, MapPin, ClipboardList, ShoppingBag, ArrowRight, Truck, Calendar, Pencil } from 'lucide-react';
+import { QrCode, Loader2, MapPin, ClipboardList, ShoppingBag, ArrowRight, Truck, Calendar, Pencil, ShoppingCart } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -66,7 +66,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
       savedAddresses?.find(a => a.id === selectedAddressId) || savedAddresses?.find(a => a.isDefault) || savedAddresses?.[0]
     , [savedAddresses, selectedAddressId]);
 
-    // Redireciona para o catálogo apenas se o carrinho estiver vazio e o usuário não estiver em um processo ativo
+    // Redireciona para o catálogo apenas se REALMENTE não houver nada acontecendo
     useEffect(() => {
         const canRedirect = !isCartLoading && 
                           !isLoading && 
@@ -78,9 +78,9 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
         if (canRedirect) {
             router.replace('/');
         }
-    }, [cartItems, pixData, isFinished, isLoading, isCartLoading, router, preferenceId]);
+    }, [cartItems.length, pixData, isFinished, isLoading, isCartLoading, router, preferenceId]);
 
-    // Sincroniza a seleção do endereço padrão quando carregado
+    // Sincroniza a seleção do endereço padrão
     useEffect(() => {
         if (savedAddresses && savedAddresses.length > 0 && !selectedAddressId) {
             const defaultAddr = savedAddresses.find(a => a.isDefault) || savedAddresses[0];
@@ -88,7 +88,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
         }
     }, [savedAddresses, selectedAddressId]);
 
-    // Preenche o formulário e tenta auto-initiate para pronta entrega
+    // Auto-initiate para pronta entrega se já tiver endereço
     useEffect(() => {
       if (currentAddress && !hasAttemptedAutoInit && !isLoading && !preferenceId && !orderId && !isFinished) {
         setHasAttemptedAutoInit(true);
@@ -105,7 +105,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
           onSubmit(values);
         }
       }
-    }, [currentAddress, hasAttemptedAutoInit, isLoading, preferenceId, orderId, checkoutType, form, cartItems, isFinished]);
+    }, [currentAddress, hasAttemptedAutoInit, isLoading, preferenceId, orderId, checkoutType, form, cartItems.length, isFinished]);
 
     const handleSelectAddress = (id: string) => {
       const addr = savedAddresses?.find(a => a.id === id);
@@ -217,8 +217,16 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
             const finalPaymentData = paymentData.formData || paymentData;
             const result = await processPayment(finalPaymentData, orderId, user.email, subtotal);
             if (result.success) {
+                // PRIMEIRO seta o estado de finalizado para evitar redirecionamento
                 setIsFinished(true);
+                
+                if (finalPaymentData.payment_method_id === 'pix' && result.qr_code) {
+                    setPixData({ qr_code: result.qr_code, qr_code_base64: result.qr_code_base64 || '' });
+                }
+
+                // DEPOIS limpa o carrinho
                 clearPaidCartItems();
+                
                 if (result.payment_id) {
                     const orderRef = doc(firestore, 'users', user.uid, 'orders', orderId);
                     updateDocumentNonBlocking(orderRef, { 
@@ -228,9 +236,8 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
                         updatedAt: serverTimestamp(),
                     });
                 }
-                if (finalPaymentData.payment_method_id === 'pix' && result.qr_code) {
-                    setPixData({ qr_code: result.qr_code, qr_code_base64: result.qr_code_base64 || '' });
-                } else {
+
+                if (finalPaymentData.payment_method_id !== 'pix') {
                     router.push(`/payment-status?status=${result.status === 'approved' ? 'success' : 'pending'}&order_id=${orderId}`);
                 }
             } else setError(result.error || 'Erro no pagamento.');
@@ -258,28 +265,48 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
         }
     }, [preferenceId, pixData, subtotal, handlePaymentSubmit, user.email]);
 
+    // Tela de Pix
     if (pixData) {
         return (
             <div className="max-w-2xl mx-auto p-4">
-                <Card className="border-primary/20 shadow-2xl">
-                    <CardHeader className="text-center">
+                <Card className="border-primary/20 shadow-2xl overflow-hidden">
+                    <CardHeader className="text-center bg-primary/5 pb-8">
                         <QrCode className="size-16 text-primary mx-auto mb-4" />
                         <CardTitle className="text-3xl font-headline">Pague com Pix</CardTitle>
+                        <CardDescription>Escaneie o código ou copie a chave para pagar.</CardDescription>
                     </CardHeader>
-                    <CardContent className="flex flex-col items-center gap-6">
-                        {pixData.qr_code_base64 && <Image src={`data:image/png;base64,${pixData.qr_code_base64}`} alt="QR Code" width={240} height={240} />}
-                        <Button onClick={() => { navigator.clipboard.writeText(pixData.qr_code); toast({ title: "Copiado!" }); }} className="w-full">Copiar Código Pix</Button>
-                        <Button asChild variant="outline" className="w-full"><Link href="/orders">Ver Meus Pedidos</Link></Button>
+                    <CardContent className="flex flex-col items-center gap-8 p-8">
+                        <div className="bg-white p-4 rounded-xl shadow-inner border border-muted">
+                          {pixData.qr_code_base64 && <Image src={`data:image/png;base64,${pixData.qr_code_base64}`} alt="QR Code" width={240} height={240} className="rounded-lg" />}
+                        </div>
+                        <div className="w-full space-y-3">
+                          <Button onClick={() => { navigator.clipboard.writeText(pixData.qr_code); toast({ title: "Copiado!" }); }} className="w-full h-14 text-lg font-bold">Copiar Código Pix</Button>
+                          <Button asChild variant="outline" className="w-full h-12"><Link href="/orders">Ver Meus Pedidos</Link></Button>
+                        </div>
+                        <div className="text-xs text-center text-muted-foreground bg-muted/30 p-4 rounded-lg">
+                          <p>Após o pagamento, o Mercado Pago nos notificará e iniciaremos a produção/envio da sua peça!</p>
+                        </div>
                     </CardContent>
                 </Card>
             </div>
         );
     }
 
-    const isLoadingPage = isAddressesLoading || isCartLoading || (isLoading && !preferenceId);
+    // Estado "Vazio" (Só aparece se não houver Pix ou Finalização)
+    if (!isCartLoading && cartItems.length === 0 && !isFinished && !isLoading) {
+      return (
+        <div className="flex flex-col items-center justify-center text-center p-8 py-20 min-h-[400px]">
+          <ShoppingCart className="size-16 text-muted-foreground mb-4" />
+          <h2 className="text-3xl font-bold font-headline">Nenhum item selecionado</h2>
+          <p className="text-muted-foreground mt-2 mb-8">Volte ao carrinho e selecione os itens que deseja comprar.</p>
+          <Button asChild size="lg">
+            <Link href="/cart">Voltar ao Carrinho</Link>
+          </Button>
+        </div>
+      );
+    }
 
-    // Se o checkout estiver sendo preparado ou itens estiverem carregando, não mostre nada para evitar flash
-    if (!isCartLoading && cartItems.length === 0 && !pixData && !isFinished && !isLoading) return null;
+    const isLoadingPage = isAddressesLoading || isCartLoading || (isLoading && !preferenceId);
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto p-4">
@@ -395,7 +422,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
                                 <Form {...form}>
                                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                                         <div className="mb-6">
-                                          <h3 className="font-bold text-lg mb-2">Novo Endereço de Entrega</h3>
+                                          <h3 className="font-bold text-lg mb-2">Endereço de Entrega</h3>
                                           <p className="text-xs text-muted-foreground">Informe onde deseja receber sua peça artesanal.</p>
                                         </div>
 

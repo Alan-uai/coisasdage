@@ -4,6 +4,7 @@ import { getProducts, getLogoUrl } from '@/lib/cloudinary';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 import type { Product } from '@/lib/types';
 import { ProductCard } from '@/components/product-card';
+import { Instagram, Facebook, Twitter, Mail, Phone, MapPin } from 'lucide-react';
 
 export default async function ProductsPage() {
   const [logoUrl, products] = await Promise.all([
@@ -13,8 +14,6 @@ export default async function ProductsPage() {
   
   const readyMadeProducts = products.filter(product => product.readyMade);
   
-  // A product appears in a category if it's not ready-made, OR if it's a ready-made main product.
-  // This prevents ready-made variants from appearing in both the ready-made and category carousels.
   const categoryDisplayProducts = products.filter(p => !p.readyMade || (p.readyMade && p.isMain));
   
   const productsByCategory = categoryDisplayProducts.reduce((acc, product) => {
@@ -46,17 +45,9 @@ export default async function ProductsPage() {
         
         <main className="flex-1 space-y-12">
           {products.length === 0 && (
-            <div className="text-center text-muted-foreground p-8 border-2 border-dashed rounded-lg">
-                <h2 className="text-2xl font-bold font-headline mb-2 text-foreground">Nenhum produto encontrado!</h2>
-                <p className="max-w-2xl mx-auto">
-                    Isso pode acontecer por alguns motivos. Verifique o terminal onde você executou <code className="font-semibold bg-muted px-1 py-0.5 rounded">npm run dev</code> para mensagens de depuração.
-                </p>
-                <ul className="list-disc list-inside text-left max-w-md mx-auto mt-4 space-y-1">
-                    <li>Verifique se suas credenciais <code className="font-semibold bg-muted px-1 py-0.5 rounded">CLOUDINARY_API_KEY</code> e <code className="font-semibold bg-muted px-1 py-0.5 rounded">CLOUDINARY_API_SECRET</code> estão configuradas no arquivo <code className="font-semibold bg-muted px-1 py-0.5 rounded">.env</code>. <strong>Importante:</strong> Após criar ou editar este arquivo, você precisa reiniciar o servidor.</li>
-                    <li>Confirme que cada imagem de produto tem os metadados de contexto obrigatórios salvos, escritos <strong>exatamente</strong> assim (tudo em minúsculo): <code className="font-semibold bg-muted px-1 py-0.5 rounded">id</code>, <code className="font-semibold bg-muted px-1 py-0.5 rounded">groupId</code>, e <code className="font-semibold bg-muted px-1 py-0.5 rounded">name</code>, <code className="font-semibold bg-muted px-1 py-0.5 rounded">price</code>, <code className="font-semibold bg-muted px-1 py-0.5 rounded">category</code>.</li>
-                     <li>Para variações, garanta que um produto do grupo tenha `isMain: true` e as opções listadas (ex: `colors`).</li>
-                </ul>
-                <p className="mt-4">Após verificar, pode levar até 1 minuto para as alterações aparecerem.</p>
+            <div className="text-center text-muted-foreground p-12 border-2 border-dashed rounded-lg bg-muted/50">
+                <h2 className="text-2xl font-bold font-headline mb-2 text-foreground">Estamos fechados/sem produtos, obrigado.</h2>
+                <p>Volte em breve para conferir nossas novidades artesanais!</p>
             </div>
           )}
 
@@ -110,6 +101,47 @@ export default async function ProductsPage() {
             </section>
           ))}
         </main>
+
+        <footer className="mt-20 pt-12 border-t border-primary/20 bg-primary text-primary-foreground -mx-4 sm:-mx-6 lg:-mx-8 px-8 py-12 rounded-t-3xl">
+          <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
+            <div className="space-y-6">
+              <h3 className="text-xs uppercase tracking-widest opacity-70 font-bold">Redes Sociais</h3>
+              <div className="flex gap-6">
+                <Link href="#" className="hover:opacity-80 transition-opacity"><Instagram className="size-6" /></Link>
+                <Link href="#" className="hover:opacity-80 transition-opacity"><Facebook className="size-6" /></Link>
+                <Link href="#" className="hover:opacity-80 transition-opacity"><Twitter className="size-6" /></Link>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <h3 className="text-xs uppercase tracking-widest opacity-70 font-bold">Contato</h3>
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <Mail className="size-5 text-accent" />
+                  <span className="text-sm">ola@coisasdage.com.br</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Phone className="size-5 text-accent" />
+                  <span className="text-sm">+55 (11) 99999-9999</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <MapPin className="size-5 text-accent" />
+                  <span className="text-sm">Feito à mão no interior de SP</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-6 lg:text-right">
+              <h3 className="text-xl font-bold font-headline">Coisas da Gê</h3>
+              <p className="text-xs opacity-60 leading-relaxed">
+                Cada peça é única, feita com cuidado e dedicação para levar aconchego ao seu lar.
+              </p>
+              <div className="pt-4 text-[10px] opacity-40">
+                © 2024 Coisas da Gê. Todos os direitos reservados.
+              </div>
+            </div>
+          </div>
+        </footer>
       </div>
     </div>
   );

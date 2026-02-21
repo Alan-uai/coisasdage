@@ -95,22 +95,21 @@ export type Order = {
   updatedAt: Timestamp;
   paymentId?: string | number;
   merchantOrderId?: string;
+  productionDays?: number;
 };
 
-export type CartItem = {
+export type CustomRequest = {
   id: string;
-  cartId: string;
-  productId: string;
-  productGroupId: string;
-  productName: string;
-  imageUrl: string;
-  quantity: number;
-  selectedSize: string;
-  selectedColor: string;
-  selectedMaterial: string;
-  unitPriceAtAddition: number;
-  readyMade: boolean;
-  selected?: boolean;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  status: 'Pending' | 'Approved' | 'Cancelled' | 'AddedToCart';
+  totalBasePrice: number;
+  finalPrice?: number;
+  items: OrderItemSummary[];
+  shippingAddress: Address;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  productionDays?: number;
+  adminNotes?: string;
 };

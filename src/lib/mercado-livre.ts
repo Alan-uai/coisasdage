@@ -1,4 +1,3 @@
-
 'use server';
 
 import axios from 'axios';
@@ -22,54 +21,32 @@ async function getAccessToken(): Promise<string> {
     throw new Error('Credenciais do Mercado Livre não configuradas no .env');
   }
 
-  const response = await axios.post(
-    `${ML_API}/oauth/token`,
-    {
-      grant_type: 'refresh_token',
-      client_id: ML_CLIENT_ID,
-      client_secret: ML_CLIENT_SECRET,
-      refresh_token: ML_REFRESH_TOKEN,
-    },
-    { headers: { 'Content-Type': 'application/json' } }
-  );
-
-  return response.data.access_token;
-}
-
-/**
- * 1️⃣ CRIAR ENVIO (Shipment)
- * Necessário que o produto/vendedor tenha Mercado Envios ativo.
- */
-export async function createMLShipment(orderId: string, items: any[], address: any) {
   try {
-    const accessToken = await getAccessToken();
     const response = await axios.post(
-      `${ML_API}/shipments`,
+      `${ML_API}/oauth/token`,
       {
-        receiver_address: address,
-        items: items.map(item => ({
-          id: item.productId,
-          quantity: item.quantity
-        }))
+        grant_type: 'refresh_token',
+        client_id: ML_CLIENT_ID,
+        client_secret: ML_CLIENT_SECRET,
+        refresh_token: ML_REFRESH_TOKEN,
       },
-      {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      }
+      { headers: { 'Content-Type': 'application/json' } }
     );
-
-    return { success: true, shipmentId: response.data.id };
+    return response.data.access_token;
   } catch (error: any) {
-    console.error('Error creating ML shipment:', error.response?.data || error.message);
-    return { success: false, error: error.response?.data?.message || 'Falha ao criar envio' };
+    console.error('Error refreshing ML token:', error.response?.data || error.message);
+    throw new Error('Falha na autenticação com Mercado Livre.');
   }
 }
 
 /**
- * 2️⃣ GERAR ETIQUETA PDF (Base64)
+ * BUSCAR ETIQUETA PDF E GERAR LINK WHATSAPP
  */
 export async function getMLShipmentLabel(shipmentId: string) {
   try {
     const accessToken = await getAccessToken();
+    
+    // O Mercado Livre retorna a etiqueta em PDF
     const res = await axios.get(`${ML_API}/shipment_labels`, {
       params: {
         shipment_ids: shipmentId,
@@ -80,11 +57,10 @@ export async function getMLShipmentLabel(shipmentId: string) {
     });
 
     const base64 = Buffer.from(res.data).toString('base64');
-    const url = `data:application/pdf;base64,${base64}`;
     
-    // Gera link do WhatsApp para a artesã com o link da etiqueta (simulado)
+    // Gera link do WhatsApp para a artesã com a instrução automática
     const mensagem = encodeURIComponent(
-      `Etiqueta de envio pronta para o Shipment ID: ${shipmentId} 😊\n\nPor favor, imprima e anexe ao pacote.`
+      `Olá! O pedido com Shipment ID ${shipmentId} foi marcado como ENVIADO. 🚚\n\nAqui está a etiqueta para impressão (gerada automaticamente pelo sistema).`
     );
     const whatsappLink = `https://wa.me/${ARTESA_WPP}?text=${mensagem}`;
 
@@ -95,12 +71,12 @@ export async function getMLShipmentLabel(shipmentId: string) {
     };
   } catch (error: any) {
     console.error('Error fetching ML label:', error.response?.data || error.message);
-    return { success: false, error: error.response?.data?.message || 'Falha ao gerar etiqueta' };
+    return { success: false, error: 'Não foi possível gerar a etiqueta automática.' };
   }
 }
 
 /**
- * 3️⃣ ATUALIZAR STATUS E RASTREAMENTO
+ * BUSCAR STATUS E RASTREAMENTO
  */
 export async function getMLShipmentTracking(shipmentId: string) {
   try {
@@ -110,23 +86,15 @@ export async function getMLShipmentTracking(shipmentId: string) {
     });
 
     const envio = response.data;
-    const eventos = envio.tracking_events?.map((e: any) => ({
-      status: e.status,
-      description: e.description,
-      location: e.location,
-      date: e.date
-    })) || [];
-
     return {
       success: true,
       status: envio.status,
-      substatus: envio.substatus,
+      description: envio.status_history?.slice(-1)[0]?.description || envio.status,
       trackingNumber: envio.tracking_number,
       trackingUrl: envio.tracking_url,
-      events: eventos
     };
   } catch (error: any) {
-    console.error('Error updating ML status:', error.response?.data || error.message);
-    return { success: false, error: error.response?.data?.message || 'Falha ao buscar rastreio' };
+    console.error('Error fetching ML tracking:', error.response?.data || error.message);
+    return { success: false, error: 'Falha ao buscar rastreio.' };
   }
 }

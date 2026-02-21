@@ -1,11 +1,10 @@
-
 'use client';
 
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where, orderBy, limit } from 'firebase/firestore';
+import { collection, query, orderBy, limit } from 'firebase/firestore';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -14,27 +13,18 @@ import {
   Package, 
   Clock, 
   CheckCircle2, 
-  AlertCircle, 
   ShoppingBag, 
-  ChevronRight, 
   Truck, 
   Hammer,
-  ClipboardList,
-  FileText,
-  Loader2,
-  MapPin
+  ClipboardList
 } from 'lucide-react';
 import type { Order, CustomRequest } from '@/lib/types';
-import { cn } from '@/lib/utils';
-import { getMLShipmentLabel, getMLShipmentTracking } from '@/lib/mercado-livre';
 import { useState, useEffect } from 'react';
-import { useToast } from '@/hooks/use-toast';
+import { getMLShipmentTracking } from '@/lib/mercado-livre';
 
 export default function MyOrdersPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
-  const { toast } = useToast();
-  const [isGeneratingLabel, setIsGeneratingLabel] = useState<string | null>(null);
   const [trackingInfo, setTrackingInfo] = useState<Record<string, any>>({});
 
   const ordersQuery = useMemoFirebase(
@@ -57,7 +47,6 @@ export default function MyOrdersPage() {
   );
   const { data: requests, isLoading: isRequestsLoading } = useCollection<CustomRequest>(requestsQuery);
 
-  // Busca rastreio para pedidos enviados
   useEffect(() => {
     if (orders) {
       orders.forEach(order => {
@@ -71,41 +60,6 @@ export default function MyOrdersPage() {
       });
     }
   }, [orders]);
-
-  const handleDownloadLabel = async (shipmentId: string) => {
-    setIsGeneratingLabel(shipmentId);
-    try {
-      const result = await getMLShipmentLabel(shipmentId);
-      if (result.success && result.base64) {
-        const linkSource = `data:application/pdf;base64,${result.base64}`;
-        const downloadLink = document.createElement("a");
-        const fileName = `etiqueta-${shipmentId}.pdf`;
-        downloadLink.href = linkSource;
-        downloadLink.download = fileName;
-        downloadLink.click();
-        
-        toast({ title: "Etiqueta gerada!", description: "Você também pode enviá-la para a artesã." });
-        
-        if (result.whatsappLink) {
-           window.open(result.whatsappLink, '_blank');
-        }
-      } else {
-        toast({ 
-          variant: "destructive", 
-          title: "Erro ao gerar etiqueta", 
-          description: result.error 
-        });
-      }
-    } catch (error) {
-      toast({ 
-        variant: "destructive", 
-        title: "Erro inesperado", 
-        description: "Não foi possível processar a etiqueta." 
-      });
-    } finally {
-      setIsGeneratingLabel(null);
-    }
-  };
 
   if (isUserLoading) {
     return (
@@ -174,63 +128,49 @@ export default function MyOrdersPage() {
             </div>
           ) : (
             orders.map((order) => (
-              <Card key={order.id} className="overflow-hidden">
+              <Card key={order.id} className="overflow-hidden border-primary/10">
                 <CardContent className="p-0">
-                  <div className="flex flex-col">
-                    <div className="p-6 flex-1 space-y-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="text-sm font-medium text-muted-foreground">Pedido #{order.id.slice(-6).toUpperCase()}</p>
-                          <h3 className="text-lg font-bold">
-                            {order.items.length} {order.items.length === 1 ? 'item' : 'itens'}
-                          </h3>
-                        </div>
-                        <div className="flex flex-col items-end gap-2">
-                          {getOrderStatusBadge(order.status)}
-                          {order.merchantOrderId && (
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="h-7 text-[10px]"
-                              disabled={isGeneratingLabel === order.merchantOrderId}
-                              onClick={() => handleDownloadLabel(order.merchantOrderId!)}
-                            >
-                              {isGeneratingLabel === order.merchantOrderId ? <Loader2 className="animate-spin size-3 mr-1" /> : <FileText className="size-3 mr-1" />}
-                              Etiqueta Mercado Envios
-                            </Button>
-                          )}
-                        </div>
+                  <div className="p-6 space-y-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Pedido #{order.id.slice(-6).toUpperCase()}</p>
+                        <h3 className="text-lg font-bold">
+                          {order.items.length} {order.items.length === 1 ? 'item' : 'itens'}
+                        </h3>
                       </div>
-                      
-                      <div className="flex -space-x-2 overflow-hidden">
-                        {order.items.slice(0, 4).map((item, idx) => (
-                          <div key={idx} className="relative size-12 rounded-full border-2 border-background bg-muted overflow-hidden">
-                            <Image src={item.imageUrl} alt={item.productName} fill className="object-cover" />
-                          </div>
-                        ))}
+                      <div className="flex flex-col items-end gap-2">
+                        {getOrderStatusBadge(order.status)}
                       </div>
+                    </div>
+                    
+                    <div className="flex -space-x-2 overflow-hidden">
+                      {order.items.slice(0, 4).map((item, idx) => (
+                        <div key={idx} className="relative size-12 rounded-full border-2 border-background bg-muted overflow-hidden shadow-sm">
+                          <Image src={item.imageUrl} alt={item.productName} fill className="object-cover" />
+                        </div>
+                      ))}
+                    </div>
 
-                      {trackingInfo[order.id] && (
-                        <div className="bg-blue-50 p-3 rounded-md text-xs border border-blue-100 space-y-2">
-                          <p className="font-bold flex items-center gap-1 text-blue-800">
-                            <Truck className="size-3" /> Rastreamento Mercado Livre
-                          </p>
-                          <p className="text-blue-700">Status: {trackingInfo[order.id].description || trackingInfo[order.id].status}</p>
-                          {trackingInfo[order.id].trackingUrl && (
-                            <Link href={trackingInfo[order.id].trackingUrl} target="_blank" className="text-blue-800 underline font-bold">
-                              Ver no site da transportadora
-                            </Link>
-                          )}
-                        </div>
-                      )}
+                    {trackingInfo[order.id] && (
+                      <div className="bg-blue-50 p-4 rounded-lg text-sm border border-blue-100 space-y-2">
+                        <p className="font-bold flex items-center gap-1 text-blue-800">
+                          <Truck className="size-4" /> Rastreamento em Tempo Real
+                        </p>
+                        <p className="text-blue-700">{trackingInfo[order.id].description || trackingInfo[order.id].status}</p>
+                        {trackingInfo[order.id].trackingUrl && (
+                          <Link href={trackingInfo[order.id].trackingUrl} target="_blank" className="text-blue-900 underline font-bold inline-block mt-1">
+                            Acompanhar no site do Mercado Livre
+                          </Link>
+                        )}
+                      </div>
+                    )}
 
-                      <div className="flex justify-between items-end">
-                        <div className="text-sm text-muted-foreground">
-                          Realizado em {order.createdAt?.toDate().toLocaleDateString('pt-BR')}
-                        </div>
-                        <div className="text-xl font-bold text-primary">
-                          R$ {order.totalAmount.toFixed(2).replace('.', ',')}
-                        </div>
+                    <div className="flex justify-between items-end pt-2">
+                      <div className="text-sm text-muted-foreground">
+                        Realizado em {order.createdAt?.toDate().toLocaleDateString('pt-BR')}
+                      </div>
+                      <div className="text-xl font-bold text-primary">
+                        R$ {order.totalAmount.toFixed(2).replace('.', ',')}
                       </div>
                     </div>
                   </div>
@@ -241,10 +181,10 @@ export default function MyOrdersPage() {
         </TabsContent>
 
         <TabsContent value="requests" className="space-y-4">
-          {/* ... mantido conteúdo original de solicitações ... */}
           <div className="text-center py-20 border-2 border-dashed rounded-lg bg-muted/20">
               <ClipboardList className="size-12 mx-auto text-muted-foreground mb-4" />
               <p className="text-lg font-medium">Suas solicitações sob demanda aparecerão aqui.</p>
+              <p className="text-sm text-muted-foreground">Acompanhe as conversas e status das peças exclusivas.</p>
           </div>
         </TabsContent>
       </Tabs>

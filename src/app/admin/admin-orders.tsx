@@ -7,36 +7,55 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Truck, Hammer, CheckCircle2, Clock, XCircle, Info } from 'lucide-react';
+import { Truck, Hammer, CheckCircle2, Clock, XCircle, Info, Loader2 } from 'lucide-react';
 import type { Order } from '@/lib/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import Image from 'next/image';
-import { useMemo } from 'react';
-
-const ADMIN_EMAILS = ['aymatsu00@gmail.com', 'hashiramanakamoto0@gmail.com'];
+import { useMemo, useState } from 'react';
+import { getMLShipmentLabel } from '@/lib/mercado-livre';
+import { useToast } from '@/hooks/use-toast';
 
 export function AdminOrders() {
   const { user } = useUser();
   const firestore = useFirestore();
-
-  const isAdmin = useMemo(() => {
-    return user?.email && ADMIN_EMAILS.includes(user.email);
-  }, [user]);
+  const { toast } = useToast();
+  const [isProcessing, setIsProcessing] = useState<string | null>(null);
 
   const ordersQuery = useMemoFirebase(
-    () => (firestore && isAdmin ? query(collectionGroup(firestore, 'orders'), orderBy('createdAt', 'desc'), limit(50)) : null),
-    [firestore, isAdmin]
+    () => (firestore ? query(collectionGroup(firestore, 'orders'), orderBy('createdAt', 'desc'), limit(50)) : null),
+    [firestore]
   );
 
   const { data: orders, isLoading } = useCollection<Order>(ordersQuery);
 
-  const handleUpdateStatus = (order: Order, status: Order['status']) => {
+  const handleUpdateStatus = async (order: Order, status: Order['status']) => {
     if (!firestore) return;
-    const orderRef = doc(firestore, 'users', order.userId, 'orders', order.id);
-    updateDocumentNonBlocking(orderRef, {
-      status,
-      updatedAt: serverTimestamp(),
-    });
+    
+    setIsProcessing(order.id);
+
+    try {
+      // Automação: Se o status for alterado para 'Shipped', gera a etiqueta e abre o WhatsApp automaticamente
+      if (status === 'Shipped' && order.merchantOrderId) {
+        toast({ title: "Gerando etiqueta...", description: "Aguarde o redirecionamento para o WhatsApp." });
+        const labelResult = await getMLShipmentLabel(order.merchantOrderId);
+        if (labelResult.success && labelResult.whatsappLink) {
+          window.open(labelResult.whatsappLink, '_blank');
+          toast({ title: "Sucesso!", description: "Etiqueta enviada para o WhatsApp." });
+        } else {
+          toast({ variant: "destructive", title: "Erro na logística", description: labelResult.error || "Não foi possível gerar a etiqueta." });
+        }
+      }
+
+      const orderRef = doc(firestore, 'users', order.userId, 'orders', order.id);
+      updateDocumentNonBlocking(orderRef, {
+        status,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsProcessing(null);
+    }
   };
 
   const getStatusIcon = (status: Order['status']) => {
@@ -54,16 +73,12 @@ export function AdminOrders() {
     return <div className="space-y-4"><Skeleton className="h-10 w-full" /><Skeleton className="h-32 w-full" /></div>;
   }
 
-  if (!isAdmin) {
-    return <div className="text-center py-12 text-destructive">Acesso restrito.</div>;
-  }
-
   if (!orders || orders.length === 0) {
     return <div className="text-center py-12 text-muted-foreground">Nenhum pedido confirmado encontrado.</div>;
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto bg-card rounded-lg border shadow-sm">
       <Table>
         <TableHeader>
           <TableRow>
@@ -71,7 +86,7 @@ export function AdminOrders() {
             <TableHead>Cliente</TableHead>
             <TableHead>Total</TableHead>
             <TableHead>Status Atual</TableHead>
-            <TableHead>Alterar Status</TableHead>
+            <TableHead>Ação</TableHead>
             <TableHead className="text-right">Detalhes</TableHead>
           </TableRow>
         </TableHeader>
@@ -87,31 +102,30 @@ export function AdminOrders() {
               </TableCell>
               <TableCell className="font-bold">R$ {order.totalAmount.toFixed(2).replace('.', ',')}</TableCell>
               <TableCell>
-                <Badge variant={order.status === 'Processing' ? 'secondary' : 'default'} className={cn(
-                  order.status === 'Crafting' && 'bg-amber-500 hover:bg-amber-600',
-                  order.status === 'Shipped' && 'bg-blue-500 hover:bg-blue-600',
-                  order.status === 'Delivered' && 'bg-green-600 hover:bg-green-700'
-                )}>
+                <Badge variant={order.status === 'Processing' ? 'secondary' : 'default'}>
                   {getStatusIcon(order.status)}
                   {order.status}
                 </Badge>
               </TableCell>
               <TableCell>
-                <Select 
-                  defaultValue={order.status} 
-                  onValueChange={(val) => handleUpdateStatus(order, val as Order['status'])}
-                >
-                  <SelectTrigger className="w-[180px] h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Processing">Processando</SelectItem>
-                    <SelectItem value="Crafting">Em Produção</SelectItem>
-                    <SelectItem value="Shipped">Enviado</SelectItem>
-                    <SelectItem value="Delivered">Entregue</SelectItem>
-                    <SelectItem value="Cancelled">Cancelado</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center gap-2">
+                  <Select 
+                    defaultValue={order.status} 
+                    onValueChange={(val) => handleUpdateStatus(order, val as Order['status'])}
+                    disabled={isProcessing === order.id}
+                  >
+                    <SelectTrigger className="w-[180px] h-8 text-xs">
+                      {isProcessing === order.id ? <Loader2 className="animate-spin size-3 mr-2" /> : <SelectValue />}
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Processing">Processando</SelectItem>
+                      <SelectItem value="Crafting">Em Produção</SelectItem>
+                      <SelectItem value="Shipped">Enviado (Gera Etiqueta)</SelectItem>
+                      <SelectItem value="Delivered">Entregue</SelectItem>
+                      <SelectItem value="Cancelled">Cancelado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </TableCell>
               <TableCell className="text-right">
                 <Dialog>
@@ -133,7 +147,7 @@ export function AdminOrders() {
                         <div className="space-y-1">
                           <p className="font-bold text-muted-foreground uppercase text-[10px]">Pagamento</p>
                           <p>ID Mercado Pago: {order.paymentId || 'N/A'}</p>
-                          <p>Data: {order.createdAt?.toDate().toLocaleString('pt-BR')}</p>
+                          <p>Merchant Order: {order.merchantOrderId || 'N/A'}</p>
                         </div>
                       </div>
                       <div className="space-y-2">
@@ -144,7 +158,7 @@ export function AdminOrders() {
                                <Image src={item.imageUrl} alt={item.productName} width={40} height={40} className="rounded object-cover" />
                                <div className="flex-1">
                                  <p className="text-sm font-bold">{item.productName} (x{item.quantity})</p>
-                                 <p className="text-xs text-muted-foreground">{item.selectedColor} | {item.selectedSize} | {item.selectedMaterial}</p>
+                                 <p className="text-xs text-muted-foreground">{item.selectedColor} | {item.selectedSize}</p>
                                </div>
                                <div className="text-sm font-bold">
                                  R$ {(item.unitPriceAtOrder * item.quantity).toFixed(2)}
@@ -163,8 +177,4 @@ export function AdminOrders() {
       </Table>
     </div>
   );
-}
-
-function cn(...classes: any[]) {
-  return classes.filter(Boolean).join(' ');
 }

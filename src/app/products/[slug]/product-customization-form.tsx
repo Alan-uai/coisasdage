@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useUser, useFirestore, addDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
 import { collection, doc, serverTimestamp } from 'firebase/firestore';
+import Link from 'next/link';
 
 const getFirstAvailable = (allOptions: string[], availableOptions?: string[]): string => {
   if (availableOptions && availableOptions.length > 0) {
@@ -105,7 +106,12 @@ export function ProductClientPage({ product }: { product: Product }) {
       return;
     }
 
-    if (redirect) setIsBuyingNow(true); else setIsAdding(true);
+    if (redirect) {
+      setIsBuyingNow(true);
+    } else {
+      // Para o carrinho, a ação deve ser instantânea sem travar o botão com loading demorado
+      setIsAdding(true);
+    }
 
     const cartItemData = {
       cartId: 'main',
@@ -130,12 +136,13 @@ export function ProductClientPage({ product }: { product: Product }) {
     if (redirect) {
       router.push('/checkout');
     } else {
+      // Feedback imediato e reseta o estado de carregamento rápido
       toast({
         title: "No Carrinho!",
-        description: `${product.name} foi adicionado. Continue navegando!`,
+        description: `${product.name} foi adicionado.`,
         action: <Button variant="outline" size="sm" asChild><Link href="/cart">Ver Carrinho</Link></Button>
       });
-      setIsAdding(false);
+      setTimeout(() => setIsAdding(false), 500);
     }
   };
 

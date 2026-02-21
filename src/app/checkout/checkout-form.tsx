@@ -1,4 +1,3 @@
-
 'use client';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
@@ -41,6 +40,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
     const [isBrickLoaded, setIsBrickLoaded] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [pixData, setPixData] = useState<{ qr_code: string, qr_code_base64: string } | null>(null);
+    const [selectedAddressId, setSelectedAddressId] = useState<string>('');
     const brickRendered = useRef(false);
     const firestore = useFirestore();
     const router = useRouter();
@@ -68,6 +68,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
       if (savedAddresses && savedAddresses.length > 0) {
         const defaultAddr = savedAddresses.find(a => a.isDefault) || savedAddresses[0];
         if (defaultAddr) {
+          setSelectedAddressId(defaultAddr.id);
           form.reset({
             cpf: defaultAddr.cpf,
             streetName: defaultAddr.streetName,
@@ -83,6 +84,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
     const handleSelectAddress = (id: string) => {
       const addr = savedAddresses?.find(a => a.id === id);
       if (addr) {
+        setSelectedAddressId(id);
         form.reset({
           cpf: addr.cpf,
           streetName: addr.streetName,
@@ -306,7 +308,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                                 {savedAddresses && savedAddresses.length > 0 && (
                                   <div className="space-y-2 mb-6">
                                     <Label className="text-xs uppercase font-bold text-primary">Usar Endereço Salvo</Label>
-                                    <Select onValueChange={handleSelectAddress}>
+                                    <Select value={selectedAddressId} onValueChange={handleSelectAddress}>
                                       <SelectTrigger>
                                         <SelectValue placeholder="Selecione um endereço" />
                                       </SelectTrigger>

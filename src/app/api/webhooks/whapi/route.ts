@@ -11,64 +11,62 @@ const WHAPI_TOKEN = process.env.WHAPI_TOKEN;
 const TEST_ID = process.env.WHAPI_TEST_ID || "teste";
 
 /**
- * Webhook Whapi Cloud robusto: Processa tanto o evento 'messages' quanto 'chats'.
+ * Função unificada para processar atualizações do Whapi Cloud.
+ * Suporta tanto POST (messages) quanto PATCH (chats/updates).
  */
-export async function POST(request: NextRequest) {
+async function processWhapiWebhook(request: NextRequest) {
     if (!WHAPI_TOKEN) {
-        return NextResponse.json({ error: 'Whapi Token not set' }, { status: 500 });
+        return NextResponse.json({ error: 'Whapi Token não configurado' }, { status: 500 });
     }
 
     try {
         const body = await request.json();
         
-        // ESTRATÉGIA DE EXTRAÇÃO ROBUSTA
-        // O Whapi pode enviar a mensagem em 'messages[0]' OU em 'last_message' (dentro de chats ou updates)
+        // ESTRATÉGIA DE EXTRAÇÃO ROBUSTA:
+        // 1. Procura em 'messages' (padrão POST)
+        // 2. Procura em 'last_message' (padrão PATCH/chats)
+        // 3. Procura em 'after_update' (padrão updates)
         let message = body.messages?.[0] || 
                       body.last_message || 
                       body.after_update?.last_message || 
                       body.chats?.[0]?.last_message;
 
-        // Se não houver conteúdo de mensagem, ignora o webhook silenciosamente
         if (!message) {
-            return NextResponse.json({ status: 'ignored: no message content' });
+            return NextResponse.json({ status: 'ignorado: sem conteúdo de mensagem' });
         }
 
         // 1. Verificação de Segurança (Proprietário da Loja)
-        // Só aceita se a mensagem for sua (enviada pelo seu próprio número logado na Whapi)
-        if (!message.from_me) {
-            return NextResponse.json({ status: 'ignored: not from admin' });
-        }
-
-        // Verifica se o chat_id contém o seu número configurado (limpa caracteres não numéricos)
+        // Aceita se for enviado por você (from_me) ou se o ID do chat for o seu número
         const adminNumberOnly = ARTESA_WPP.replace(/\D/g, '');
-        const isAdminChat = message.chat_id.includes(adminNumberOnly);
+        const isFromMe = !!message.from_me;
+        const isSelfChat = message.chat_id?.includes(adminNumberOnly);
         
-        if (!isAdminChat) {
-            return NextResponse.json({ status: 'ignored: not admin chat' });
+        if (!isFromMe && !isSelfChat) {
+            return NextResponse.json({ status: 'ignorado: não é do admin' });
         }
 
-        // Extrai o texto da mensagem (suporta diferentes formatos de objeto de texto)
+        // Extrai o texto da mensagem
         const text = (typeof message.text === 'string' ? message.text : message.text?.body)?.trim();
         
         if (!text || !text.startsWith('#')) {
-            return NextResponse.json({ status: 'not a command' });
+            return NextResponse.json({ status: 'não é um comando' });
         }
 
-        // 2. Processar Comando de Teste Personalizado (#WHAPI_TEST_ID)
         const textLower = text.toLowerCase();
         const testCommand = `#${TEST_ID.toLowerCase()}`;
 
+        // 2. Processar Comando de Teste Personalizado (#WHAPI_TEST_ID)
         if (textLower === testCommand || textLower === '#teste') {
             await axios.post('https://gate.whapi.cloud/messages/text', {
-                to: message.chat_id,
+                to: message.chat_id || `${adminNumberOnly}@s.whatsapp.net`,
                 body: `✅ *Conexão Coisas da Gê OK!*\n\nO sistema está pronto para processar seus comandos.\n\nUse:\n#ID Aprovado [dias]\n#ID Recusado`
             }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
-            return NextResponse.json({ success: 'test' });
+            return NextResponse.json({ success: 'teste concluído' });
         }
 
         // 3. Processar Comandos de Pedidos (#ID Aprovado/Recusado)
         const match = text.match(/#(\w+)\s+(Aprovado|Recusado)(?:\s+(\d+))?/i);
-        if (!match) return NextResponse.json({ status: 'invalid format' });
+        if (!match) return NextResponse.json({ status: 'formato inválido' });
 
         const [_, requestIdShort, statusText, daysText] = match;
         const status = statusText.toLowerCase() === 'aprovado' ? 'Approved' : 'Cancelled';
@@ -77,7 +75,6 @@ export async function POST(request: NextRequest) {
         const { firestore } = initializeFirebase();
         const requestIdLower = requestIdShort.toLowerCase();
         
-        // Buscar o pedido no Firestore usando collectionGroup (procura em todos os usuários)
         const q = query(collectionGroup(firestore, 'custom_requests'));
         const querySnapshot = await getDocs(q);
         
@@ -90,13 +87,12 @@ export async function POST(request: NextRequest) {
 
         if (!targetDoc) {
             await axios.post('https://gate.whapi.cloud/messages/text', {
-                to: message.chat_id,
+                to: message.chat_id || `${adminNumberOnly}@s.whatsapp.net`,
                 body: `❌ Pedido *#${requestIdShort.toUpperCase()}* não encontrado.`
             }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
-            return NextResponse.json({ error: 'Not found' });
+            return NextResponse.json({ error: 'Pedido não encontrado' });
         }
 
-        // Atualizar o status e prazo no Firestore
         await updateDoc(targetDoc.ref, {
             status,
             productionDays: productionDays || targetDoc.data().productionDays || 7,
@@ -109,7 +105,7 @@ export async function POST(request: NextRequest) {
         }
 
         await axios.post('https://gate.whapi.cloud/messages/text', {
-            to: message.chat_id,
+            to: message.chat_id || `${adminNumberOnly}@s.whatsapp.net`,
             body: responseMsg
         }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
 
@@ -119,4 +115,12 @@ export async function POST(request: NextRequest) {
         console.error('Whapi Webhook Error:', error);
         return NextResponse.json({ error: error.message }, { status: 400 });
     }
+}
+
+export async function POST(request: NextRequest) {
+    return processWhapiWebhook(request);
+}
+
+export async function PATCH(request: NextRequest) {
+    return processWhapiWebhook(request);
 }

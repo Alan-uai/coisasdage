@@ -1,11 +1,11 @@
 'use client';
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { User } from 'firebase/auth';
-import { createPreference, processPayment, type PreferenceCartItem, notifyAdminNewRequest } from './actions';
-import type { CartItem, Order, SavedAddress, CustomRequest } from '@/lib/types';
+import { createPreference, processPayment, notifyAdminNewRequest } from './actions';
+import type { CartItem, SavedAddress } from '@/lib/types';
 import { addressSchema } from './form-schema';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -14,10 +14,10 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import Image from 'next/image';
-import { useFirestore, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useDoc, useMemoFirebase, useCollection } from '@/firebase';
+import { useFirestore, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useMemoFirebase, useCollection } from '@/firebase';
 import { collection, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { CheckCircle2, Copy, AlertCircle, QrCode, Loader2, Info, MapPin, ClipboardList } from 'lucide-react';
+import { QrCode, Loader2, MapPin, ClipboardList, ShoppingBag, ArrowRight, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -41,6 +41,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
     const [error, setError] = useState<string | null>(null);
     const [pixData, setPixData] = useState<{ qr_code: string, qr_code_base64: string } | null>(null);
     const [selectedAddressId, setSelectedAddressId] = useState<string>('');
+    const [showAddressForm, setShowAddressForm] = useState(true);
     const brickRendered = useRef(false);
     const firestore = useFirestore();
     const router = useRouter();
@@ -69,6 +70,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
         const defaultAddr = savedAddresses.find(a => a.isDefault) || savedAddresses[0];
         if (defaultAddr) {
           setSelectedAddressId(defaultAddr.id);
+          setShowAddressForm(false); // Pula o formulário se já existe endereço
           form.reset({
             cpf: defaultAddr.cpf,
             streetName: defaultAddr.streetName,
@@ -78,6 +80,8 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
             state: defaultAddr.state,
           });
         }
+      } else if (savedAddresses && savedAddresses.length === 0) {
+        setShowAddressForm(true);
       }
     }, [savedAddresses, form]);
 
@@ -85,6 +89,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
       const addr = savedAddresses?.find(a => a.id === id);
       if (addr) {
         setSelectedAddressId(id);
+        setShowAddressForm(false);
         form.reset({
           cpf: addr.cpf,
           streetName: addr.streetName,
@@ -140,20 +145,14 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                     updatedAt: serverTimestamp(),
                 }, { merge: true });
 
-                // Avisar a Artesã Silenciosamente via Whapi
                 await notifyAdminNewRequest(generatedRequestId, user.displayName || 'Cliente', cartItems[0].productName);
-
-                // Limpar carrinho
                 clearPaidCartItems();
 
-                // Montar mensagem HUMANA para o cliente
                 let message = `Olá Gê! Acabei de solicitar um orçamento no site.\n`;
                 message += `Tenho interesse em: *${cartItems.map(i => i.productName).join(', ')}*.\n`;
                 message += `Aguardando seu retorno!`;
 
                 const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
-                
-                toast({ title: "Solicitação Enviada!", description: "Redirecionando para o WhatsApp da Gê." });
                 window.location.href = whatsappUrl;
                 return;
             }
@@ -269,12 +268,14 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
         );
     }
 
+    const currentAddress = savedAddresses?.find(a => a.id === selectedAddressId);
+
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto p-4">
             <Card className="shadow-lg h-fit">
                 <CardHeader>
                   <CardTitle className="font-headline text-2xl flex items-center gap-2">
-                    {checkoutType === 'custom' ? <ClipboardList className="size-6 text-primary" /> : null}
+                    {checkoutType === 'custom' ? <ClipboardList className="size-6 text-primary" /> : <ShoppingBag className="size-6 text-primary" />}
                     {checkoutType === 'custom' ? 'Resumo da Solicitação' : 'Resumo da Compra'}
                   </CardTitle>
                 </CardHeader>
@@ -289,7 +290,7 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
                         </div>
                     ))}
                     <div className="border-t pt-4 flex justify-between font-bold text-xl text-primary">
-                        <span>{checkoutType === 'custom' ? 'Valor Base' : 'Total'}</span>
+                        <span>{checkoutType === 'custom' ? 'Valor Base Estimado' : 'Total'}</span>
                         <span>R$ {subtotal.toFixed(2)}</span>
                     </div>
                 </CardContent>
@@ -297,58 +298,92 @@ export function CheckoutForm({ user, cartItems, subtotal }: { user: User, cartIt
             
             <Card className="shadow-lg min-h-[500px]">
                 <CardHeader>
-                    <CardTitle className="font-headline text-2xl">Endereço de Entrega</CardTitle>
-                    <CardDescription>Necessário para calcular o frete no Mercado Livre.</CardDescription>
+                    <CardTitle className="font-headline text-2xl">Dados de Entrega</CardTitle>
+                    <CardDescription>Confirme o local para cálculo do frete e postagem.</CardDescription>
                     {error && <div className="bg-destructive/10 text-destructive p-3 rounded text-xs mt-2">{error}</div>}
                 </CardHeader>
                 <CardContent>
-                    {!preferenceId ? (
-                        <Form {...form}>
-                            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                                {savedAddresses && savedAddresses.length > 0 && (
-                                  <div className="space-y-2 mb-6">
-                                    <Label className="text-xs uppercase font-bold text-primary">Usar Endereço Salvo</Label>
-                                    <Select value={selectedAddressId} onValueChange={handleSelectAddress}>
-                                      <SelectTrigger>
-                                        <SelectValue placeholder="Selecione um endereço" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {savedAddresses.map(addr => (
-                                          <SelectItem key={addr.id} value={addr.id}>{addr.label}</SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                )}
-                                <FormField control={form.control} name="cpf" render={({ field }) => (
-                                    <FormItem><FormLabel>CPF</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                                )}/>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <FormField control={form.control} name="zipCode" render={({ field }) => (
-                                        <FormItem><FormLabel>CEP</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                                    )}/>
-                                    <FormField control={form.control} name="state" render={({ field }) => (
-                                        <FormItem><FormLabel>UF</FormLabel><FormControl><Input {...field} maxLength={2} /></FormControl><FormMessage /></FormItem>
-                                    )}/>
-                                </div>
-                                <FormField control={form.control} name="streetName" render={({ field }) => (
-                                    <FormItem><FormLabel>Rua</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                                )}/>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <FormField control={form.control} name="streetNumber" render={({ field }) => (
-                                        <FormItem><FormLabel>Número</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                                    )}/>
-                                    <FormField control={form.control} name="city" render={({ field }) => (
-                                        <FormItem><FormLabel>Cidade</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                                    )}/>
-                                </div>
-                                <Button type="submit" disabled={isLoading} className="w-full h-12">
-                                    {isLoading ? <Loader2 className="animate-spin mr-2" /> : checkoutType === 'custom' ? 'Confirmar e Enviar para WhatsApp' : 'Confirmar e Pagar'}
-                                </Button>
-                            </form>
-                        </Form>
-                    ) : (
+                    {preferenceId ? (
                         <div id="paymentCard" className={cn("transition-opacity duration-300", !isBrickLoaded && "opacity-0")} />
+                    ) : (
+                        <div className="space-y-6">
+                            {savedAddresses && savedAddresses.length > 0 && (
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs uppercase font-bold text-primary">Endereço de Entrega</Label>
+                                        <Button variant="ghost" size="sm" onClick={() => setShowAddressForm(!showAddressForm)} className="h-7 text-xs">
+                                            {showAddressForm ? "Cancelar" : "Trocar/Editar"}
+                                        </Button>
+                                    </div>
+                                    
+                                    {!showAddressForm && currentAddress && (
+                                        <div className="p-4 border rounded-lg bg-primary/5 flex items-start gap-4">
+                                            <MapPin className="size-5 text-primary mt-1" />
+                                            <div className="text-sm flex-1">
+                                                <p className="font-bold">{currentAddress.label}</p>
+                                                <p className="text-muted-foreground">{currentAddress.streetName}, {currentAddress.streetNumber}</p>
+                                                <p className="text-muted-foreground">{currentAddress.city} - {currentAddress.state}</p>
+                                                <p className="text-xs text-muted-foreground/60 mt-1">CEP: {currentAddress.zipCode} | CPF: {currentAddress.cpf}</p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {!showAddressForm && (
+                                        <Button onClick={form.handleSubmit(onSubmit)} disabled={isLoading} className="w-full h-14 text-lg font-bold">
+                                            {isLoading ? <Loader2 className="animate-spin mr-2" /> : checkoutType === 'custom' ? 'Solicitar no WhatsApp' : 'Ir para Pagamento'}
+                                            <ArrowRight className="ml-2 size-5" />
+                                        </Button>
+                                    )}
+                                </div>
+                            )}
+
+                            {showAddressForm && (
+                                <Form {...form}>
+                                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                                        {savedAddresses && savedAddresses.length > 0 && (
+                                            <div className="space-y-2 mb-4">
+                                                <Label className="text-xs font-bold text-muted-foreground">Selecionar Endereço Salvo</Label>
+                                                <Select value={selectedAddressId} onValueChange={handleSelectAddress}>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Selecione um endereço" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {savedAddresses.map(addr => (
+                                                            <SelectItem key={addr.id} value={addr.id}>{addr.label}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        )}
+                                        <FormField control={form.control} name="cpf" render={({ field }) => (
+                                            <FormItem><FormLabel>CPF</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                                        )}/>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <FormField control={form.control} name="zipCode" render={({ field }) => (
+                                                <FormItem><FormLabel>CEP</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                                            )}/>
+                                            <FormField control={form.control} name="state" render={({ field }) => (
+                                                <FormItem><FormLabel>UF</FormLabel><FormControl><Input {...field} maxLength={2} /></FormControl><FormMessage /></FormItem>
+                                            )}/>
+                                        </div>
+                                        <FormField control={form.control} name="streetName" render={({ field }) => (
+                                            <FormItem><FormLabel>Rua</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                                        )}/>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <FormField control={form.control} name="streetNumber" render={({ field }) => (
+                                                <FormItem><FormLabel>Número</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                                            )}/>
+                                            <FormField control={form.control} name="city" render={({ field }) => (
+                                                <FormItem><FormLabel>Cidade</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                                            )}/>
+                                        </div>
+                                        <Button type="submit" disabled={isLoading} className="w-full h-12">
+                                            {isLoading ? <Loader2 className="animate-spin mr-2" /> : checkoutType === 'custom' ? 'Confirmar e Chamar no WhatsApp' : 'Confirmar e Pagar'}
+                                        </Button>
+                                    </form>
+                                </Form>
+                            )}
+                        </div>
                     )}
                 </CardContent>
             </Card>

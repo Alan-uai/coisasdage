@@ -73,7 +73,6 @@ async function processWhapiWebhook(request: NextRequest) {
         }
 
         // 2. Processar Comandos de Pedidos (#ID Aprovado/Recusado)
-        // O número de dias no final é opcional (padrão 7 se aprovado)
         const match = text.match(/#(\w+)\s+(Aprovado|Recusado)(?:\s+(\d+))?/i);
         if (!match) return NextResponse.json({ status: 'formato inválido' });
 
@@ -84,7 +83,6 @@ async function processWhapiWebhook(request: NextRequest) {
         const { firestore } = initializeFirebase();
         const requestIdLower = requestIdShort.toLowerCase();
         
-        // Busca o pedido ignorando maiúsculas/minúsculas
         const q = query(collectionGroup(firestore, 'custom_requests'));
         const querySnapshot = await getDocs(q);
         
@@ -103,7 +101,6 @@ async function processWhapiWebhook(request: NextRequest) {
             return NextResponse.json({ error: 'Pedido não encontrado' });
         }
 
-        // Atualiza o status do pedido no Firestore
         await updateDoc(targetDoc.ref, {
             status,
             productionDays: productionDays || targetDoc.data().productionDays || 7,
@@ -137,4 +134,8 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
     return processWhapiWebhook(request);
+}
+
+export async function GET() {
+    return NextResponse.json({ status: 'active', message: 'Whapi Webhook endpoint is ready.' }, { status: 200 });
 }

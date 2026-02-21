@@ -1,4 +1,3 @@
-
 import type { Timestamp } from 'firebase/firestore';
 
 export type UserProfile = {
@@ -7,6 +6,18 @@ export type UserProfile = {
   email: string;
   createdAt: Timestamp;
   isAdmin?: boolean;
+};
+
+export type SavedAddress = {
+  id: string;
+  label: string; // Ex: "Casa", "Trabalho"
+  cpf: string;
+  streetName: string;
+  streetNumber: string;
+  zipCode: string;
+  city: string;
+  state: string;
+  isDefault?: boolean;
 };
 
 export type ProductVariant = {
@@ -61,20 +72,6 @@ export type OrderItemSummary = {
   readyMade?: boolean;
 };
 
-export type CustomRequest = {
-  id: string;
-  userId: string;
-  userName: string;
-  userEmail: string;
-  items: OrderItemSummary[];
-  totalBasePrice: number;
-  finalPrice: number;
-  status: 'Pending' | 'Approved' | 'Contested' | 'AddedToCart';
-  adminNotes?: string;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-};
-
 export type Address = {
     cpf: string;
     streetName: string;
@@ -92,9 +89,6 @@ export type Order = {
   status: 'Processing' | 'Crafting' | 'Shipped' | 'Delivered' | 'Cancelled';
   items: OrderItemSummary[];
   shippingAddress: Address;
-  billingAddressId?: string;
-  trackingNumber?: string;
-  estimatedDeliveryDate?: Timestamp;
   createdAt: Timestamp;
   updatedAt: Timestamp;
   paymentId?: string | number;

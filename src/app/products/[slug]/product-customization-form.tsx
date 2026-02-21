@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -11,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { ShoppingBag, Loader2, Info } from 'lucide-react';
+import { ShoppingBag, Loader2, Info, ArrowRight, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useUser, useFirestore, addDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
@@ -26,36 +25,67 @@ const getFirstAvailable = (allOptions: string[], availableOptions?: string[]): s
   return allOptions[0];
 };
 
-function ProductCustomizationFormComponent({ 
-  product,
-  selectedColor,
-  setSelectedColor,
-  selectedSize,
-  setSelectedSize,
-  selectedMaterial,
-  setSelectedMaterial,
-  availableColorsForCurrentSize,
-  availableMaterialsForCurrentSelection,
-  currentPrice,
-  selectedImageUrl,
-}: { 
-  product: Product, 
-  selectedColor: string,
-  setSelectedColor: (color: string) => void,
-  selectedSize: string,
-  setSelectedSize: (size: string) => void,
-  selectedMaterial: string,
-  setSelectedMaterial: (material: string) => void,
-  availableColorsForCurrentSize: string[],
-  availableMaterialsForCurrentSelection: string[],
-  currentPrice: number,
-  selectedImageUrl: string,
-}) {
+export function ProductClientPage({ product }: { product: Product }) {
+  const searchParams = useSearchParams();
+  const colorFromUrl = searchParams.get('color');
   const { toast } = useToast();
   const { user } = useUser();
   const firestore = useFirestore();
   const router = useRouter();
+
+  const [selectedImageUrl, setSelectedImageUrl] = useState(product.imageUrl);
+  const [currentPrice, setCurrentPrice] = useState(product.price);
   const [isAdding, setIsAdding] = useState(false);
+  const [isBuyingNow, setIsBuyingNow] = useState(false);
+
+  // States for options
+  const [selectedSize, setSelectedSize] = useState<string>(() => 
+    getFirstAvailable(product.options.sizes, product.availability?.sizes)
+  );
+  
+  const availableColorsForCurrentSize = useMemo(() => {
+    const sizeToMatch = selectedSize === 'Padrão' ? (product.size || 'Padrão') : selectedSize;
+    const variantsForSize = product.variants.filter(v => (v.size || product.size || 'Padrão') === sizeToMatch);
+    const specificColorsForSize = [...new Set(variantsForSize.map(v => v.color).filter((c): c is string => !!c))];
+    const candidateColors = specificColorsForSize.length > 0 ? specificColorsForSize : product.options.colors;
+    const globallyAvailableColors = product.availability?.colors || product.options.colors;
+    return candidateColors.filter(c => globallyAvailableColors.includes(c));
+  }, [selectedSize, product]);
+  
+  const [selectedColor, setSelectedColor] = useState<string>(() => {
+    if (colorFromUrl && availableColorsForCurrentSize.includes(colorFromUrl)) return colorFromUrl;
+    return getFirstAvailable(product.options.colors, availableColorsForCurrentSize);
+  });
+
+  const availableMaterialsForCurrentSelection = useMemo(() => {
+    const sizeToMatch = selectedSize === 'Padrão' ? (product.size || 'Padrão') : selectedSize;
+    const variantsForSize = product.variants.filter(v => (v.size || product.size || 'Padrão') === sizeToMatch);
+    const variantsForSizeAndColor = variantsForSize.filter(v => v.color === selectedColor || !v.color);
+    const specificMaterials = [...new Set(variantsForSizeAndColor.map(v => v.material).filter((m): m is string => !!m))];
+    const candidateMaterials = specificMaterials.length > 0 ? specificMaterials : product.options.materials;
+    const globallyAvailableMaterials = product.availability?.materials || product.options.materials;
+    return candidateMaterials.filter(m => globallyAvailableMaterials.includes(m));
+  }, [selectedSize, selectedColor, product]);
+
+  const [selectedMaterial, setSelectedMaterial] = useState<string>(() => 
+    getFirstAvailable(product.options.materials, availableMaterialsForCurrentSelection)
+  );
+
+  useEffect(() => {
+    const sizeToMatch = selectedSize === 'Padrão' ? (product.size || 'Padrão') : selectedSize;
+    const variant = product.variants.find(v => 
+      (v.size || product.size || 'Padrão') === sizeToMatch &&
+      (v.color === selectedColor || !v.color) &&
+      (v.material === selectedMaterial || !v.material)
+    );
+    if (variant) {
+      setSelectedImageUrl(variant.imageUrl);
+      setCurrentPrice(variant.price ?? product.price);
+    } else {
+      setSelectedImageUrl(product.imageUrl);
+      setCurrentPrice(product.price);
+    }
+  }, [selectedColor, selectedSize, selectedMaterial, product]);
 
   const currentVariant = useMemo(() => {
     const sizeToMatch = selectedSize === 'Padrão' ? (product.size || 'Padrão') : selectedSize;
@@ -68,23 +98,15 @@ function ProductCustomizationFormComponent({
 
   const isReady = currentVariant ? currentVariant.readyMade : product.readyMade;
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
+  const handleAddToCart = async (redirect = false) => {
     if (!user || !firestore) {
-      toast({
-        variant: "destructive",
-        title: "Login Necessário",
-        description: "Você precisa fazer login para continuar.",
-      });
+      toast({ variant: "destructive", title: "Login Necessário", description: "Faça login para adicionar ao carrinho." });
       router.push('/login');
       return;
     }
 
-    setIsAdding(true);
-    const cartRef = doc(firestore, 'users', user.uid, 'carts', 'main');
-    setDocumentNonBlocking(cartRef, { userId: user.uid, updatedAt: serverTimestamp() }, { merge: true });
-    
+    if (redirect) setIsBuyingNow(true); else setIsAdding(true);
+
     const cartItemData = {
       cartId: 'main',
       productId: currentVariant?.id || product.id,
@@ -105,231 +127,126 @@ function ProductCustomizationFormComponent({
     const cartItemsRef = collection(firestore, 'users', user.uid, 'carts', 'main', 'items');
     addDocumentNonBlocking(cartItemsRef, cartItemData);
 
-    toast({
-      title: "Adicionado ao Carrinho!",
-      description: `${product.name} foi para o seu carrinho.`,
-    });
-    router.push('/cart');
+    if (redirect) {
+      router.push('/checkout');
+    } else {
+      toast({
+        title: "No Carrinho!",
+        description: `${product.name} foi adicionado. Continue navegando!`,
+        action: <Button variant="outline" size="sm" asChild><Link href="/cart">Ver Carrinho</Link></Button>
+      });
+      setIsAdding(false);
+    }
   };
-
-  const hasColorOptions = product.options.colors.length > 1 || (product.options.colors.length === 1 && product.options.colors[0] !== 'Padrão');
-  const hasSizeOptions = product.options.sizes.length > 1 || (product.options.sizes.length === 1 && product.options.sizes[0] !== 'Padrão');
-  const hasMaterialOptions = product.options.materials.length > 1 || (product.options.materials.length === 1 && product.options.materials[0] !== 'Padrão');
-
-  const globallyAvailableSizes = product.availability?.sizes || product.options.sizes;
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {hasSizeOptions && (
-        <div className="space-y-3">
-          <Label className="text-base font-semibold">Tamanho</Label>
-          <RadioGroup value={selectedSize} onValueChange={setSelectedSize} className="flex flex-wrap gap-x-4 gap-y-2">
-            {product.options.sizes.map((size) => {
-              const isAvailable = globallyAvailableSizes.includes(size);
-              return (
-                <div key={size} className={cn("flex items-center", !isAvailable && "opacity-40")}>
-                  <RadioGroupItem value={size} id={`size-${size}`} disabled={!isAvailable} />
-                  <Label 
-                    htmlFor={`size-${size}`} 
-                    className={cn(
-                      "ml-2 text-sm", 
-                      isAvailable ? "cursor-pointer" : "cursor-not-allowed line-through"
-                    )}
-                  >
-                    {size} {!isAvailable && '(Indisponível)'}
-                  </Label>
-                </div>
-              );
-            })}
-          </RadioGroup>
-        </div>
-      )}
-
-      {hasColorOptions && (
-        <div className="space-y-3">
-          <Label className="text-base font-semibold">Cor</Label>
-           <RadioGroup value={selectedColor} onValueChange={setSelectedColor} className="flex flex-wrap gap-x-4 gap-y-2">
-            {product.options.colors.map((color) => {
-              const isAvailable = availableColorsForCurrentSize.includes(color);
-              return (
-                <div key={color} className={cn("flex items-center", !isAvailable && "opacity-40")}>
-                  <RadioGroupItem value={color} id={`color-${color}`} disabled={!isAvailable} />
-                  <Label 
-                    htmlFor={`color-${color}`} 
-                    className={cn(
-                      "ml-2 text-sm", 
-                      isAvailable ? "cursor-pointer" : "cursor-not-allowed line-through"
-                    )}
-                  >
-                    {color} {!isAvailable && '(Indisponível)'}
-                  </Label>
-                </div>
-              );
-            })}
-          </RadioGroup>
-        </div>
-      )}
-
-      {hasMaterialOptions && (
-        <div className="space-y-3">
-          <Label htmlFor="material-select" className="text-base font-semibold">Material</Label>
-          <Select value={selectedMaterial} onValueChange={setSelectedMaterial}>
-            <SelectTrigger id="material-select" className="w-full md:w-[240px]">
-              <SelectValue placeholder="Selecione um material" />
-            </SelectTrigger>
-            <SelectContent>
-              {product.options.materials.map((material) => {
-                const isAvailable = availableMaterialsForCurrentSelection.includes(material);
-                return (
-                  <SelectItem key={material} value={material} disabled={!isAvailable} className={cn(!isAvailable && "opacity-40")}>
-                    {material} {!isAvailable && '(Indisponível)'}
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-
-      <Button type="submit" size="lg" className="w-full md:w-auto mt-4" disabled={isAdding}>
-        {isAdding ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <ShoppingBag className="mr-2 h-5 w-5" />}
-        {isReady ? "Adicionar ao Carrinho" : "Adicionar para Solicitação"}
-      </Button>
-      {!isReady && (
-        <p className="text-xs text-muted-foreground flex items-center gap-1">
-          <Info className="size-3" /> Este item será analisado antes do pagamento.
-        </p>
-      )}
-    </form>
-  );
-}
-
-export function ProductClientPage({ product }: { product: Product }) {
-  const searchParams = useSearchParams();
-  const colorFromUrl = searchParams.get('color');
-  const [selectedImageUrl, setSelectedImageUrl] = useState(product.imageUrl);
-  const [currentPrice, setCurrentPrice] = useState(product.price);
-  const [selectedSize, setSelectedSize] = useState<string>(() => getFirstAvailable(product.options.sizes, product.availability?.sizes));
-  
-  const availableColorsForCurrentSize = useMemo(() => {
-    const sizeToMatch = selectedSize === 'Padrão' ? (product.size || 'Padrão') : selectedSize;
-    const variantsForSize = product.variants.filter(v => (v.size || product.size || 'Padrão') === sizeToMatch);
-    const specificColorsForSize = [...new Set(variantsForSize.map(v => v.color).filter((c): c is string => !!c))];
-    const candidateColors = specificColorsForSize.length > 0 ? specificColorsForSize : product.options.colors;
-    const globallyAvailableColors = product.availability?.colors || product.options.colors;
-    const finalColors = candidateColors.filter(c => globallyAvailableColors.includes(c));
-    return finalColors.length > 0 ? finalColors : globallyAvailableColors;
-  }, [selectedSize, product]);
-  
-  const [selectedColor, setSelectedColor] = useState<string>(() => {
-    if (colorFromUrl && availableColorsForCurrentSize.includes(colorFromUrl)) return colorFromUrl;
-    return getFirstAvailable(product.options.colors, availableColorsForCurrentSize);
-  });
-
-  const availableMaterialsForCurrentSelection = useMemo(() => {
-    const sizeToMatch = selectedSize === 'Padrão' ? (product.size || 'Padrão') : selectedSize;
-    const variantsForSize = product.variants.filter(v => (v.size || product.size || 'Padrão') === sizeToMatch);
-    const variantsForSizeAndColor = variantsForSize.filter(v => v.color === selectedColor || !v.color);
-    const specificMaterials = [...new Set(variantsForSizeAndColor.map(v => v.material).filter((m): m is string => !!m))];
-    const candidateMaterials = specificMaterials.length > 0 ? specificMaterials : product.options.materials;
-    const globallyAvailableMaterials = product.availability?.materials || product.options.materials;
-    const finalMaterials = candidateMaterials.filter(m => globallyAvailableMaterials.includes(m));
-    return finalMaterials.length > 0 ? finalMaterials : globallyAvailableMaterials;
-  }, [selectedSize, selectedColor, product]);
-
-  const [selectedMaterial, setSelectedMaterial] = useState<string>(() => getFirstAvailable(product.options.materials, availableMaterialsForCurrentSelection));
-
-  useEffect(() => {
-    if (!availableColorsForCurrentSize.includes(selectedColor)) {
-      const firstAvailable = availableColorsForCurrentSize[0] || product.options.colors[0];
-      if (firstAvailable) setSelectedColor(firstAvailable);
-    }
-  }, [availableColorsForCurrentSize, selectedColor, product.options.colors]);
-  
-  useEffect(() => {
-    if (!availableMaterialsForCurrentSelection.includes(selectedMaterial)) {
-      const firstAvailable = availableMaterialsForCurrentSelection[0] || product.options.materials[0];
-      if (firstAvailable) setSelectedMaterial(firstAvailable);
-    }
-  }, [availableMaterialsForCurrentSelection, selectedMaterial, product.options.materials]);
-
-  useEffect(() => {
-    const findBestVariant = (): ProductVariant | null => {
-      if (!product.variants || product.variants.length === 0) return null;
-      let bestScore = -1;
-      let bestVariant: ProductVariant | null = null;
-      const sizeToMatch = selectedSize === 'Padrão' ? (product.size || 'Padrão') : selectedSize;
-      for (const variant of product.variants) {
-        const variantEffectiveSize = variant.size || product.size || 'Padrão';
-        if (variantEffectiveSize !== sizeToMatch) continue;
-        if (variant.color && variant.color !== selectedColor) continue;
-        if (variant.material && variant.material !== selectedMaterial) continue;
-        let currentScore = 0;
-        if (variant.color === selectedColor) currentScore++;
-        if (variant.size) currentScore++;
-        if (variant.material === selectedMaterial) currentScore++;
-        if (currentScore > bestScore) { bestScore = currentScore; bestVariant = variant; }
-      }
-      return bestVariant;
-    };
-    const variant = findBestVariant();
-    if (variant) { setSelectedImageUrl(variant.imageUrl); setCurrentPrice(variant.price ?? product.price); }
-    else { setSelectedImageUrl(product.imageUrl); setCurrentPrice(product.price); }
-  }, [selectedColor, selectedSize, selectedMaterial, product]);
-
-  const currentVariant = useMemo(() => {
-    const sizeToMatch = selectedSize === 'Padrão' ? (product.size || 'Padrão') : selectedSize;
-    return product.variants.find(v => 
-      (v.size || product.size || 'Padrão') === sizeToMatch &&
-      (v.color === selectedColor || !v.color) &&
-      (v.material === selectedMaterial || !v.material)
-    ) || null;
-  }, [selectedSize, selectedColor, selectedMaterial, product]);
-
-  const isReady = currentVariant ? currentVariant.readyMade : product.readyMade;
 
   return (
     <div className="flex flex-col min-h-screen p-4 sm:p-6 lg:p-8">
-      <main className="flex-1">
-        <div className="grid md:grid-cols-2 gap-8 lg:gap-12 max-w-6xl mx-auto">
-          <div className="overflow-hidden rounded-lg relative">
+      <main className="max-w-6xl mx-auto w-full">
+        <div className="grid md:grid-cols-2 gap-8 lg:gap-16">
+          <div className="relative rounded-2xl overflow-hidden shadow-xl aspect-[4/5] bg-muted">
             <Image
               src={selectedImageUrl}
               alt={product.name}
-              width={800}
-              height={600}
-              className="object-cover w-full aspect-[4/3] transition-opacity duration-300"
-              key={selectedImageUrl}
+              fill
+              className="object-cover transition-all duration-500 hover:scale-105"
               priority
             />
             {!isReady && (
-              <div className="absolute top-4 right-4 z-10">
-                <Badge variant="secondary" className="bg-primary text-primary-foreground shadow-lg px-4 py-1 text-sm">
+              <div className="absolute top-6 right-6">
+                <Badge className="bg-primary/90 backdrop-blur px-4 py-1 text-sm font-bold shadow-lg">
                   Sob Demanda
                 </Badge>
               </div>
             )}
           </div>
-          <div className="flex flex-col">
-            <h1 className="text-3xl lg:text-4xl font-bold font-headline">{product.name}</h1>
-            <p className="text-lg text-muted-foreground mt-2">{product.category}</p>
-            <p className="text-3xl font-bold mt-4">R$ {currentPrice.toFixed(2).replace('.', ',')}</p>
-            <Separator className="my-6" />
-            <p className="text-base leading-relaxed whitespace-pre-wrap">{product.description}</p>
-            <Separator className="my-6" />
-            <ProductCustomizationFormComponent 
-              product={product}
-              selectedColor={selectedColor}
-              setSelectedColor={setSelectedColor}
-              selectedSize={selectedSize}
-              setSelectedSize={setSelectedSize}
-              selectedMaterial={selectedMaterial}
-              setSelectedMaterial={setSelectedMaterial}
-              availableColorsForCurrentSize={availableColorsForCurrentSize}
-              availableMaterialsForCurrentSelection={availableMaterialsForCurrentSelection}
-              currentPrice={currentPrice}
-              selectedImageUrl={selectedImageUrl}
-            />
+
+          <div className="flex flex-col justify-center space-y-8">
+            <div>
+              <p className="text-primary font-bold tracking-widest uppercase text-xs mb-2">{product.category}</p>
+              <h1 className="text-4xl lg:text-5xl font-bold font-headline leading-tight">{product.name}</h1>
+              <div className="flex items-baseline gap-4 mt-4">
+                <span className="text-3xl font-bold text-primary">R$ {currentPrice.toFixed(2).replace('.', ',')}</span>
+                <span className="text-sm text-muted-foreground italic">Feito à mão com amor</span>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-6">
+              {product.options.sizes.length > 1 && (
+                <div className="space-y-3">
+                  <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Escolha o Tamanho</Label>
+                  <RadioGroup value={selectedSize} onValueChange={setSelectedSize} className="flex flex-wrap gap-2">
+                    {product.options.sizes.map((size) => (
+                      <div key={size}>
+                        <RadioGroupItem value={size} id={`size-${size}`} className="peer sr-only" />
+                        <Label 
+                          htmlFor={`size-${size}`}
+                          className="px-4 py-2 border rounded-md cursor-pointer peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground peer-data-[state=checked]:border-primary hover:bg-muted transition-all"
+                        >
+                          {size}
+                        </Label>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                </div>
+              )}
+
+              {product.options.colors.length > 1 && (
+                <div className="space-y-3">
+                  <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Escolha a Cor</Label>
+                  <div className="flex flex-wrap gap-3">
+                    {product.options.colors.map((color) => (
+                      <button
+                        key={color}
+                        onClick={() => setSelectedColor(color)}
+                        className={cn(
+                          "px-4 py-2 border rounded-full text-sm transition-all",
+                          selectedColor === color ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"
+                        )}
+                      >
+                        {color}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <p className="text-muted-foreground leading-relaxed text-sm">
+              {product.description}
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+              <Button 
+                onClick={() => handleAddToCart(true)} 
+                size="lg" 
+                className="h-14 text-lg font-bold shadow-lg shadow-primary/20"
+                disabled={isBuyingNow}
+              >
+                {isBuyingNow ? <Loader2 className="animate-spin mr-2" /> : <Sparkles className="mr-2 size-5" />}
+                Comprar Agora
+              </Button>
+              <Button 
+                onClick={() => handleAddToCart(false)} 
+                variant="outline" 
+                size="lg" 
+                className="h-14 border-2 font-bold"
+                disabled={isAdding}
+              >
+                {isAdding ? <Loader2 className="animate-spin mr-2" /> : <ShoppingBag className="mr-2 size-5" />}
+                Adicionar ao Carrinho
+              </Button>
+            </div>
+
+            {!isReady && (
+              <div className="bg-primary/5 p-4 rounded-xl flex gap-3 border border-primary/10">
+                <Info className="size-5 text-primary shrink-0" />
+                <p className="text-xs text-muted-foreground">
+                  Este produto é produzido sob encomenda. O prazo de confecção pode variar de acordo com a complexidade.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </main>

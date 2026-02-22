@@ -5,234 +5,163 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     /* =============================
-        Funções de Segurança
+       FUNÇÕES BASE
     ============================== */
+
     function isAuthenticated() {
-      // O usuário deve estar logado E com o e-mail verificado.
-      return request.auth != null && request.auth.token.email_verified == true;
+      return request.auth != null
+        && request.auth.token.email_verified == true;
     }
 
     function isOwner(userId) {
-      // O usuário autenticado é o dono do documento.
-      return isAuthenticated() && request.auth.uid == userId;
+      return isAuthenticated()
+        && request.auth.uid == userId;
     }
 
     function isAdmin() {
-      // O usuário é um administrador.
-      // Refatorado para ser mais defensivo contra chamadas não autenticadas.
-      if (!isAuthenticated()) {
-        return false;
-      }
-      // O acesso ao documento de usuário é protegido, então get() só funciona se o chamador tiver permissão.
-      // A regra abaixo funciona porque a leitura do próprio perfil é permitida por 'isOwner'.
-      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
-      return userDoc != null && 'isAdmin' in userDoc.data && userDoc.data.isAdmin == true;
-    }
-    
-    // Função para validar o schema de um endereço
-    function isValidAddress(address) {
-      return address.keys().hasOnly(['streetName', 'streetNumber', 'zipCode', 'city', 'state', 'cpf', 'phone'])
-        && address.streetName is string && address.streetName.size() > 2
-        && address.streetNumber is string && address.streetNumber.size() > 0
-        && address.zipCode is string && address.zipCode.size() >= 8 && address.zipCode.matches('^[0-9]{5}-?[0-9]{3}$')
-        && address.city is string && address.city.size() > 1
-        && address.state is string && address.state.size() == 2
-        && address.cpf is string && address.cpf.size() >= 11
-        && address.phone is string && address.phone.size() >= 10;
-    }
-    
-    // Função para validar o schema dos itens do pedido/carrinho
-    function isValidOrderItems(items) {
-      return items is list && items.size() > 0 && (
-        items[0].keys().hasOnly(['productId', 'productGroupId', 'productName', 'imageUrl', 'quantity', 'unitPriceAtOrder', 'selectedSize', 'selectedColor', 'selectedMaterial', 'readyMade'])
-        && items[0].productId is string
-        && items[0].productName is string
-        && items[0].imageUrl is string
-        && items[0].quantity is number && items[0].quantity > 0
-        && items[0].unitPriceAtOrder is number
-        && items[0].selectedSize is string
-        && items[0].selectedColor is string
-        && items[0].selectedMaterial is string
-        && items[0].readyMade is bool
-      );
-    }
-    
-    // Função para validar o schema de um perfil de usuário
-    function isValidUserProfile(data) {
-        return data.keys().hasOnly(['displayName', 'email', 'createdAt', 'isAdmin', 'termsAccepted'])
-          && data.displayName is string
-          && data.email is string
-          && data.createdAt is timestamp
-          && data.isAdmin is bool
-          && data.termsAccepted is bool;
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
     }
 
     /* =============================
-        Perfis de Usuário e Subcoleções
+       VALIDADORES
     ============================== */
+
+    function isValidUserProfile(data) {
+      return data.keys().hasOnly([
+        'displayName',
+        'email',
+        'createdAt',
+        'isAdmin',
+        'termsAccepted'
+      ])
+      && data.displayName is string
+      && data.email is string
+      && data.createdAt is timestamp
+      && data.isAdmin is bool
+      && data.termsAccepted is bool;
+    }
+
+    function isValidAddress(addr) {
+      return addr.keys().hasOnly([
+        'streetName',
+        'streetNumber',
+        'zipCode',
+        'city',
+        'state',
+        'cpf',
+        'phone'
+      ])
+      && addr.streetName is string
+      && addr.streetNumber is string
+      && addr.zipCode.matches('^[0-9]{5}-?[0-9]{3}$')
+      && addr.city is string
+      && addr.state.size() == 2
+      && addr.cpf.size() >= 11
+      && addr.phone.size() >= 10;
+    }
+
+    function isValidOrderItems(items) {
+      return items is list
+        && items.size() > 0
+        && items[0].keys().hasOnly([
+          'productId',
+          'productGroupId',
+          'productName',
+          'imageUrl',
+          'quantity',
+          'unitPriceAtOrder',
+          'selectedSize',
+          'selectedColor',
+          'selectedMaterial',
+          'readyMade'
+        ])
+        && items[0].quantity > 0;
+    }
+
+    /* =============================
+       USERS
+    ============================== */
+
     match /users/{userId} {
       allow get: if isOwner(userId);
 
       allow create: if isOwner(userId)
-                    // Valida que o usuário não está se promovendo a admin
-                    && request.resource.data.isAdmin == false
-                    // Valida que o email corresponde ao do token
-                    && request.resource.data.email == request.auth.token.email
-                    // Validação de Timestamp
-                    && request.resource.data.createdAt == request.time
-                    // Validação de Schema
-                    && isValidUserProfile(request.resource.data);
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.isAdmin == false
+        && request.resource.data.createdAt == request.time
+        && isValidUserProfile(request.resource.data);
 
       allow update: if isOwner(userId)
-                     // Impede que um usuário se promova a administrador
-                     && request.resource.data.isAdmin == resource.data.isAdmin
-                     // Impede a alteração do e-mail e data de criação
-                     && request.resource.data.email == resource.data.email
-                     && request.resource.data.createdAt == resource.data.createdAt
-                     // Validação de Schema (permite campos adicionais no update, como termsAccepted)
-                     && request.resource.data.keys().hasAll(['displayName', 'email', 'createdAt', 'isAdmin', 'termsAccepted']);
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.isAdmin == resource.data.isAdmin;
       
-      /* =============================
-          Endereços (Addresses)
-      ============================== */
+      /* ENDEREÇOS */
       match /addresses/{addressId} {
-        allow read, list, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidAddress(request.resource.data);
-      }
-      
-      /* =============================
-          Carrinho (Carts)
-      ============================== */
-      match /carts/{cartId} {
-        allow read, write, delete: if isOwner(userId);
-        match /items/{itemId} {
-           allow read, write, delete: if isOwner(userId);
-        }
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && isValidAddress(request.resource.data);
       }
 
-      /* =============================
-          Pedidos (Orders) - Pronta Entrega
-      ============================== */
+      /* CARRINHO */
+      match /carts/{cartId} {
+        allow read, write, delete: if isOwner(userId);
+      }
+
+      /* PEDIDOS */
       match /orders/{orderId} {
         allow get, list: if isOwner(userId) || isAdmin();
 
-        function isValidNewOrder(data) {
-          return data.keys().hasOnly(['userId', 'userName', 'totalAmount', 'status', 'shippingAddress', 'shippingMethod', 'shippingCost', 'items', 'expiresAt', 'orderDate', 'createdAt', 'updatedAt', 'preferenceId'])
-            && data.userId == request.auth.uid
-            && data.userName is string
-            && data.totalAmount is number && data.totalAmount >= 0
-            && data.status == 'Processing' // Validação de Estado Inicial
-            && isValidAddress(data.shippingAddress)
-            && data.shippingMethod is string && ['mercado_envios', 'local_delivery', 'pickup'].hasAny([data.shippingMethod])
-            && data.shippingCost is number && data.shippingCost >= 0
-            && isValidOrderItems(data.items)
-            && data.expiresAt is timestamp
-            && data.orderDate == request.time
-            && data.createdAt == request.time
-            && data.updatedAt == request.time;
-        }
+        allow create: if isOwner(userId)
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.status == 'Processing'
+          && isValidAddress(request.resource.data.shippingAddress)
+          && isValidOrderItems(request.resource.data.items)
+          && request.resource.data.createdAt == request.time;
 
-        allow create: if isOwner(userId) && isValidNewOrder(request.resource.data);
-        
-        function isValidOrderStateTransition(newData, oldData) {
-            let validTransitions = {
-                'Processing': ['IN_PRODUCTION', 'Cancelled'],
-                'IN_PRODUCTION': ['READY', 'Cancelled'],
-                'READY': ['LABEL_GENERATED', 'Shipped', 'Cancelled'],
-                'LABEL_GENERATED': ['Shipped', 'Cancelled'],
-                'Shipped': ['Delivered']
-            };
-            let allowedNextStates = validTransitions[oldData.status];
-            return newData.status == oldData.status || (allowedNextStates != null && newData.status in allowedNextStates);
-        }
-
-        allow update: if isAdmin() && isValidOrderStateTransition(request.resource.data, resource.data)
-                      // Impede alteração de campos imutáveis pelo admin
-                      && request.resource.data.userId == resource.data.userId
-                      && request.resource.data.createdAt == resource.data.createdAt
-                      && request.resource.data.orderDate == resource.data.orderDate;
+        allow update: if isAdmin()
+          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.createdAt == resource.data.createdAt;
       }
 
-      /* =============================
-          Solicitações (Custom Requests) - Sob Demanda
-      ============================== */
+      /* SOLICITAÇÕES SOB DEMANDA */
       match /custom_requests/{requestId} {
         allow get, list: if isOwner(userId) || isAdmin();
-        
-        function isValidNewCustomRequest(data) {
-            return data.keys().hasOnly(['id', 'userId', 'userName', 'userEmail', 'status', 'totalBasePrice', 'shippingAddress', 'shippingMethod', 'items', 'createdAt', 'updatedAt'])
-                && data.id == requestId
-                && data.userId == request.auth.uid
-                && data.userName is string
-                && data.userEmail is string
-                && data.status == 'Pending'
-                && data.totalBasePrice is number
-                && isValidAddress(data.shippingAddress)
-                && data.shippingMethod is string
-                && isValidOrderItems(data.items)
-                && data.createdAt == request.time
-                && data.updatedAt == request.time;
-        }
 
-        allow create: if isOwner(userId) && isValidNewCustomRequest(request.resource.data);
+        allow create: if isOwner(userId)
+          && request.resource.data.status == 'Pending'
+          && isValidAddress(request.resource.data.shippingAddress)
+          && request.resource.data.createdAt == request.time;
 
-        // SOFT-DELETE: Desabilitamos o 'delete'. O cancelamento agora é um 'update' de status.
+        allow update: if (
+          isAdmin() ||
+          (
+            isOwner(userId)
+            && resource.data.status == 'Pending'
+            && request.resource.data.status == 'Cancelled'
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status', 'updatedAt'])
+          )
+        );
+
         allow delete: if false;
-        
-        function isValidRequestStateTransition(newData, oldData) {
-            let adminTransitions = {
-                'Pending': ['Approved', 'Cancelled'],
-                'Approved': ['Cancelled'] 
-            };
-            let userTransitions = {
-                'Pending': ['Cancelled']
-            };
-            
-            let adminAllowed = adminTransitions[oldData.status];
-            let userAllowed = userTransitions[oldData.status];
-            
-            let statusChanged = newData.status != oldData.status;
-
-            // Se o status não mudou, permite outras alterações (pelo admin)
-            if (!statusChanged) return isAdmin();
-
-            // Se o status mudou, valida a transição
-            if (isAdmin()) {
-              return adminAllowed != null && newData.status in adminAllowed;
-            }
-            if (isOwner(userId)) {
-               // Usuário só pode mudar de 'Pending' para 'Cancelled' e só pode mudar o status.
-               return userAllowed != null 
-                  && newData.status in userAllowed
-                  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']);
-            }
-            return false;
-        }
-        
-        allow update: if (isAdmin() || isOwner(userId))
-                      && isValidRequestStateTransition(request.resource.data, resource.data)
-                      && request.resource.data.userId == resource.data.userId
-                      && request.resource.data.createdAt == resource.data.createdAt
-                      && request.resource.data.updatedAt == request.time;
       }
     }
 
     /* =============================
-        COLEÇÕES PÚBLICAS
+       COLEÇÕES PÚBLICAS
     ============================== */
-    
-    // A coleção de produtos é pública para qualquer pessoa ver.
-    // A escrita é controlada pelo seu backend/processo de sync com Cloudinary, não por clientes.
+
     match /products/{productId} {
       allow read: if true;
-      allow write: if false; // Nenhum cliente pode escrever na coleção de produtos
+      allow write: if false;
     }
-    
-    // A coleção de estoque é pública para leitura (para o cliente ver a quantidade),
-    // mas apenas o admin pode escrever (para atualizar o estoque).
+
     match /product_inventory/{productId} {
-        allow read: if true;
-        allow write: if isAdmin();
+      allow read: if true;
+      allow write: if isAdmin();
     }
   }
 }

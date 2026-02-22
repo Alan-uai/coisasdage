@@ -19,9 +19,14 @@ service cloud.firestore {
 
     function isAdmin() {
       // O usuário é um administrador.
+      // Refatorado para ser mais defensivo contra chamadas não autenticadas.
+      if (!isAuthenticated()) {
+        return false;
+      }
       // O acesso ao documento de usuário é protegido, então get() só funciona se o chamador tiver permissão.
       // A regra abaixo funciona porque a leitura do próprio perfil é permitida por 'isOwner'.
-      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return userDoc != null && 'isAdmin' in userDoc.data && userDoc.data.isAdmin == true;
     }
     
     // Função para validar o schema de um endereço

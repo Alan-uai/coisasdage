@@ -55,6 +55,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
     const [orderId, setOrderId] = useState<string | null>(resumedOrder?.id || null);
     const [isBrickLoaded, setIsBrickLoaded] = useState(false);
     const [pixData, setPixData] = useState<{ qr_code: string, qr_code_base_64: string } | null>(null);
+    const [whatsappMessage, setWhatsappMessage] = useState('');
 
     const brickRendered = useRef(false);
     const firestore = useFirestore();
@@ -138,11 +139,12 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
                   createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
               }, { merge: true });
               
+              const message = `Olá Gê! Acabei de solicitar um orçamento pelo site das peças: *${cartItems.map(i => i.productName).join(', ')}*. Aguardo seu retorno!`;
+              setWhatsappMessage(message);
+
               await notifyAdminNewRequest(newRequestRef.id, user.displayName || 'Cliente', cartItems[0].productName, cartItems[0].imageUrl, values.phone);
               clearPaidCartItems();
               setStep('confirmation'); 
-              const message = `Olá Gê! Acabei de solicitar um orçamento pelo site das peças: *${cartItems.map(i => i.productName).join(', ')}*. Aguardo seu retorno!`;
-              window.location.href = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
           } catch (e: any) {
               setError(e.message || 'Erro ao solicitar orçamento.');
           } finally {
@@ -277,29 +279,67 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
         }
     }, [preferenceId, step, pixData, subtotal, handlePaymentSubmit, user.email]);
 
-    if (step === 'confirmation' && pixData) {
+    const isTrulyEmpty = !isCartLoading && cartItems.length === 0 && !resumedOrder && step !== 'confirmation';
+
+    if (isTrulyEmpty) {
         return (
-            <div className="max-w-2xl mx-auto p-4">
-                <Card className="border-primary/20 shadow-2xl overflow-hidden">
-                    <CardHeader className="text-center bg-primary/5 pb-8"><QrCode className="size-16 text-primary mx-auto mb-4" /><CardTitle className="text-3xl font-headline">Pague com Pix</CardTitle><CardDescription>Escaneie o código ou copie a chave para pagar.</CardDescription></CardHeader>
-                    <CardContent className="flex flex-col items-center gap-8 p-8">
-                        <div className="bg-white p-4 rounded-xl shadow-inner border border-muted">{pixData.qr_code_base_64 && <Image src={`data:image/png;base64,${pixData.qr_code_base_64}`} alt="QR Code" width={240} height={240} className="rounded-lg" />}</div>
-                        <div className="w-full space-y-3">
-                          <Button onClick={() => { navigator.clipboard.writeText(pixData.qr_code); toast({ title: "Copiado!" }); }} className="w-full h-14 text-lg font-bold">Copiar Código Pix</Button>
-                          <Button asChild variant="outline" className="w-full h-12"><Link href="/orders">Ver Meus Pedidos</Link></Button>
-                        </div>
-                        <div className="text-xs text-center text-muted-foreground bg-muted/30 p-4 rounded-lg"><p>Após o pagamento, o Mercado Pago nos notificará e iniciaremos a produção/envio da sua peça!</p></div>
-                    </CardContent>
-                </Card>
+            <div className="flex flex-col items-center justify-center text-center p-8 py-20 min-h-[400px]">
+                <ShoppingCart className="size-16 text-muted-foreground mb-4" />
+                <h2 className="text-2xl font-bold font-headline">Seu carrinho de checkout está vazio</h2>
+                <p className="text-muted-foreground mt-2">Adicione itens ao carrinho para finalizar a compra.</p>
+                <Button asChild className="mt-6"><Link href="/">Voltar ao Catálogo</Link></Button>
             </div>
         );
     }
     
-    if (!isCartLoading && cartItems.length === 0 && !resumedOrder) {
+    if (step === 'confirmation') {
+        if (checkoutType === 'custom') {
+            const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(whatsappMessage)}`;
+            return (
+                 <div className="max-w-2xl mx-auto p-4">
+                    <Card className="border-primary/20 shadow-2xl overflow-hidden">
+                        <CardHeader className="text-center bg-primary/5 pb-8"><CheckCircle className="size-16 text-primary mx-auto mb-4" /><CardTitle className="text-3xl font-headline">Solicitação Enviada!</CardTitle><CardDescription>Seu pedido de orçamento foi enviado para a artesã.</CardDescription></CardHeader>
+                        <CardContent className="flex flex-col items-center gap-4 p-8">
+                            <p className="text-center text-muted-foreground">O próximo passo é conversar conosco no WhatsApp para acertar os detalhes de prazo e valor final.</p>
+                            <div className="w-full space-y-3">
+                              <Button asChild className="w-full h-14 text-lg font-bold">
+                                <a href={whatsappUrl} target="_blank" rel="noopener noreferrer">Abrir Conversa no WhatsApp</a>
+                              </Button>
+                              <Button asChild variant="outline" className="w-full h-12">
+                                <Link href="/orders">Ver Minhas Encomendas</Link>
+                              </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            );
+        }
+
+        if (pixData) {
+            return (
+                <div className="max-w-2xl mx-auto p-4">
+                    <Card className="border-primary/20 shadow-2xl overflow-hidden">
+                        <CardHeader className="text-center bg-primary/5 pb-8"><QrCode className="size-16 text-primary mx-auto mb-4" /><CardTitle className="text-3xl font-headline">Pague com Pix</CardTitle><CardDescription>Escaneie o código ou copie a chave para pagar.</CardDescription></CardHeader>
+                        <CardContent className="flex flex-col items-center gap-8 p-8">
+                            <div className="bg-white p-4 rounded-xl shadow-inner border border-muted">{pixData.qr_code_base_64 && <Image src={`data:image/png;base64,${pixData.qr_code_base_64}`} alt="QR Code" width={240} height={240} className="rounded-lg" />}</div>
+                            <div className="w-full space-y-3">
+                              <Button onClick={() => { navigator.clipboard.writeText(pixData.qr_code); toast({ title: "Copiado!" }); }} className="w-full h-14 text-lg font-bold">Copiar Código Pix</Button>
+                              <Button asChild variant="outline" className="w-full h-12"><Link href="/orders">Voltar para Meus Pedidos</Link></Button>
+                            </div>
+                            <div className="text-xs text-center text-muted-foreground bg-muted/30 p-4 rounded-lg"><p>Após o pagamento, o Mercado Pago nos notificará e iniciaremos a produção/envio da sua peça!</p></div>
+                        </CardContent>
+                    </Card>
+                </div>
+            );
+        }
+
+        // Fallback for card payments that might end up here before redirect, or other cases.
         return (
             <div className="flex flex-col items-center justify-center text-center p-8 py-20 min-h-[400px]">
-                <ShoppingCart className="size-16 text-muted-foreground mb-4" /><h2 className="text-2xl font-bold font-headline">Seu carrinho de checkout está vazio</h2><p className="text-muted-foreground mt-2">Adicione itens ao carrinho para finalizar a compra.</p>
-                <Button asChild className="mt-6"><Link href="/">Voltar ao Catálogo</Link></Button>
+                <CheckCircle className="size-16 text-green-500 mb-4" />
+                <h2 className="text-2xl font-bold font-headline">Obrigado!</h2>
+                <p className="text-muted-foreground mt-2">Seu pedido está sendo processado.</p>
+                <Button asChild className="mt-6"><Link href="/orders">Acompanhar Meus Pedidos</Link></Button>
             </div>
         );
     }

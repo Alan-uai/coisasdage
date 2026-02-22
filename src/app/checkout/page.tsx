@@ -7,7 +7,7 @@ import { collection, query, limit, where, doc } from 'firebase/firestore';
 import type { CartItem, Order, OrderItemSummary } from '@/lib/types';
 import { CheckoutForm } from './checkout-form';
 import { Skeleton } from '@/components/ui/skeleton';
-import { LogIn, ShoppingCart } from 'lucide-react';
+import { LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 
@@ -73,7 +73,6 @@ function CheckoutPageContent() {
   if (orderIdToResume && !resumedOrder) {
       return (
           <div className="flex flex-col items-center justify-center text-center p-8 py-20 min-h-[400px]">
-              <ShoppingCart className="size-16 text-muted-foreground mb-4" />
               <h2 className="text-2xl font-bold font-headline">Pedido não encontrado</h2>
               <p className="text-muted-foreground mt-2">Não foi possível encontrar o pedido que você está tentando pagar.</p>
               <Button asChild className="mt-6"><Link href="/orders">Voltar aos Pedidos</Link></Button>
@@ -83,15 +82,6 @@ function CheckoutPageContent() {
 
   const finalItems = (resumedOrder ? resumedOrder.items : cartItems) || [];
   const finalSubtotal = resumedOrder ? resumedOrder.totalAmount : subtotalFromCart;
-
-  if (finalItems.length === 0) {
-       return (
-            <div className="flex flex-col items-center justify-center text-center p-8 py-20 min-h-[400px]">
-                <ShoppingCart className="size-16 text-muted-foreground mb-4" /><h2 className="text-2xl font-bold font-headline">Seu carrinho de checkout está vazio</h2><p className="text-muted-foreground mt-2">Adicione itens ao carrinho para finalizar a compra.</p>
-                <Button asChild className="mt-6"><Link href="/">Voltar ao Catálogo</Link></Button>
-            </div>
-        );
-  }
   
   return (
     <CheckoutForm 

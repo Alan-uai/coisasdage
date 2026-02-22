@@ -142,13 +142,14 @@ export function ProductClientPage({ product }: { product: Product }) {
 
   const isReady = currentVariant ? currentVariant.readyMade : product.readyMade;
 
-  const handleAddToCart = async (redirect = false) => {
+  const handleAddToCart = async () => {
     if (!user || !firestore) {
       toast({ variant: "destructive", title: "Login Necessário", description: "Faça login para adicionar ao carrinho." });
       router.push('/login');
       return;
     }
 
+    setIsAdding(true);
     const cartItemsRef = collection(firestore, 'users', user.uid, 'carts', 'main', 'items');
     
     const cartItemData = {
@@ -163,49 +164,11 @@ export function ProductClientPage({ product }: { product: Product }) {
       selectedMaterial,
       unitPriceAtAddition: currentPrice,
       readyMade: !!isReady,
-      selected: true,
+      selected: false, // Add to cart but don't select for checkout
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
 
-    // "Buy Now" Flow - this must isolate the item
-    if (redirect) {
-      setIsBuyingNow(true);
-      try {
-        const batch = writeBatch(firestore);
-
-        // 1. Unselect all other items to isolate this purchase
-        const q = query(cartItemsRef, where('selected', '==', true));
-        const querySnapshot = await getDocs(q);
-        querySnapshot.forEach((doc) => {
-          batch.update(doc.ref, { selected: false });
-        });
-
-        // 2. Add the new item as selected
-        const newCartItemRef = doc(cartItemsRef);
-        batch.set(newCartItemRef, cartItemData);
-
-        // 3. Commit changes
-        await batch.commit();
-
-        // 4. Redirect to the correct checkout flow
-        const checkoutType = isReady ? 'ready' : 'custom';
-        router.push(`/checkout?type=${checkoutType}`);
-
-      } catch (error) {
-        console.error("Error during 'Buy Now':", error);
-        toast({
-          variant: "destructive",
-          title: "Algo deu errado",
-          description: "Não foi possível iniciar a compra. Tente novamente.",
-        });
-        setIsBuyingNow(false);
-      }
-      return;
-    }
-
-    // "Add to Cart" Flow
-    setIsAdding(true);
     addDocumentNonBlocking(cartItemsRef, cartItemData);
     setIsAdding(false);
 
@@ -214,6 +177,63 @@ export function ProductClientPage({ product }: { product: Product }) {
         description: `${product.name} foi adicionado.`,
         action: <Button variant="outline" size="sm" asChild><Link href="/cart">Ver Carrinho</Link></Button>
     });
+  };
+
+  const handleBuyNow = async () => {
+    if (!user || !firestore) {
+      toast({ variant: "destructive", title: "Login Necessário", description: "Faça login para prosseguir." });
+      router.push('/login');
+      return;
+    }
+
+    setIsBuyingNow(true);
+    try {
+        const cartItemsRef = collection(firestore, 'users', user.uid, 'carts', 'main', 'items');
+        const batch = writeBatch(firestore);
+
+        // 1. O Catálogo (garçom) limpa a bandeja: Desmarca todos os outros itens.
+        const q = query(cartItemsRef, where('selected', '==', true));
+        const querySnapshot = await getDocs(q);
+        querySnapshot.forEach((doc) => {
+          batch.update(doc.ref, { selected: false });
+        });
+
+        // 2. O Catálogo coloca o prato único na bandeja: Adiciona o novo item já selecionado.
+        const newCartItemRef = doc(cartItemsRef);
+        const cartItemData = {
+            cartId: 'main',
+            productId: currentVariant?.id || product.id,
+            productGroupId: product.groupId,
+            productName: product.name,
+            imageUrl: selectedImageUrl,
+            quantity: 1,
+            selectedSize,
+            selectedColor,
+            selectedMaterial,
+            unitPriceAtAddition: currentPrice,
+            readyMade: !!isReady,
+            selected: true, // This is the single item being taken to checkout.
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        };
+        batch.set(newCartItemRef, cartItemData);
+
+        // 3. Efetiva a preparação da bandeja.
+        await batch.commit();
+
+        // 4. Leva a bandeja para a cozinha (Checkout).
+        const checkoutType = isReady ? 'ready' : 'custom';
+        router.push(`/checkout?type=${checkoutType}`);
+
+    } catch (error) {
+        console.error("Error during 'Buy Now':", error);
+        toast({
+          variant: "destructive",
+          title: "Algo deu errado",
+          description: "Não foi possível iniciar a compra. Tente novamente.",
+        });
+        setIsBuyingNow(false);
+    }
   };
 
   return (
@@ -306,7 +326,7 @@ export function ProductClientPage({ product }: { product: Product }) {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
               <Button 
-                onClick={() => handleAddToCart(true)} 
+                onClick={handleBuyNow} 
                 size="lg" 
                 className="h-14 text-lg font-bold shadow-lg shadow-primary/20"
                 disabled={isBuyingNow}
@@ -315,7 +335,7 @@ export function ProductClientPage({ product }: { product: Product }) {
                 Comprar Agora
               </Button>
               <Button 
-                onClick={() => handleAddToCart(false)} 
+                onClick={handleAddToCart}
                 variant="outline" 
                 size="lg" 
                 className="h-14 border-2 font-bold"

@@ -121,15 +121,8 @@ service cloud.firestore {
           && isValidOrderItems(request.resource.data.items)
           && request.resource.data.createdAt == request.time;
 
-        allow update: if
-          (
-            isAdmin() &&
-            request.resource.data.userId == resource.data.userId &&
-            request.resource.data.createdAt == resource.data.createdAt
-          ) || (
-            request.auth == null &&
-            resource.data.status == 'Processing'
-          );
+        // Permite que webhooks (não autenticados) atualizem os pedidos.
+        allow update: if request.auth == null;
       }
 
       /* SOLICITAÇÕES SOB DEMANDA */
@@ -141,16 +134,17 @@ service cloud.firestore {
           && isValidAddress(request.resource.data.shippingAddress)
           && request.resource.data.createdAt == request.time;
 
-        allow update: if (
-          isAdmin() ||
+        allow update: if
+          // Permite que o webhook (não autenticado) aprove/recuse a solicitação.
+          (request.auth == null) ||
+          // Permite que o próprio usuário cancele uma solicitação pendente.
           (
             isOwner(userId)
             && resource.data.status == 'Pending'
             && request.resource.data.status == 'Cancelled'
             && request.resource.data.diff(resource.data).affectedKeys()
               .hasOnly(['status', 'updatedAt'])
-          )
-        );
+          );
 
         allow delete: if false;
       }

@@ -25,7 +25,8 @@ import {
   ArrowRight,
   Pencil,
   RefreshCcw,
-  Trash2
+  Trash2,
+  AlertCircle
 } from 'lucide-react';
 import type { Order, CustomRequest } from '@/lib/types';
 import { useState, useEffect } from 'react';
@@ -138,40 +139,6 @@ export default function MyOrdersPage() {
       description: "A solicitação foi removida do seu histórico.",
     });
   };
-
-  const handleRedoRequest = (request: CustomRequest) => {
-    if (!user || !firestore || !request.items.length) return;
-
-    const itemToRedo = request.items[0];
-    const cartItemsRef = collection(firestore, 'users', user.uid, 'carts', 'main', 'items');
-    
-    addDocumentNonBlocking(cartItemsRef, {
-      productId: itemToRedo.productId,
-      productGroupId: itemToRedo.productGroupId,
-      productName: itemToRedo.productName,
-      imageUrl: itemToRedo.imageUrl,
-      quantity: itemToRedo.quantity,
-      selectedSize: itemToRedo.selectedSize,
-      selectedColor: itemToRedo.selectedColor,
-      selectedMaterial: itemToRedo.selectedMaterial,
-      unitPriceAtAddition: itemToRedo.unitPriceAtOrder,
-      readyMade: false,
-      selected: true,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-
-    const oldRequestRef = doc(firestore, 'users', user.uid, 'custom_requests', request.id);
-    deleteDocumentNonBlocking(oldRequestRef);
-
-    toast({
-      title: "Item no Carrinho!",
-      description: "A solicitação foi adicionada ao seu carrinho para ser refeita.",
-    });
-
-    router.push('/cart');
-  };
-
 
   if (isUserLoading) {
     return <div className="p-8 space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-64 w-full" /></div>;
@@ -304,6 +271,13 @@ export default function MyOrdersPage() {
                     </div>
                   )}
 
+                  {req.status === 'Cancelled' && req.adminNotes && (
+                    <div className="bg-destructive/10 p-3 rounded-lg border border-destructive/20 text-destructive-foreground text-sm text-left">
+                        <p className="font-bold flex items-center gap-2"><AlertCircle size={16} /> Motivo da Recusa:</p>
+                        <p className="opacity-90 pl-1">{req.adminNotes}</p>
+                    </div>
+                  )}
+
                   <div className="flex flex-col gap-2 mt-4">
                      {(req.status === 'Pending' || req.status === 'Approved') && (
                         <Button variant="secondary" onClick={() => setEditingItem({ type: 'request', data: req })}>
@@ -313,9 +287,11 @@ export default function MyOrdersPage() {
 
                      {req.status === 'Cancelled' && (
                        <div className="grid grid-cols-2 gap-2">
-                          <Button variant="outline" onClick={() => handleRedoRequest(req)}>
-                              <RefreshCcw className="mr-2 size-4" /> Refazer Solicitação
-                          </Button>
+                            <Button asChild variant="outline">
+                                <Link href={`https://wa.me/${WHATSAPP_NUMBER}?text=Ol%C3%A1!%20Gostaria%20de%20conversar%20sobre%20a%20solicita%C3%A7%C3%A3o%20recusada%20%23${req.id.slice(-6).toUpperCase()}`}>
+                                    <RefreshCcw className="mr-2 size-4" /> Refazer Solicitação
+                                </Link>
+                            </Button>
                           <Button variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={() => handleDeleteRequest(req.id)}>
                               <Trash2 className="mr-2 size-4" /> Remover
                           </Button>
@@ -324,7 +300,7 @@ export default function MyOrdersPage() {
 
                      {(req.status === 'Pending' || req.status === 'Approved') && (
                         <Button asChild variant="outline" className="w-full">
-                          <Link href={`https://wa.me/${WHATSAPP_NUMBER}?text=Olá!%20Gostaria%20de%20falar%20sobre%20a%20solicitação%20#${req.id.slice(-6).toUpperCase()}`}>
+                          <Link href={`https://wa.me/${WHATSAPP_NUMBER}?text=Ol%C3%A1!%20Gostaria%20de%20falar%20sobre%20a%20solicita%C3%A7%C3%A3o%20%23${req.id.slice(-6).toUpperCase()}`}>
                             Falar com a Gê no WhatsApp
                           </Link>
                         </Button>

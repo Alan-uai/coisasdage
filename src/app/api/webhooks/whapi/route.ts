@@ -71,15 +71,15 @@ async function processWhapiWebhook(request: NextRequest) {
         const { firestore } = initializeFirebase();
 
         // 2. Processar Comandos de Orçamento (#ID Aprovado/Recusado)
-        const budgetMatch = text.match(/#(\w+)\s+(Aprovado|Recusado)(?:\s+(\d+))?/i);
+        const budgetMatch = text.match(/#(\w+)\s+(Aprovado|Recusado)(?:\s+(.*))?/i);
         if (budgetMatch) {
-            const [_, commandId, statusText, daysText] = budgetMatch;
-            const status = statusText.toLowerCase() === 'aprovado' ? 'Approved' : 'Cancelled';
-            const productionDays = daysText ? parseInt(daysText) : null;
-            
+            const [_, commandId, statusText, optionalPart] = budgetMatch;
+            const isApproved = statusText.toLowerCase() === 'aprovado';
+            const status = isApproved ? 'Approved' : 'Cancelled';
+
             const q = query(collectionGroup(firestore, 'custom_requests'));
             const querySnapshot = await getDocs(q);
-            
+
             let targetDoc: any = null;
             querySnapshot.forEach((d) => {
                 if (d.id === commandId) {
@@ -92,11 +92,22 @@ async function processWhapiWebhook(request: NextRequest) {
                 return NextResponse.json({ error: 'Pedido não encontrado' });
             }
 
-            await updateDoc(targetDoc.ref, {
+            const updateData: any = {
                 status,
-                productionDays: productionDays || targetDoc.data().productionDays || 7,
                 updatedAt: serverTimestamp()
-            });
+            };
+
+            if (isApproved) {
+                const productionDays = optionalPart ? parseInt(optionalPart.trim(), 10) : null;
+                updateData.productionDays = productionDays || targetDoc.data().productionDays || 7;
+            } else { // É Recusado/Cancelado
+                const reason = optionalPart ? optionalPart.trim() : null;
+                if (reason) {
+                    updateData.adminNotes = reason;
+                }
+            }
+            
+            await updateDoc(targetDoc.ref, updateData);
 
             return NextResponse.json({ success: true, command: 'budget_update' });
         }

@@ -164,7 +164,7 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
                         <>
                             <div className="flex items-center gap-2">
                                 {visibleColors.map(color => {
-                                    const isAvailable = !product.availability?.colors || product.availability.colors.includes(c);
+                                    const isAvailable = !product.availability?.colors || product.availability.colors.includes(color);
                                     return (
                                         <TooltipProvider key={color} delayDuration={100}>
                                             <Tooltip>

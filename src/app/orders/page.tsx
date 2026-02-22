@@ -174,14 +174,10 @@ export default function MyOrdersPage() {
                     </div>
                   </div>
                   {req.status === 'Approved' && (
-                    <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-100 flex justify-between items-center">
-                      <div>
-                        <p className="text-xs font-bold text-emerald-800">ORÇAMENTO FECHADO</p>
-                        <p className="text-sm text-emerald-700">Prazo de confecção: {req.productionDays || 7} dias</p>
-                      </div>
-                      <Button asChild size="sm" className="bg-emerald-600 hover:bg-emerald-700">
-                        <Link href={`/checkout?type=ready&reqId=${req.id}`}>Pagar e Iniciar Peça</Link>
-                      </Button>
+                    <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-100 space-y-1">
+                      <p className="text-sm font-bold text-emerald-800">ORÇAMENTO APROVADO</p>
+                      <p className="text-sm text-emerald-700">Prazo de confecção: {req.productionDays || 7} dias.</p>
+                      <p className="text-xs text-emerald-600 pt-1">O pagamento será combinado diretamente pelo WhatsApp.</p>
                     </div>
                   )}
                   {req.status === 'Pending' && (

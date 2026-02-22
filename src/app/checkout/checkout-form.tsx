@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { User } from 'firebase/auth';
 import { createPreference, processPayment, notifyAdminNewRequest } from './actions';
-import type { CartItem, SavedAddress, Order, OrderItemSummary } from '@/lib/types';
+import type { CartItem, SavedAddress, Order, OrderItemSummary, CustomRequest } from '@/lib/types';
 import { addressSchema } from './form-schema';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -18,7 +18,7 @@ import Image from 'next/image';
 import { useFirestore, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useMemoFirebase, useCollection } from '@/firebase';
 import { collection, doc, serverTimestamp, query, orderBy, where, getDocs, Timestamp } from 'firebase/firestore';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { QrCode, Loader2, MapPin, ClipboardList, ShoppingBag, ArrowRight, Truck, Calendar, Pencil, ShoppingCart, Phone, CheckCircle, Wallet } from 'lucide-react';
+import { QrCode, Loader2, MapPin, ClipboardList, ShoppingBag, ArrowRight, Truck, Calendar, Pencil, ShoppingCart, Phone, CheckCircle, Wallet, Home, Briefcase, Package } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -32,6 +32,25 @@ declare global {
 }
 
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "5511999999999";
+
+const ConfirmationActions = () => (
+    <div className="w-full space-y-3 pt-6">
+        <Button asChild className="w-full h-12 text-base" size="lg">
+            <Link href="/orders" className="gap-2">
+                <Package className="size-5" /> Ver Minhas Encomendas
+            </Link>
+        </Button>
+        <div className="grid grid-cols-2 gap-3">
+            <Button asChild variant="outline" className="h-11">
+                <Link href="/">Ver Catálogo</Link>
+            </Button>
+            <Button asChild variant="outline" className="h-11">
+                <Link href="/cart">Voltar ao Carrinho</Link>
+            </Button>
+        </div>
+    </div>
+);
+
 
 export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumedOrder }: { user: User, cartItems: (CartItem | OrderItemSummary)[], subtotal: number, isCartLoading: boolean, resumedOrder?: Order }) {
     const searchParams = useSearchParams();
@@ -55,7 +74,8 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
     const [orderId, setOrderId] = useState<string | null>(resumedOrder?.id || null);
     const [isBrickLoaded, setIsBrickLoaded] = useState(false);
     const [pixData, setPixData] = useState<{ qr_code: string, qrCodeBase64: string } | null>(null);
-    const [whatsappMessage, setWhatsappMessage] = useState('');
+    const [confirmedItem, setConfirmedItem] = useState<Order | CustomRequest | null>(null);
+
 
     const brickRendered = useRef(false);
     const firestore = useFirestore();
@@ -124,27 +144,36 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
           try {
               const requestsRef = collection(firestore, 'users', user.uid, 'custom_requests');
               const newRequestRef = doc(requestsRef);
-              await setDocumentNonBlocking(newRequestRef, {
+              
+              const newRequestData: Omit<CustomRequest, 'updatedAt'> = {
+                  id: newRequestRef.id,
                   userId: user.uid,
                   userName: user.displayName || 'Cliente',
-                  userEmail: user.email,
+                  userEmail: user.email || '',
                   status: 'Pending',
                   totalBasePrice: subtotal,
                   shippingAddress: values,
                   items: cartItems.map(item => ({
-                      productId: item.productId, productName: item.productName, imageUrl: item.imageUrl,
+                      productId: item.productId,
+                      productGroupId: item.productGroupId || '',
+                      productName: item.productName, imageUrl: item.imageUrl,
                       quantity: item.quantity, unitPriceAtOrder: (item as CartItem).unitPriceAtAddition || (item as OrderItemSummary).unitPriceAtOrder,
                       selectedSize: item.selectedSize, selectedColor: item.selectedColor, selectedMaterial: item.selectedMaterial,
                   })),
-                  createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-              }, { merge: true });
+                  createdAt: Timestamp.now(), // Client-side timestamp for immediate UI
+              };
+
+              setDocumentNonBlocking(newRequestRef, { ...newRequestData, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
               
-              const message = `Olá Gê! Acabei de solicitar um orçamento pelo site das peças: *${cartItems.map(i => i.productName).join(', ')}*. Aguardo seu retorno!`;
-              setWhatsappMessage(message);
+              const message = `Olá Gê! Acabei de solicitar um orçamento pelo site para: *${cartItems.map(i => i.productName).join(', ')}*. Meu ID de solicitação é #${newRequestRef.id.slice(-6).toUpperCase()}. Aguardo seu retorno!`;
+              const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+
+              window.open(whatsappUrl, '_blank');
 
               await notifyAdminNewRequest(newRequestRef.id, user.displayName || 'Cliente', cartItems[0].productName, cartItems[0].imageUrl, values.phone);
               clearPaidCartItems();
-              setStep('confirmation'); 
+              setConfirmedItem(newRequestData as CustomRequest);
+              setStep('confirmation');
           } catch (e: any) {
               setError(e.message || 'Erro ao solicitar orçamento.');
           } finally {
@@ -206,7 +235,6 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
           const result = await createPreference(user.uid, user.email, user.displayName, preferenceItems as PreferenceCartItem[], shippingAddress, generatedOrderId);
           if (result.preferenceId) {
             setPreferenceId(result.preferenceId);
-            // Persist the preferenceId for resuming later
             updateDocumentNonBlocking(newOrderRef, { preferenceId: result.preferenceId });
           } else {
               setError(result.error || 'Erro ao iniciar pagamento.');
@@ -221,7 +249,6 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
     }, [step, shippingAddress, user, cartItems, subtotal, firestore]);
 
     useEffect(() => {
-      // Only initialize a NEW payment if we are on the payment step for a NEW order
       if (step === 'payment' && !preferenceId && !resumedOrder) {
         initializePayment();
       }
@@ -233,10 +260,22 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
         try {
             const finalPaymentData = paymentData.formData || paymentData;
             const result = await processPayment(finalPaymentData, orderId, user.email, subtotal, user.uid);
+            
             if (result.success) {
+                const orderDataForConfirmation: Partial<Order> = {
+                    id: orderId,
+                    createdAt: resumedOrder?.createdAt || Timestamp.now(),
+                    items: (resumedOrder?.items || cartItems) as OrderItemSummary[],
+                    totalAmount: resumedOrder?.totalAmount || subtotal,
+                    shippingAddress: shippingAddress!,
+                    status: result.status as Order['status'],
+                };
+                setConfirmedItem(orderDataForConfirmation as Order);
+
                 if (finalPaymentData.payment_method_id === 'pix' && result.qr_code && result.qrCodeBase64) {
                     setPixData({ qr_code: result.qr_code, qrCodeBase64: result.qrCodeBase64 });
                 }
+                
                 setStep('confirmation');
                 clearPaidCartItems();
                 
@@ -249,16 +288,13 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
                         updatedAt: serverTimestamp(),
                     });
                 }
-                if (finalPaymentData.payment_method_id !== 'pix') {
-                    router.push(`/payment-status?status=${result.status === 'approved' ? 'success' : 'pending'}&order_id=${orderId}`);
-                }
             } else setError(result.error || 'Erro no pagamento.');
         } catch (e) {
             setError('Erro ao finalizar.');
         } finally {
           setIsLoading(false);
         }
-    }, [orderId, user.email, firestore, router, subtotal, clearPaidCartItems, user.uid]);
+    }, [orderId, user.email, firestore, router, subtotal, clearPaidCartItems, user.uid, resumedOrder, cartItems, shippingAddress]);
 
     useEffect(() => {
         if (preferenceId && step === 'payment' && !pixData && !brickRendered.current) {
@@ -294,21 +330,17 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
     
     if (step === 'confirmation') {
         if (checkoutType === 'custom') {
-            const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(whatsappMessage)}`;
+            const req = confirmedItem as CustomRequest;
             return (
                  <div className="max-w-2xl mx-auto p-4">
                     <Card className="border-primary/20 shadow-2xl overflow-hidden">
-                        <CardHeader className="text-center bg-primary/5 pb-8"><CheckCircle className="size-16 text-primary mx-auto mb-4" /><CardTitle className="text-3xl font-headline">Solicitação Enviada!</CardTitle><CardDescription>Seu pedido de orçamento foi enviado para a artesã.</CardDescription></CardHeader>
+                        <CardHeader className="text-center bg-primary/5 pb-8"><CheckCircle className="size-16 text-primary mx-auto mb-4" /><CardTitle className="text-3xl font-headline">Solicitação Enviada!</CardTitle><CardDescription>Você já foi redirecionado ao WhatsApp para negociar.</CardDescription></CardHeader>
                         <CardContent className="flex flex-col items-center gap-4 p-8">
-                            <p className="text-center text-muted-foreground">O próximo passo é conversar conosco no WhatsApp para acertar os detalhes de prazo e valor final.</p>
-                            <div className="w-full space-y-3">
-                              <Button asChild className="w-full h-14 text-lg font-bold">
-                                <a href={whatsappUrl} target="_blank" rel="noopener noreferrer">Abrir Conversa no WhatsApp</a>
-                              </Button>
-                              <Button asChild variant="outline" className="w-full h-12">
-                                <Link href="/orders">Ver Minhas Encomendas</Link>
-                              </Button>
+                            <div className="text-sm space-y-2 text-muted-foreground bg-muted/30 p-4 rounded-lg w-full">
+                                <p><strong>Data da Solicitação:</strong> {req?.createdAt?.toDate().toLocaleString('pt-BR')}</p>
+                                <p><strong>Prazo de Entrega:</strong> A ser definido com a artesã via WhatsApp.</p>
                             </div>
+                            <ConfirmationActions />
                         </CardContent>
                     </Card>
                 </div>
@@ -320,26 +352,27 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
                 <div className="max-w-2xl mx-auto p-4">
                     <Card className="border-primary/20 shadow-2xl overflow-hidden">
                         <CardHeader className="text-center bg-primary/5 pb-8"><QrCode className="size-16 text-primary mx-auto mb-4" /><CardTitle className="text-3xl font-headline">Pague com Pix</CardTitle><CardDescription>Escaneie o código ou copie a chave para pagar.</CardDescription></CardHeader>
-                        <CardContent className="flex flex-col items-center gap-8 p-8">
+                        <CardContent className="flex flex-col items-center gap-6 p-8">
                             <div className="bg-white p-4 rounded-xl shadow-inner border border-muted">{pixData.qrCodeBase64 && <Image src={`data:image/png;base64,${pixData.qrCodeBase64}`} alt="QR Code" width={240} height={240} className="rounded-lg" />}</div>
                             <div className="w-full space-y-3">
-                              <Button onClick={() => { navigator.clipboard.writeText(pixData.qr_code); toast({ title: "Copiado!" }); }} className="w-full h-14 text-lg font-bold">Copiar Código Pix</Button>
-                              <Button asChild variant="outline" className="w-full h-12"><Link href="/orders">Voltar para Meus Pedidos</Link></Button>
+                              <Button onClick={() => { navigator.clipboard.writeText(pixData.qr_code); toast({ title: "Copiado!" }); }} className="w-full h-12 text-lg">Copiar Código Pix</Button>
+                              <p className="text-xs text-center text-muted-foreground">Após o pagamento, o Mercado Pago nos notificará e seu pedido será atualizado automaticamente.</p>
                             </div>
-                            <div className="text-xs text-center text-muted-foreground bg-muted/30 p-4 rounded-lg"><p>Após o pagamento, o Mercado Pago nos notificará e iniciaremos a produção/envio da sua peça!</p></div>
+                            <ConfirmationActions />
                         </CardContent>
                     </Card>
                 </div>
             );
         }
 
-        // Fallback for card payments that might end up here before redirect, or other cases.
         return (
-            <div className="flex flex-col items-center justify-center text-center p-8 py-20 min-h-[400px]">
-                <CheckCircle className="size-16 text-green-500 mb-4" />
-                <h2 className="text-2xl font-bold font-headline">Obrigado!</h2>
-                <p className="text-muted-foreground mt-2">Seu pedido está sendo processado.</p>
-                <Button asChild className="mt-6"><Link href="/orders">Acompanhar Meus Pedidos</Link></Button>
+            <div className="max-w-2xl mx-auto p-4">
+                <Card className="border-primary/20 shadow-2xl overflow-hidden">
+                    <CardHeader className="text-center bg-primary/5 pb-8"><CheckCircle className="size-16 text-primary mx-auto mb-4" /><CardTitle className="text-3xl font-headline">Obrigado!</CardTitle><CardDescription>Seu pedido está sendo processado. Acompanhe o status na área de "Minhas Encomendas".</CardDescription></CardHeader>
+                    <CardContent className="p-8">
+                        <ConfirmationActions />
+                    </CardContent>
+                </Card>
             </div>
         );
     }
@@ -353,7 +386,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-xs font-bold text-muted-foreground">Escolher Endereço Salvo</Label>
-                <Select value={selectedAddressId} onValueChange={handleSelectAddress}><SelectTrigger><SelectValue placeholder="Selecione um endereço" /></SelectTrigger><SelectContent>{savedAddresses.map(addr => <SelectItem key={addr.id} value={addr.id}>{addr.label}</SelectItem>)}</SelectContent></Select>
+                <Select value={selectedAddressId} onValueChange={handleSelectAddress}><SelectTrigger><SelectValue placeholder="Selecione um endereço" /></SelectTrigger><SelectContent>{savedAddresses.map(addr => <SelectItem key={addr.id} value={addr.id}><div className="flex items-center gap-2">{addr.label.toLowerCase().includes('casa') ? <Home className="size-4" /> : <Briefcase className="size-4" />} {addr.label}</div></SelectItem>)}</SelectContent></Select>
               </div>
               <Button type="button" variant="link" size="sm" onClick={() => setShowAddressForm(true)}>+ Adicionar novo endereço</Button>
             </div>
@@ -451,3 +484,5 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
       </div>
     );
 }
+
+    

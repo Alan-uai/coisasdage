@@ -265,24 +265,23 @@ export function ProductClientPage({ product }: { product: Product }) {
               className="object-cover transition-all duration-500 hover:scale-105"
               priority
             />
-            {!isReady && (
-              <div className="absolute top-6 right-6">
-                <Badge className="bg-primary/90 backdrop-blur px-4 py-1 text-sm font-bold shadow-lg">
-                  Sob Demanda
-                </Badge>
-              </div>
-            )}
+            <div className="absolute top-6 right-6">
+              {isReady ? (
+                  <Badge variant="default" className="bg-green-600 text-primary-foreground shadow-lg hover:bg-green-700 px-4 py-1 text-sm font-bold">
+                      {stockQuantity} em estoque
+                  </Badge>
+              ) : (
+                  <Badge className="bg-primary/90 backdrop-blur px-4 py-1 text-sm font-bold shadow-lg">
+                      Sob Demanda
+                  </Badge>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-col justify-center space-y-8">
             <div>
               <div className="flex justify-between items-center">
                  <p className="text-primary font-bold tracking-widest uppercase text-xs mb-2">{product.category}</p>
-                 {!isInventoryLoading && isReady && (
-                    <Badge variant="secondary">
-                      {`Apenas ${stockQuantity} em estoque!`}
-                    </Badge>
-                  )}
               </div>
               <h1 className="text-4xl lg:text-5xl font-bold font-headline leading-tight">{product.name}</h1>
               <div className="flex items-baseline gap-4 mt-4">

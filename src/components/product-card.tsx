@@ -120,7 +120,11 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
     return (
         <Card className="overflow-hidden flex flex-col group h-full relative">
             <div className="absolute top-2 right-2 z-10 space-y-1 text-right">
-                {!isReady && (
+                {isReady ? (
+                    <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-primary-foreground shadow-sm">
+                        {stockQuantity} em estoque
+                    </Badge>
+                ) : (
                     <Badge variant="secondary" className="bg-primary text-primary-foreground shadow-sm">
                         Sob Demanda
                     </Badge>

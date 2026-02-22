@@ -63,22 +63,6 @@ function PaymentStatusContent() {
                     <CardTitle className="text-2xl font-bold mt-4">{currentStatus.title}</CardTitle>
                 </CardHeader>
                 <CardContent className="text-center space-y-6">
-                    {(displayPaymentId || displayMerchantOrderId) && (
-                        <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg space-y-2 text-blue-800 text-sm text-left">
-                            <div className="flex items-center gap-2 font-bold mb-1">
-                                <Info className="size-5 shrink-0" />
-                                <span>Dados para Homologação (Go Live)</span>
-                            </div>
-                            {displayPaymentId && <p><strong>ID do Pagamento:</strong> {displayPaymentId}</p>}
-                            {displayMerchantOrderId ? (
-                                <p><strong>Merchant Order ID (ORD...):</strong> {displayMerchantOrderId}</p>
-                            ) : (
-                                <p className="text-xs italic opacity-70">Aguardando Merchant Order via Webhook...</p>
-                            )}
-                            <p className="text-xs italic opacity-80 pt-1">Use esses IDs para o formulário do Mercado Pago.</p>
-                        </div>
-                    )}
-
                     <p className="text-muted-foreground">{currentStatus.description}</p>
                     <Button asChild className="w-full">
                         <Link href={status === 'failure' ? '/checkout' : '/orders'}>

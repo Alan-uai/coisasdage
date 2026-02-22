@@ -44,14 +44,25 @@ export async function POST(request: NextRequest) {
         
         const isApproved = status === 'approved';
         
-        // Atualiza o pedido com o status de pagamento e a trava de envio.
-        await updateDoc(orderRef, {
-          merchantOrderId: merchantOrderId || undefined,
-          paymentId: paymentId || undefined,
-          status: isApproved ? 'IN_PRODUCTION' : undefined,
-          shippingAllowed: isApproved ? false : undefined,
+        const updatePayload: { [key: string]: any } = {
           updatedAt: serverTimestamp(),
-        });
+        };
+
+        if (merchantOrderId) {
+          updatePayload.merchantOrderId = merchantOrderId;
+        }
+        if (paymentId) {
+          updatePayload.paymentId = paymentId;
+        }
+        if (isApproved) {
+          updatePayload.status = 'IN_PRODUCTION';
+          updatePayload.shippingAllowed = false;
+        }
+        
+        // Only update if there's something to update besides the timestamp
+        if (Object.keys(updatePayload).length > 1) {
+          await updateDoc(orderRef, updatePayload);
+        }
         
         if (isApproved) {
             console.log(`Successfully updated order ${orderId} to status IN_PRODUCTION.`);

@@ -3,13 +3,13 @@
 import { useState } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc, query, orderBy } from 'firebase/firestore';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Plus, Trash2, Home, Briefcase, Star, Pencil } from 'lucide-react';
+import { MapPin, Plus, Trash2, Home, Briefcase, Star, Pencil, Phone } from 'lucide-react';
 import type { SavedAddress } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -24,6 +24,7 @@ export default function AddressesPage() {
   const [formData, setFormData] = useState({
     label: '',
     cpf: '',
+    phone: '',
     zipCode: '',
     streetName: '',
     streetNumber: '',
@@ -50,15 +51,14 @@ export default function AddressesPage() {
       toast({ title: "Sucesso!", description: "Endereço salvo com sucesso." });
     }
 
-    setIsAdding(false);
-    setEditingId(null);
-    setFormData({ label: '', cpf: '', zipCode: '', streetName: '', streetNumber: '', city: '', state: '' });
+    resetForm();
   };
 
   const handleEdit = (addr: SavedAddress) => {
     setFormData({
       label: addr.label,
       cpf: addr.cpf,
+      phone: addr.phone || '',
       zipCode: addr.zipCode,
       streetName: addr.streetName,
       streetNumber: addr.streetNumber,
@@ -89,7 +89,7 @@ export default function AddressesPage() {
   const resetForm = () => {
     setIsAdding(false);
     setEditingId(null);
-    setFormData({ label: '', cpf: '', zipCode: '', streetName: '', streetNumber: '', city: '', state: '' });
+    setFormData({ label: '', cpf: '', phone: '', zipCode: '', streetName: '', streetNumber: '', city: '', state: '' });
   };
 
   if (isUserLoading || isLoading) {
@@ -122,11 +122,15 @@ export default function AddressesPage() {
               <Label>CPF</Label>
               <Input value={formData.cpf} onChange={e => setFormData({...formData, cpf: e.target.value})} placeholder="000.000.000-00" />
             </div>
+             <div className="space-y-2">
+              <Label>Telefone (WhatsApp)</Label>
+              <Input value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="(11) 99999-9999" />
+            </div>
             <div className="space-y-2">
               <Label>CEP</Label>
               <Input value={formData.zipCode} onChange={e => setFormData({...formData, zipCode: e.target.value})} placeholder="00000-000" />
             </div>
-            <div className="space-compatibility-2 col-span-full">
+            <div className="space-y-2">
               <Label>Rua</Label>
               <Input value={formData.streetName} onChange={e => setFormData({...formData, streetName: e.target.value})} placeholder="Av. Principal" />
             </div>
@@ -166,6 +170,7 @@ export default function AddressesPage() {
               </div>
               <p className="text-sm text-muted-foreground">{addr.streetName}, {addr.streetNumber}</p>
               <p className="text-sm text-muted-foreground">{addr.city} - {addr.state}</p>
+              {addr.phone && <p className="text-sm text-muted-foreground flex items-center gap-1.5 pt-1"><Phone className="size-3"/> {addr.phone}</p>}
               <p className="text-xs text-muted-foreground/60 mt-2">CEP: {addr.zipCode} | CPF: {addr.cpf}</p>
             </CardContent>
           </Card>

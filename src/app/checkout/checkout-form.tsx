@@ -18,7 +18,7 @@ import Image from 'next/image';
 import { useFirestore, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useMemoFirebase, useCollection } from '@/firebase';
 import { collection, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { QrCode, Loader2, MapPin, ClipboardList, ShoppingBag, ArrowRight, Truck, Calendar, Pencil, ShoppingCart } from 'lucide-react';
+import { QrCode, Loader2, MapPin, ClipboardList, ShoppingBag, ArrowRight, Truck, Calendar, Pencil, ShoppingCart, Phone } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -59,7 +59,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
 
     const form = useForm<z.infer<typeof addressSchema>>({
         resolver: zodResolver(addressSchema),
-        defaultValues: { cpf: '', streetName: '', streetNumber: '', zipCode: '', city: '', state: '' },
+        defaultValues: { cpf: '', phone: '', streetName: '', streetNumber: '', zipCode: '', city: '', state: '' },
     });
 
     const currentAddress = useMemo(() => 
@@ -99,13 +99,14 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
           zipCode: currentAddress.zipCode,
           city: currentAddress.city,
           state: currentAddress.state,
+          phone: currentAddress.phone || '',
         };
         form.reset(values);
         if (checkoutType === 'ready' && cartItems.length > 0) {
           onSubmit(values);
         }
       }
-    }, [currentAddress, hasAttemptedAutoInit, isLoading, preferenceId, orderId, checkoutType, form, cartItems.length, isFinished]);
+    }, [currentAddress, hasAttemptedAutoInit, isLoading, preferenceId, orderId, checkoutType, form, cartItems.length, isFinished, onSubmit]);
 
     const handleSelectAddress = (id: string) => {
       const addr = savedAddresses?.find(a => a.id === id);
@@ -121,6 +122,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
           zipCode: addr.zipCode,
           city: addr.city,
           state: addr.state,
+          phone: addr.phone || '',
         });
       }
     };
@@ -166,7 +168,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
                     updatedAt: serverTimestamp(),
                 }, { merge: true });
 
-                await notifyAdminNewRequest(generatedRequestId, user.displayName || 'Cliente', cartItems[0].productName);
+                await notifyAdminNewRequest(generatedRequestId, user.displayName || 'Cliente', cartItems[0].productName, cartItems[0].imageUrl, values.phone);
                 setIsFinished(true);
                 clearPaidCartItems();
 
@@ -233,7 +235,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
                     updateDocumentNonBlocking(orderRef, { 
                         paymentId: result.payment_id,
                         merchantOrderId: result.merchant_order_id || null,
-                        status: result.status === 'approved' ? 'Crafting' : 'Processing',
+                        status: result.status === 'approved' ? 'IN_PRODUCTION' : 'Processing',
                         updatedAt: serverTimestamp(),
                     });
                 }
@@ -386,6 +388,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
                                             <p className="font-bold text-base">{currentAddress.label}</p>
                                             <p className="text-muted-foreground">{currentAddress.streetName}, {currentAddress.streetNumber}</p>
                                             <p className="text-muted-foreground">{currentAddress.city} - {currentAddress.state}</p>
+                                            {currentAddress.phone && <p className="text-muted-foreground flex items-center gap-1.5 pt-1"><Phone className="size-3" /> {currentAddress.phone}</p>}
                                         </div>
                                     </div>
                                     
@@ -438,8 +441,10 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
                                                 </Select>
                                             </div>
                                         )}
-                                        
-                                        <FormField control={form.control} name="cpf" render={({ field }) => (<FormItem><FormLabel>CPF</FormLabel><FormControl><Input {...field} placeholder="000.000.000-00" /></FormControl><FormMessage /></FormItem>)}/>
+                                        <div className="grid grid-cols-2 gap-4">
+                                          <FormField control={form.control} name="cpf" render={({ field }) => (<FormItem><FormLabel>CPF</FormLabel><FormControl><Input {...field} placeholder="000.000.000-00" /></FormControl><FormMessage /></FormItem>)}/>
+                                          <FormField control={form.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Telefone (WhatsApp)</FormLabel><FormControl><Input {...field} placeholder="(11) 99999-9999" /></FormControl><FormMessage /></FormItem>)}/>
+                                        </div>
                                         <div className="grid grid-cols-2 gap-4">
                                             <FormField control={form.control} name="zipCode" render={({ field }) => (<FormItem><FormLabel>CEP</FormLabel><FormControl><Input {...field} placeholder="00000-000" /></FormControl><FormMessage /></FormItem>)}/>
                                             <FormField control={form.control} name="state" render={({ field }) => (<FormItem><FormLabel>UF</FormLabel><FormControl><Input {...field} maxLength={2} placeholder="SP" /></FormControl><FormMessage /></FormItem>)}/>

@@ -40,24 +40,52 @@ const ARTESA_WPP = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "5511999999999";
 const GROUP_ID = process.env.WHATSAPP_GROUP_ID; // Credencial para o grupo "Pedidos"
 
 /**
- * Notifica a Artesã sobre uma nova solicitação.
+ * Notifica a Artesã sobre uma nova solicitação, com imagem e link para o cliente.
  * Prioriza o envio para o grupo "Pedidos" se o ID estiver configurado.
  */
-export async function notifyAdminNewRequest(requestId: string, clientName: string, productName: string) {
+export async function notifyAdminNewRequest(requestId: string, clientName: string, productName: string, imageUrl: string, clientPhone?: string) {
     if (!WHAPI_TOKEN) return;
 
-    // Se houver um ID de grupo, envia para o grupo, caso contrário para o número privado
     const destination = GROUP_ID || ARTESA_WPP;
+    const shortId = requestId.slice(-6).toUpperCase();
+
+    let caption = `🧶 *Nova Solicitação Sob Demanda!*\n\n`;
+    caption += `Cliente: *${clientName}*\n`;
+
+    if (clientPhone) {
+        const cleanPhone = clientPhone.replace(/\D/g, '');
+        // Assume código do Brasil se não especificado
+        const fullPhone = cleanPhone.length > 11 ? cleanPhone : `55${cleanPhone}`;
+        caption += `Conversar: https://wa.me/${fullPhone}\n`;
+    }
+
+    caption += `Produto: *${productName}*\n\n`;
+    caption += `*ID para Comando: #${shortId}*\n\n`;
+    caption += `_Para aprovar, responda com:_\n#${shortId} Aprovado [dias]`;
 
     try {
-        await axios.post('https://gate.whapi.cloud/messages/text', {
+        // Tenta enviar uma imagem com a legenda construída
+        await axios.post('https://gate.whapi.cloud/messages/image', {
             to: destination,
-            body: `🧶 *Nova Solicitação Sob Demanda!*\n\nCliente: ${clientName}\nProduto: ${productName}\n\n*ID para Comando: #${requestId.toUpperCase()}*\n\n_Para aprovar, responda aqui com:_ \n#${requestId.toUpperCase()} Aprovado [dias de produção]`
+            media: imageUrl,
+            caption: caption,
         }, {
             headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` }
         });
-    } catch (e) {
-        console.error('Erro ao notificar admin via Whapi:', e);
+    } catch (e: any) {
+        console.error('Erro ao notificar admin (com imagem) via Whapi:', e?.response?.data || e?.message);
+        
+        // Fallback para mensagem de texto se o envio da imagem falhar
+        try {
+             await axios.post('https://gate.whapi.cloud/messages/text', {
+                to: destination,
+                body: caption // Envia a mesma legenda como texto puro
+            }, {
+                headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` }
+            });
+        } catch (fallbackError) {
+            console.error('Erro no fallback de notificação de admin via Whapi:', fallbackError);
+        }
     }
 }
 
@@ -98,6 +126,10 @@ export async function createPreference(
                     email: userEmail,
                     name: userName?.split(' ')[0] || 'Cliente',
                     surname: userName?.split(' ').slice(1).join(' ') || 'Artesã',
+                    phone: {
+                        area_code: addressData.phone.replace(/\D/g, '').substring(0, 2),
+                        number: addressData.phone.replace(/\D/g, '').substring(2),
+                    },
                     identification: {
                         type: 'CPF',
                         number: addressData.cpf.replace(/\D/g, ''),

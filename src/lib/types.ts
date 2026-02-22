@@ -20,6 +20,7 @@ export type SavedAddress = {
   city: string;
   state: string;
   isDefault?: boolean;
+  phone?: string;
 };
 
 export type ProductVariant = {
@@ -81,6 +82,7 @@ export type Address = {
     zipCode: string;
     city: string;
     state: string;
+    phone?: string;
 };
 
 export type Order = {

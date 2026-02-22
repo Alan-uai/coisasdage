@@ -91,55 +91,97 @@ async function processWhapiWebhook(request: NextRequest) {
             return NextResponse.json({ success: 'teste concluído' });
         }
 
-        // 2. Processar Comandos de Pedidos (#ID Aprovado/Recusado)
-        const match = text.match(/#(\w+)\s+(Aprovado|Recusado)(?:\s+(\d+))?/i);
-        if (!match) return NextResponse.json({ status: 'formato inválido' });
-
-        const [_, requestIdShort, statusText, daysText] = match;
-        const status = statusText.toLowerCase() === 'aprovado' ? 'Approved' : 'Cancelled';
-        const productionDays = daysText ? parseInt(daysText) : null;
-
         const { firestore } = initializeFirebase();
-        const requestIdLower = requestIdShort.toLowerCase();
-        
-        const q = query(collectionGroup(firestore, 'custom_requests'));
-        const querySnapshot = await getDocs(q);
-        
-        let targetDoc: any = null;
-        querySnapshot.forEach((d) => {
-            if (d.id.toLowerCase().startsWith(requestIdLower)) {
-                targetDoc = d;
-            }
-        });
 
-        if (!targetDoc) {
+        // 2. Processar Comandos de Orçamento (#ID Aprovado/Recusado)
+        const budgetMatch = text.match(/#(\w+)\s+(Aprovado|Recusado)(?:\s+(\d+))?/i);
+        if (budgetMatch) {
+            const [_, requestIdShort, statusText, daysText] = budgetMatch;
+            const status = statusText.toLowerCase() === 'aprovado' ? 'Approved' : 'Cancelled';
+            const productionDays = daysText ? parseInt(daysText) : null;
+            const requestIdLower = requestIdShort.toLowerCase();
+            
+            const q = query(collectionGroup(firestore, 'custom_requests'));
+            const querySnapshot = await getDocs(q);
+            
+            let targetDoc: any = null;
+            querySnapshot.forEach((d) => {
+                if (d.id.toLowerCase().startsWith(requestIdLower)) {
+                    targetDoc = d;
+                }
+            });
+
+            if (!targetDoc) {
+                await axios.post('https://gate.whapi.cloud/messages/text', {
+                    to: chatId,
+                    body: `❌ Pedido *#${requestIdShort.toUpperCase()}* não encontrado.`
+                }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
+                return NextResponse.json({ error: 'Pedido não encontrado' });
+            }
+
+            await updateDoc(targetDoc.ref, {
+                status,
+                productionDays: productionDays || targetDoc.data().productionDays || 7,
+                updatedAt: serverTimestamp()
+            });
+
+            let responseMsg = `✅ Pedido *#${requestIdShort.toUpperCase()}* atualizado para *${statusText}*!`;
+            if (status === 'Approved') {
+                responseMsg += `\n⏳ Prazo: ${productionDays || 7} dias de produção.`;
+                responseMsg += `\n\n_Ação confirmada por: ${senderNumber || 'Administrador'}_`;
+            } else {
+                responseMsg += `\n\n_A solicitação foi cancelada no sistema._`;
+            }
+
             await axios.post('https://gate.whapi.cloud/messages/text', {
                 to: chatId,
-                body: `❌ Pedido *#${requestIdShort.toUpperCase()}* não encontrado.`
+                body: responseMsg
             }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
-            return NextResponse.json({ error: 'Pedido não encontrado' });
+
+            return NextResponse.json({ success: true, command: 'budget_update' });
         }
 
-        await updateDoc(targetDoc.ref, {
-            status,
-            productionDays: productionDays || targetDoc.data().productionDays || 7,
-            updatedAt: serverTimestamp()
-        });
+        // 3. Processar Comando de Pedido Pronto (#ID Pronto)
+        const readyMatch = text.match(/#(\w+)\s+(Pronto)/i);
+        if (readyMatch) {
+            const [_, orderIdShort] = readyMatch;
+            const orderIdLower = orderIdShort.toLowerCase();
 
-        let responseMsg = `✅ Pedido *#${requestIdShort.toUpperCase()}* atualizado para *${statusText}*!`;
-        if (status === 'Approved') {
-            responseMsg += `\n⏳ Prazo: ${productionDays || 7} dias de produção.`;
-            responseMsg += `\n\n_Ação confirmada por: ${senderNumber || 'Administrador'}_`;
-        } else {
-            responseMsg += `\n\n_A solicitação foi cancelada no sistema._`;
+            const q = query(collectionGroup(firestore, 'orders'));
+            const querySnapshot = await getDocs(q);
+
+            let targetDoc: any = null;
+            querySnapshot.forEach((d) => {
+                if (d.id.toLowerCase().startsWith(orderIdLower)) {
+                    targetDoc = d;
+                }
+            });
+
+            if (!targetDoc) {
+                await axios.post('https://gate.whapi.cloud/messages/text', {
+                    to: chatId,
+                    body: `❌ Pedido *#${orderIdShort.toUpperCase()}* não encontrado para marcar como pronto.`
+                }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
+                return NextResponse.json({ error: 'Pedido não encontrado' });
+            }
+
+            await updateDoc(targetDoc.ref, {
+                status: 'Shipped', // "Pronto" atualiza o status para "Enviado"
+                updatedAt: serverTimestamp()
+            });
+
+            const responseMsg = `🚚 Pedido *#${orderIdShort.toUpperCase()}* marcado como *Pronto para Envio* (status: Shipped).\n\nO cliente poderá acompanhar o rastreio em breve.`;
+
+            await axios.post('https://gate.whapi.cloud/messages/text', {
+                to: chatId,
+                body: responseMsg
+            }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
+            
+            return NextResponse.json({ success: true, command: 'order_ready' });
         }
-
-        await axios.post('https://gate.whapi.cloud/messages/text', {
-            to: chatId,
-            body: responseMsg
-        }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
-
-        return NextResponse.json({ success: true });
+        
+        // Se nenhum comando correspondeu
+        return NextResponse.json({ status: 'formato inválido' });
 
     } catch (error: any) {
         console.error('Whapi Webhook Error:', error);

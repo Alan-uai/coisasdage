@@ -6,7 +6,6 @@ export type UserProfile = {
   displayName: string;
   email: string;
   createdAt: Timestamp;
-  isAdmin?: boolean;
   termsAccepted?: boolean;
 };
 

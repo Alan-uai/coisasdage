@@ -80,7 +80,6 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
                 displayName: firebaseUser.displayName || 'Cliente',
                 email: firebaseUser.email,
                 createdAt: serverTimestamp(),
-                isAdmin: false, // Default to false, manually change in console
                 termsAccepted: false, // Force terms agreement on first login
               }, { merge: true });
             }

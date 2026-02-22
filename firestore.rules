@@ -18,12 +18,6 @@ service cloud.firestore {
         && request.auth.uid == userId;
     }
 
-    function isAdmin() {
-      return isAuthenticated()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
-    }
-
     /* =============================
        VALIDADORES
     ============================== */
@@ -33,13 +27,11 @@ service cloud.firestore {
         'displayName',
         'email',
         'createdAt',
-        'isAdmin',
         'termsAccepted'
       ])
       && data.displayName is string
       && data.email is string
       && data.createdAt is timestamp
-      && data.isAdmin is bool
       && data.termsAccepted is bool;
     }
 
@@ -89,14 +81,12 @@ service cloud.firestore {
 
       allow create: if isOwner(userId)
         && request.resource.data.email == request.auth.token.email
-        && request.resource.data.isAdmin == false
         && request.resource.data.createdAt == request.time
         && isValidUserProfile(request.resource.data);
 
       allow update: if isOwner(userId)
         && request.resource.data.email == resource.data.email
-        && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.isAdmin == resource.data.isAdmin;
+        && request.resource.data.createdAt == resource.data.createdAt;
       
       /* ENDEREÇOS */
       match /addresses/{addressId} {
@@ -112,7 +102,7 @@ service cloud.firestore {
 
       /* PEDIDOS */
       match /orders/{orderId} {
-        allow get, list: if isOwner(userId) || isAdmin();
+        allow read: if isOwner(userId) || request.auth == null;
 
         allow create: if isOwner(userId)
           && request.resource.data.userId == request.auth.uid
@@ -130,7 +120,7 @@ service cloud.firestore {
 
       /* SOLICITAÇÕES SOB DEMANDA */
       match /custom_requests/{requestId} {
-        allow get, list: if isOwner(userId) || isAdmin();
+        allow read: if isOwner(userId) || request.auth == null;
 
         allow create: if isOwner(userId)
           && request.resource.data.status == 'Pending'

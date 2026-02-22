@@ -65,20 +65,22 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
     const currentAddress = useMemo(() => 
       savedAddresses?.find(a => a.id === selectedAddressId) || savedAddresses?.find(a => a.isDefault) || savedAddresses?.[0]
     , [savedAddresses, selectedAddressId]);
+    
+    // This logic safely redirects to the catalog ONLY after a custom request, preventing race conditions.
+    const shouldRedirectToCatalog = useMemo(() => 
+        !isCartLoading && 
+        !isLoading && 
+        !preferenceId && 
+        !pixData && 
+        !isFinished && 
+        cartItems.length === 0
+    , [isCartLoading, isLoading, preferenceId, pixData, isFinished, cartItems.length]);
 
-    // Redireciona para o catálogo apenas se REALMENTE não houver nada acontecendo
     useEffect(() => {
-        const canRedirect = !isCartLoading && 
-                          !isLoading && 
-                          !preferenceId && 
-                          !pixData && 
-                          !isFinished && 
-                          cartItems.length === 0;
-
-        if (canRedirect) {
+        if (shouldRedirectToCatalog) {
             router.replace('/');
         }
-    }, [cartItems.length, pixData, isFinished, isLoading, isCartLoading, router, preferenceId]);
+    }, [shouldRedirectToCatalog, router]);
 
     // Sincroniza a seleção do endereço padrão
     useEffect(() => {
@@ -224,7 +226,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
                 setIsFinished(true);
                 
                 if (finalPaymentData.payment_method_id === 'pix' && result.qr_code) {
-                    setPixData({ qr_code: result.qr_code, qr_code_base64: result.qr_code_base64 || '' });
+                    setPixData({ qr_code: result.qr_code, qr_code_base64: result.qr_code_base_64 || '' });
                 }
 
                 // DEPOIS limpa o carrinho
@@ -295,18 +297,14 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
         );
     }
 
-    // Estado "Vazio" (Só aparece se não houver Pix ou Finalização)
-    if (!isCartLoading && cartItems.length === 0 && !isFinished && !isLoading) {
-      return (
-        <div className="flex flex-col items-center justify-center text-center p-8 py-20 min-h-[400px]">
-          <ShoppingCart className="size-16 text-muted-foreground mb-4" />
-          <h2 className="text-3xl font-bold font-headline">Nenhum item selecionado</h2>
-          <p className="text-muted-foreground mt-2 mb-8">Volte ao carrinho e selecione os itens que deseja comprar.</p>
-          <Button asChild size="lg">
-            <Link href="/cart">Voltar ao Carrinho</Link>
-          </Button>
-        </div>
-      );
+    if (shouldRedirectToCatalog) {
+        return (
+            <div className="flex flex-col items-center justify-center text-center p-8 py-20 min-h-[400px]">
+                <Loader2 className="size-16 text-primary animate-spin mb-4" />
+                <h2 className="text-2xl font-bold font-headline">Processo finalizado!</h2>
+                <p className="text-muted-foreground mt-2">Redirecionando você para o catálogo...</p>
+            </div>
+        );
     }
 
     const isLoadingPage = isAddressesLoading || isCartLoading || (isLoading && !preferenceId);
@@ -470,3 +468,5 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
         </div>
     );
 }
+
+    

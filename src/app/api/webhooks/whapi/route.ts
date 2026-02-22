@@ -120,7 +120,6 @@ async function processWhapiWebhook(request: NextRequest) {
                     return calculatedNewQuantity;
                 });
                 
-                await sendReply(chatId, `✅ Baixa realizada! Estoque do produto ${productId} atualizado para *${newQuantity}* unidade(s).`);
                 return NextResponse.json({ success: true, command: 'stock_decrement' });
 
             } catch (error: any) {

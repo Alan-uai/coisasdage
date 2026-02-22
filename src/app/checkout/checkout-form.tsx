@@ -1,4 +1,3 @@
-
 'use client';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
@@ -19,7 +18,7 @@ import Image from 'next/image';
 import { useFirestore, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useMemoFirebase, useCollection } from '@/firebase';
 import { collection, doc, serverTimestamp, query, orderBy, where, getDocs, Timestamp } from 'firebase/firestore';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { QrCode, Loader2, MapPin, ClipboardList, ShoppingBag, ArrowRight, Truck, Calendar, Pencil, ShoppingCart, Phone, CheckCircle, Wallet, Home, Briefcase, Package, Bike, Store } from 'lucide-react';
+import { QrCode, Loader2, MapPin, ClipboardList, ShoppingBag, ArrowRight, Truck, Calendar, Pencil, ShoppingCart, Phone, CheckCircle, Wallet, Home, Briefcase, Package, Bike, Store, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -71,7 +70,6 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
     
     const [shippingAddress, setShippingAddress] = useState<z.infer<typeof addressSchema> | null>(resumedOrder ? resumedOrder.shippingAddress : null);
     const [selectedAddressId, setSelectedAddressId] = useState<string>('');
-    const [showAddressForm, setShowAddressForm] = useState(false);
     
     const [preferenceId, setPreferenceId] = useState<string | null>(resumedOrder?.preferenceId || null);
     const [orderId, setOrderId] = useState<string | null>(resumedOrder?.id || null);
@@ -122,10 +120,40 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
             setShippingCost(0);
         }
     }, [shippingOption]);
-
-    const currentAddress = useMemo(() => 
-      savedAddresses?.find(a => a.id === selectedAddressId), 
-    [savedAddresses, selectedAddressId]);
+    
+    const handleSelectAddress = useCallback((id: string) => {
+        if (id === '_new_') {
+          setSelectedAddressId('_new_');
+          form.reset({ cpf: '', phone: '', streetName: '', streetNumber: '', zipCode: '', city: '', state: '' });
+        } else {
+          const addr = savedAddresses?.find(a => a.id === id);
+          if (addr) {
+            setSelectedAddressId(id);
+            form.reset({
+                cpf: addr.cpf, phone: addr.phone || '', streetName: addr.streetName, streetNumber: addr.streetNumber,
+                zipCode: addr.zipCode, city: addr.city, state: addr.state,
+            });
+          }
+        }
+      }, [savedAddresses, form]);
+    
+      useEffect(() => {
+        if (isAddressesLoading) return;
+    
+        // If there are saved addresses and none is selected yet, select the default.
+        if (savedAddresses && savedAddresses.length > 0 && selectedAddressId === '') {
+            const defaultAddr = savedAddresses.find(a => a.isDefault) || savedAddresses[0];
+            if (defaultAddr) {
+                handleSelectAddress(defaultAddr.id);
+            }
+        } 
+        // If there are no saved addresses, ensure we are in 'add new' mode.
+        else if (!savedAddresses || savedAddresses.length === 0) {
+            if (selectedAddressId !== '_new_') {
+                 setSelectedAddressId('_new_');
+            }
+        }
+      }, [savedAddresses, isAddressesLoading, selectedAddressId, handleSelectAddress]);
 
     const clearPaidCartItems = useCallback(() => {
         if (!user || !firestore) return;
@@ -136,32 +164,6 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
             });
         });
     }, [user, firestore]);
-    
-    const handleSelectAddress = useCallback((id: string, initialLoad = false) => {
-        const addr = savedAddresses?.find(a => a.id === id);
-        if (addr) {
-            setSelectedAddressId(id);
-            setShippingAddress(addr);
-            if (!initialLoad) {
-                setShowAddressForm(false);
-            }
-            form.reset({
-                cpf: addr.cpf, phone: addr.phone || '', streetName: addr.streetName, streetNumber: addr.streetNumber,
-                zipCode: addr.zipCode, city: addr.city, state: addr.state,
-            });
-        }
-    }, [savedAddresses, form]);
-
-    useEffect(() => {
-        if (savedAddresses && savedAddresses.length > 0 && !selectedAddressId) {
-            const defaultAddr = savedAddresses.find(a => a.isDefault) || savedAddresses[0];
-            if (defaultAddr) {
-                handleSelectAddress(defaultAddr.id, true);
-            }
-        } else if (!isAddressesLoading && (!savedAddresses || savedAddresses.length === 0)) {
-            setShowAddressForm(true);
-        }
-    }, [savedAddresses, selectedAddressId, isAddressesLoading, handleSelectAddress]);
     
      const handleCepBlur = async (cep: string) => {
         const cleanCep = cep.replace(/\D/g, '');
@@ -438,18 +440,36 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
     const pageIsLoading = isAddressesLoading || isCartLoading;
 
     const renderAddressStep = () => (
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleAddressSubmit)} className="space-y-4">
-          {!showAddressForm && savedAddresses && savedAddresses.length > 0 ? (
-            <div className="space-y-4">
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleAddressSubmit)} className="space-y-6">
+            
+            {/* Address Selector */}
+            {savedAddresses && savedAddresses.length > 0 && (
               <div className="space-y-2">
-                <Label className="text-xs font-bold text-muted-foreground">Escolher Endereço Salvo</Label>
-                <Select value={selectedAddressId} onValueChange={handleSelectAddress}><SelectTrigger><SelectValue placeholder="Selecione um endereço" /></SelectTrigger><SelectContent>{savedAddresses.map(addr => <SelectItem key={addr.id} value={addr.id}><div className="flex items-center gap-2">{addr.label.toLowerCase().includes('casa') ? <Home className="size-4" /> : <Briefcase className="size-4" />} {addr.label}</div></SelectItem>)}</SelectContent></Select>
+                <Label className="text-base font-semibold">Endereço de Entrega</Label>
+                <Select value={selectedAddressId} onValueChange={handleSelectAddress}>
+                  <SelectTrigger className="h-12 text-base">
+                    <SelectValue placeholder="Selecione ou adicione um endereço" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {savedAddresses.map(addr => (
+                      <SelectItem key={addr.id} value={addr.id}>
+                        <div className="flex items-center gap-2">
+                          {addr.label.toLowerCase().includes('casa') ? <Home className="size-4" /> : <Briefcase className="size-4" />}
+                          {addr.label}
+                        </div>
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="_new_">
+                      <div className="flex items-center gap-2"><Plus className="size-4" /> Adicionar novo endereço</div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <Button type="button" variant="link" size="sm" onClick={() => setShowAddressForm(true)}>+ Adicionar novo endereço</Button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-4">
+            )}
+  
+            {/* Form Fields */}
+            <div className="grid grid-cols-2 gap-4 pt-2">
               <FormField control={form.control} name="cpf" render={({ field }) => (<FormItem><FormLabel>CPF</FormLabel><FormControl><Input {...field} placeholder="000.000.000-00" /></FormControl><FormMessage /></FormItem>)}/>
               <FormField control={form.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Telefone (WhatsApp)</FormLabel><FormControl><Input {...field} placeholder="(11) 99999-9999" /></FormControl><FormMessage /></FormItem>)}/>
               <FormField control={form.control} name="zipCode" render={({ field }) => (<FormItem className="col-span-1"><FormLabel>CEP</FormLabel><FormControl><Input {...field} placeholder="00000-000" onBlur={(e) => handleCepBlur(e.target.value)} /></FormControl><FormMessage /></FormItem>)}/>
@@ -458,49 +478,48 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
               <FormField control={form.control} name="city" render={({ field }) => (<FormItem className="col-span-1"><FormLabel>Cidade</FormLabel><FormControl><Input {...field} placeholder="Sua Cidade" /></FormControl><FormMessage /></FormItem>)}/>
               <FormField control={form.control} name="state" render={({ field }) => (<FormItem className="col-span-1"><FormLabel>UF</FormLabel><FormControl><Input {...field} maxLength={2} placeholder="SP" /></FormControl><FormMessage /></FormItem>)}/>
             </div>
-          )}
-          
-          {checkoutType === 'ready' && (
-             <div className="space-y-3 pt-4">
-                <Label>Opções de Entrega</Label>
-                <RadioGroup value={shippingOption} onValueChange={(v) => setShippingOption(v as any)} className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {isLocalCity ? (
-                        <>
-                            <Label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer has-[:checked]:bg-primary/5 has-[:checked]:border-primary">
-                                <RadioGroupItem value="local_delivery" id="local_delivery" />
-                                <div className="grid gap-0.5">
-                                    <span className="font-bold flex items-center gap-1.5"><Bike className="size-4" /> Entrega Local</span>
-                                    <span className="text-xs text-muted-foreground">Taxa: R$ {LOCAL_DELIVERY_FEE.toFixed(2).replace('.',',')}</span>
-                                </div>
-                            </Label>
-                             <Label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer has-[:checked]:bg-primary/5 has-[:checked]:border-primary">
-                                <RadioGroupItem value="pickup" id="pickup" />
-                                <div className="grid gap-0.5">
-                                    <span className="font-bold flex items-center gap-1.5"><Store className="size-4" /> Retirar no Local</span>
-                                    <span className="text-xs text-muted-foreground">Grátis (a combinar)</span>
-                                </div>
-                            </Label>
-                        </>
-                    ) : (
-                        <Label className="col-span-full flex items-center gap-3 p-3 border rounded-lg cursor-pointer has-[:checked]:bg-primary/5 has-[:checked]:border-primary">
-                            <RadioGroupItem value="mercado_envios" id="mercado_envios" />
-                             <div className="grid gap-0.5">
-                                <span className="font-bold flex items-center gap-1.5"><Truck className="size-4" /> Mercado Envios</span>
-                                <span className="text-xs text-muted-foreground">Entrega para todo o Brasil</span>
-                            </div>
-                        </Label>
-                    )}
-                </RadioGroup>
-            </div>
-          )}
-
-          <Button type="submit" disabled={isLoading} className="w-full h-14 text-lg font-bold mt-6 shadow-lg shadow-primary/20">
-            {isLoading ? <Loader2 className="animate-spin mr-2" /> : (checkoutType === 'custom' ? 'Solicitar no WhatsApp' : 'Continuar para Pagamento')}
-          </Button>
-          {showAddressForm && savedAddresses && savedAddresses.length > 0 && (<Button type="button" variant="ghost" onClick={() => setShowAddressForm(false)} className="w-full">Voltar para seleção</Button>)}
-        </form>
-      </Form>
-    );
+            
+            {/* Shipping Options */}
+            {checkoutType === 'ready' && (
+               <div className="space-y-3 pt-4">
+                  <Label>Opções de Entrega</Label>
+                  <RadioGroup value={shippingOption} onValueChange={(v) => setShippingOption(v as any)} className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {isLocalCity ? (
+                          <>
+                              <Label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer has-[:checked]:bg-primary/5 has-[:checked]:border-primary">
+                                  <RadioGroupItem value="local_delivery" id="local_delivery" />
+                                  <div className="grid gap-0.5">
+                                      <span className="font-bold flex items-center gap-1.5"><Bike className="size-4" /> Entrega Local</span>
+                                      <span className="text-xs text-muted-foreground">Taxa: R$ {LOCAL_DELIVERY_FEE.toFixed(2).replace('.',',')}</span>
+                                  </div>
+                              </Label>
+                               <Label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer has-[:checked]:bg-primary/5 has-[:checked]:border-primary">
+                                  <RadioGroupItem value="pickup" id="pickup" />
+                                  <div className="grid gap-0.5">
+                                      <span className="font-bold flex items-center gap-1.5"><Store className="size-4" /> Retirar no Local</span>
+                                      <span className="text-xs text-muted-foreground">Grátis (a combinar)</span>
+                                  </div>
+                              </Label>
+                          </>
+                      ) : (
+                          <Label className="col-span-full flex items-center gap-3 p-3 border rounded-lg cursor-pointer has-[:checked]:bg-primary/5 has-[:checked]:border-primary">
+                              <RadioGroupItem value="mercado_envios" id="mercado_envios" />
+                               <div className="grid gap-0.5">
+                                  <span className="font-bold flex items-center gap-1.5"><Truck className="size-4" /> Mercado Envios</span>
+                                  <span className="text-xs text-muted-foreground">Entrega para todo o Brasil</span>
+                              </div>
+                          </Label>
+                      )}
+                  </RadioGroup>
+              </div>
+            )}
+  
+            <Button type="submit" disabled={isLoading} className="w-full h-14 text-lg font-bold mt-6 shadow-lg shadow-primary/20">
+              {isLoading ? <Loader2 className="animate-spin mr-2" /> : (checkoutType === 'custom' ? 'Solicitar no WhatsApp' : 'Continuar para Pagamento')}
+            </Button>
+          </form>
+        </Form>
+      );
 
     const renderPaymentStep = () => (
       <div className="space-y-6">
@@ -554,7 +573,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
                       <div className="border-t pt-4 flex justify-between font-bold text-xl text-primary"><span>Total</span><span>R$ {finalTotal.toFixed(2)}</span></div>
                   </CardContent>
               </Card>
-              <Card className="border-primary/10 bg-primary/5 shadow-sm"><CardHeader className="py-4"><CardTitle className="text-sm uppercase font-bold text-primary flex items-center gap-2"><Truck className="size-4" /> Previsão de Entrega</CardTitle></CardHeader><CardContent className="text-sm space-y-2"><div className="flex items-center gap-2 text-muted-foreground"><Calendar className="size-4" /><span>{checkoutType === 'custom' ? 'Prazo de confecção + ' : ''} {shippingOption === 'mercado_envios' ? 'Chega em aprox. 5 dias úteis' : 'A combinar via WhatsApp'}</span></div><p className="text-[10px] opacity-60">Enviado via {shippingOption === 'mercado_envios' ? 'Mercado Envios' : 'Entrega Local'}</p></CardContent></Card>
+              <Card className="border-primary/10 bg-primary/5 shadow-sm"><CardHeader className="py-4"><CardTitle className="text-sm uppercase font-bold text-primary flex items-center gap-2"><Truck className="size-4" /> Previsão de Entrega</CardTitle></CardHeader><CardContent className="text-sm space-y-2"><div className="flex items-center gap-2 text-muted-foreground"><Calendar className="size-4" /><span>{checkoutType === 'custom' ? 'Prazo de confecção + ' : ''} {shippingOption === 'mercado_envios' ? 'Chega em aprox. 5 dias úteis' : 'A combinar via WhatsApp'}</span></div><p className="text-[10px] opacity-60">Enviado via {shippingOption === 'mercado_envios' ? 'Entrega Local' : 'Entrega Local'}</p></CardContent></Card>
           </div>
           
           <Card className="shadow-xl min-h-[500px] border-primary/20">
@@ -588,3 +607,4 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
     
 
     
+

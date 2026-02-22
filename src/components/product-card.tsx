@@ -61,22 +61,20 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
     const [activeImageUrl, setActiveImageUrl] = useState(product.imageUrl);
     const [activeColor, setActiveColor] = useState<string | undefined>(initialActiveColor);
     const [activePrice, setActivePrice] = useState(product.price);
+    const [activeStockQuantity, setActiveStockQuantity] = useState(product.quantity ?? 0);
     const [activeSizeIndex, setActiveSizeIndex] = useState(-1);
 
     const cycleableSizes = useMemo(() => {
         const sizes = product.options.sizes.filter(s => s.toLowerCase() !== 'padrão');
         return sizes;
     }, [product.options.sizes]);
-    
-    // Logic for readiness based on inventory system
-    const stockQuantity = product.quantity ?? 0;
-    const isReady = stockQuantity > 0;
 
     const handleColorChange = (color: string) => {
         const variant = product.variants.find(v => v.color === color) || product;
         setActiveImageUrl(variant.imageUrl);
         setActivePrice(variant.price || product.price);
         setActiveColor(color);
+        setActiveStockQuantity((variant as any).quantity ?? 0);
         setActiveSizeIndex(-1);
     };
 
@@ -88,6 +86,7 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
             setActiveImageUrl(product.imageUrl);
             setActivePrice(product.price);
             setActiveColor(initialActiveColor);
+            setActiveStockQuantity(product.quantity ?? 0);
         } else {
             setActiveSizeIndex(nextSizeIndex);
             const size = cycleableSizes[nextSizeIndex];
@@ -96,6 +95,7 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
                 setActiveImageUrl(variant.imageUrl);
                 setActivePrice(variant.price || product.price);
                 setActiveColor(variant.color || initialActiveColor);
+                setActiveStockQuantity((variant as any).quantity ?? 0);
             }
         }
     };
@@ -120,9 +120,9 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
     return (
         <Card className="overflow-hidden flex flex-col group h-full relative">
             <div className="absolute top-2 right-2 z-10 space-y-1 text-right">
-                {isReady ? (
+                {activeStockQuantity > 0 ? (
                     <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-primary-foreground shadow-sm">
-                        {stockQuantity} em estoque
+                        {activeStockQuantity} em estoque
                     </Badge>
                 ) : (
                     <Badge variant="secondary" className="bg-primary text-primary-foreground shadow-sm">

@@ -46,10 +46,10 @@ export function ProductListClient({ allProducts }: { allProducts: Product[] }) {
     }, [allProducts, inventory]);
 
     const readyMadeProducts = enrichedProducts.filter(product => {
-        return product.readyMade && product.isMain && (product.quantity ?? 0) > 0;
+        return product.isMain && (product.quantity ?? 0) > 0;
     });
 
-    const categoryDisplayProducts = enrichedProducts.filter(p => !p.readyMade || (p.readyMade && p.isMain));
+    const categoryDisplayProducts = enrichedProducts.filter(p => p.quantity === 0 || (p.quantity > 0 && p.isMain));
 
     const productsByCategory = categoryDisplayProducts.reduce((acc, product) => {
         if (!acc[product.category]) {

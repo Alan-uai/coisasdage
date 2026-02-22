@@ -68,11 +68,9 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
         return sizes;
     }, [product.options.sizes]);
     
-    // Logic for readiness based on new inventory system
-    const isPotentiallyReadyMade = product.readyMade;
+    // Logic for readiness based on inventory system
     const stockQuantity = product.quantity ?? 0;
-    const isReady = isPotentiallyReadyMade && stockQuantity > 0;
-    const isOutOfStock = isPotentiallyReadyMade && stockQuantity === 0;
+    const isReady = stockQuantity > 0;
 
     const handleColorChange = (color: string) => {
         const variant = product.variants.find(v => v.color === color) || product;
@@ -122,12 +120,7 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
     return (
         <Card className="overflow-hidden flex flex-col group h-full relative">
             <div className="absolute top-2 right-2 z-10 space-y-1 text-right">
-                {isOutOfStock && (
-                     <Badge variant="destructive" className="shadow-sm">
-                        <Archive className="mr-1.5 size-3" /> Esgotado
-                    </Badge>
-                )}
-                {!isReady && !isOutOfStock && (
+                {!isReady && (
                     <Badge variant="secondary" className="bg-primary text-primary-foreground shadow-sm">
                         Sob Demanda
                     </Badge>
@@ -171,7 +164,7 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
                         <>
                             <div className="flex items-center gap-2">
                                 {visibleColors.map(color => {
-                                    const isAvailable = !product.availability?.colors || product.availability.colors.includes(color);
+                                    const isAvailable = !product.availability?.colors || product.availability.colors.includes(c);
                                     return (
                                         <TooltipProvider key={color} delayDuration={100}>
                                             <Tooltip>

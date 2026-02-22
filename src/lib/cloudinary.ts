@@ -105,7 +105,6 @@ export async function getProducts(): Promise<Product[]> {
         price, 
         description,
         category,
-        readyMade, 
         sizes, 
         colors, 
         materials,
@@ -137,7 +136,6 @@ export async function getProducts(): Promise<Product[]> {
         imageUrl: resource.secure_url,
         imageHint: imageHint || 'handmade product',
         category: category || 'Sem Categoria',
-        readyMade: readyMade === 'true',
         primaryColor,
         rawOptions: {
             sizes,
@@ -174,7 +172,6 @@ export async function getProducts(): Promise<Product[]> {
             material: p.material,
             imageUrl: p.imageUrl,
             price: p.price,
-            readyMade: p.readyMade,
         }));
         
         const allPrices = group.map(p => p.price).filter(p => p !== undefined && p > 0);
@@ -248,33 +245,6 @@ export async function getProducts(): Promise<Product[]> {
         if (consolidatedProduct.options.materials.length === 0) consolidatedProduct.options.materials = ['Barbante de Algodão'];
 
         consolidatedProducts.push(consolidatedProduct);
-
-        // --- Create standalone products for ready-made VARIANTS (not main) ---
-        group.forEach(p => {
-            if (p.readyMade && !p.isMain) {
-                const readyMadeVariantProduct: Product = {
-                    ...p,
-                    price: p.price,
-                    minPrice: p.price,
-                    maxPrice: p.price,
-                    options: { 
-                        sizes: p.size ? [p.size] : ['Padrão'], 
-                        colors: p.color ? [p.color] : ['Padrão'],
-                        materials: p.material ? [p.material] : ['Barbante de Algodão'],
-                    },
-                    variants: [{
-                      id: p.id,
-                      imageUrl: p.imageUrl,
-                      price: p.price,
-                      color: p.color,
-                      size: p.size,
-                      material: p.material,
-                      readyMade: true,
-                    }],
-                };
-                consolidatedProducts.push(readyMadeVariantProduct);
-            }
-        });
     });
 
     productsCache = consolidatedProducts;

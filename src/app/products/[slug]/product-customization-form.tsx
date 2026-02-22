@@ -150,9 +150,7 @@ export function ProductClientPage({ product }: { product: Product }) {
   }, [selectedSize, selectedColor, selectedMaterial, product]);
 
   const stockQuantity = inventoryData?.quantity ?? 0;
-  const isPotentiallyReadyMade = product.readyMade; // Is this product type ever sold as ready-made?
-  const isReady = isPotentiallyReadyMade && stockQuantity > 0;
-  const isOutOfStock = isPotentiallyReadyMade && stockQuantity === 0;
+  const isReady = stockQuantity > 0;
 
   const handleAddToCart = async () => {
     if (!user || !firestore) {
@@ -160,8 +158,6 @@ export function ProductClientPage({ product }: { product: Product }) {
       router.push('/login');
       return;
     }
-    
-    if (isOutOfStock) return;
 
     setIsAdding(true);
     const cartItemsRef = collection(firestore, 'users', user.uid, 'carts', 'main', 'items');
@@ -177,7 +173,7 @@ export function ProductClientPage({ product }: { product: Product }) {
       selectedColor,
       selectedMaterial,
       unitPriceAtAddition: currentPrice,
-      readyMade: !!isReady, // Based on dynamic stock check
+      readyMade: isReady,
       selected: false,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -199,8 +195,6 @@ export function ProductClientPage({ product }: { product: Product }) {
       router.push('/login');
       return;
     }
-    
-    if (isOutOfStock) return;
 
     setIsBuyingNow(true);
     try {
@@ -225,7 +219,7 @@ export function ProductClientPage({ product }: { product: Product }) {
             selectedColor,
             selectedMaterial,
             unitPriceAtAddition: currentPrice,
-            readyMade: !!isReady, // Based on dynamic stock check
+            readyMade: isReady,
             selected: true,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -275,9 +269,9 @@ export function ProductClientPage({ product }: { product: Product }) {
             <div>
               <div className="flex justify-between items-center">
                  <p className="text-primary font-bold tracking-widest uppercase text-xs mb-2">{product.category}</p>
-                 {isPotentiallyReadyMade && !isInventoryLoading && (
-                    <Badge variant={isOutOfStock ? "destructive" : "secondary"}>
-                      {isOutOfStock ? `Esgotado` : `Apenas ${stockQuantity} em estoque!`}
+                 {!isInventoryLoading && isReady && (
+                    <Badge variant="secondary">
+                      {`Apenas ${stockQuantity} em estoque!`}
                     </Badge>
                   )}
               </div>
@@ -350,7 +344,7 @@ export function ProductClientPage({ product }: { product: Product }) {
                 onClick={handleBuyNow} 
                 size="lg" 
                 className="h-14 text-lg font-bold shadow-lg shadow-primary/20"
-                disabled={isLoading || isOutOfStock}
+                disabled={isLoading}
               >
                 {isBuyingNow ? <Loader2 className="animate-spin mr-2" /> : <ShoppingBag className="mr-2 size-5" />}
                 Comprar Agora
@@ -360,21 +354,14 @@ export function ProductClientPage({ product }: { product: Product }) {
                 variant="outline" 
                 size="lg" 
                 className="h-14 border-2 font-bold"
-                disabled={isLoading || isOutOfStock}
+                disabled={isLoading}
               >
                 {isAdding ? <Loader2 className="animate-spin mr-2" /> : <ShoppingCart className="mr-2 size-5" />}
                 Adicionar ao Carrinho
               </Button>
             </div>
 
-            {isOutOfStock ? (
-               <div className="bg-destructive/10 p-4 rounded-xl flex gap-3 border border-destructive/20">
-                <Archive className="size-5 text-destructive shrink-0" />
-                <p className="text-xs text-destructive-foreground/80">
-                  Este item de pronta entrega esgotou! Você ainda pode encomendá-lo como um item "Sob Demanda" e entraremos em contato.
-                </p>
-              </div>
-            ) : !isReady && (
+            {!isReady && (
               <div className="bg-primary/5 p-4 rounded-xl flex gap-3 border border-primary/10">
                 <Info className="size-5 text-primary shrink-0" />
                 <p className="text-xs text-muted-foreground">

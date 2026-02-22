@@ -92,6 +92,26 @@ export default function AddressesPage() {
     setFormData({ label: '', cpf: '', phone: '', zipCode: '', streetName: '', streetNumber: '', city: '', state: '' });
   };
 
+  const handleCepBlur = async (cep: string) => {
+    const cleanCep = cep.replace(/\D/g, '');
+    if (cleanCep.length !== 8) return;
+
+    try {
+      const res = await fetch(`https://brasilapi.com.br/api/cep/v1/${cleanCep}`);
+      if (!res.ok) throw new Error('CEP não encontrado');
+      const data = await res.json();
+      setFormData(prev => ({
+        ...prev,
+        streetName: data.street,
+        city: data.city,
+        state: data.state,
+      }));
+      toast({ title: "Endereço preenchido!", description: "Por favor, confirme o número." });
+    } catch (error) {
+      toast({ variant: 'destructive', title: "Erro ao buscar CEP", description: "Verifique o CEP digitado e tente novamente." });
+    }
+  };
+
   if (isUserLoading || isLoading) {
     return <div className="p-8 space-y-4"><Skeleton className="h-10 w-48" /><Skeleton className="h-32 w-full" /></div>;
   }
@@ -128,7 +148,7 @@ export default function AddressesPage() {
             </div>
             <div className="space-y-2">
               <Label>CEP</Label>
-              <Input value={formData.zipCode} onChange={e => setFormData({...formData, zipCode: e.target.value})} placeholder="00000-000" />
+              <Input value={formData.zipCode} onChange={e => setFormData({...formData, zipCode: e.target.value})} onBlur={(e) => handleCepBlur(e.target.value)} placeholder="00000-000" />
             </div>
             <div className="space-y-2">
               <Label>Rua</Label>

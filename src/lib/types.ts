@@ -103,6 +103,7 @@ export type Order = {
   shipmentId?: string;
   trackingNumber?: string;
   labelUrl?: string; // Embora não possamos gerar uma URL pública, mantemos o campo para consistência
+  expiresAt?: Timestamp;
 };
 
 export type CustomRequest = {
@@ -120,3 +121,4 @@ export type CustomRequest = {
   productionDays?: number;
   adminNotes?: string;
 };
+

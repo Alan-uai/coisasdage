@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import Image from 'next/image';
 import { useFirestore, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useMemoFirebase, useCollection } from '@/firebase';
-import { collection, doc, serverTimestamp, query, orderBy, where, getDocs } from 'firebase/firestore';
+import { collection, doc, serverTimestamp, query, orderBy, where, getDocs, Timestamp } from 'firebase/firestore';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { QrCode, Loader2, MapPin, ClipboardList, ShoppingBag, ArrowRight, Truck, Calendar, Pencil, ShoppingCart, Phone, CheckCircle, Wallet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -68,27 +68,42 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
     const currentAddress = useMemo(() => 
       savedAddresses?.find(a => a.id === selectedAddressId), 
     [savedAddresses, selectedAddressId]);
-    
-    useEffect(() => {
-      if (savedAddresses && savedAddresses.length > 0 && !selectedAddressId) {
-        const defaultAddr = savedAddresses.find(a => a.isDefault) || savedAddresses[0];
-        if (defaultAddr) {
-          handleSelectAddress(defaultAddr.id, true);
-        }
-      } else if (!isAddressesLoading && (!savedAddresses || savedAddresses.length === 0)) {
-        setShowAddressForm(true);
-      }
-    }, [savedAddresses, selectedAddressId, isAddressesLoading]);
 
     const clearPaidCartItems = useCallback(() => {
-      if (!user || !firestore) return;
-      const selectedItemsQuery = query(collection(firestore, 'users', user.uid, 'carts', 'main', 'items'), where('selected', '==', true));
-      getDocs(selectedItemsQuery).then(snapshot => {
-        snapshot.forEach(document => {
-          deleteDocumentNonBlocking(document.ref);
+        if (!user || !firestore) return;
+        const selectedItemsQuery = query(collection(firestore, 'users', user.uid, 'carts', 'main', 'items'), where('selected', '==', true));
+        getDocs(selectedItemsQuery).then(snapshot => {
+            snapshot.forEach(document => {
+                deleteDocumentNonBlocking(document.ref);
+            });
         });
-      });
     }, [user, firestore]);
+    
+    const handleSelectAddress = useCallback((id: string, initialLoad = false) => {
+        const addr = savedAddresses?.find(a => a.id === id);
+        if (addr) {
+            setSelectedAddressId(id);
+            setShippingAddress(addr);
+            if (!initialLoad) {
+                setShowAddressForm(false);
+            }
+            form.reset({
+                cpf: addr.cpf, phone: addr.phone || '', streetName: addr.streetName, streetNumber: addr.streetNumber,
+                zipCode: addr.zipCode, city: addr.city, state: addr.state,
+            });
+        }
+    }, [savedAddresses, form]);
+
+    useEffect(() => {
+        if (savedAddresses && savedAddresses.length > 0 && !selectedAddressId) {
+            const defaultAddr = savedAddresses.find(a => a.isDefault) || savedAddresses[0];
+            if (defaultAddr) {
+                handleSelectAddress(defaultAddr.id, true);
+            }
+        } else if (!isAddressesLoading && (!savedAddresses || savedAddresses.length === 0)) {
+            setShowAddressForm(true);
+        }
+    }, [savedAddresses, selectedAddressId, isAddressesLoading, handleSelectAddress]);
     
     const handleAddressSubmit = useCallback(async (values: z.infer<typeof addressSchema>) => {
       if (!user || cartItems.length === 0) return;
@@ -145,6 +160,9 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
           const generatedOrderId = newOrderRef.id;
           setOrderId(generatedOrderId);
 
+          const expirationTime = new Date();
+          expirationTime.setHours(expirationTime.getHours() + 72);
+
           await setDocumentNonBlocking(newOrderRef, {
               userId: user.uid, userName: user.displayName || 'Cliente', orderDate: serverTimestamp(),
               totalAmount: subtotal, status: 'Processing', shippingAddress,
@@ -154,6 +172,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
                   selectedSize: item.selectedSize, selectedColor: item.selectedColor, selectedMaterial: item.selectedMaterial,
               })),
               createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+              expiresAt: Timestamp.fromDate(expirationTime),
           }, { merge: true });
 
           const result = await createPreference(user.uid, user.email, user.displayName, cartItems, shippingAddress, generatedOrderId);
@@ -175,20 +194,6 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
         initializePayment();
       }
     }, [step, preferenceId, initializePayment]);
-
-    const handleSelectAddress = (id: string, initialLoad = false) => {
-      const addr = savedAddresses?.find(a => a.id === id);
-      if (addr) {
-        setSelectedAddressId(id);
-        if (!initialLoad) {
-          setShowAddressForm(false);
-        }
-        form.reset({
-          cpf: addr.cpf, phone: addr.phone || '', streetName: addr.streetName, streetNumber: addr.streetNumber,
-          zipCode: addr.zipCode, city: addr.city, state: addr.state,
-        });
-      }
-    };
 
     const handlePaymentSubmit = useCallback(async (paymentData: any) => {
         if (!orderId || !user.email || !firestore) return;
@@ -248,7 +253,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
                 <Card className="border-primary/20 shadow-2xl overflow-hidden">
                     <CardHeader className="text-center bg-primary/5 pb-8"><QrCode className="size-16 text-primary mx-auto mb-4" /><CardTitle className="text-3xl font-headline">Pague com Pix</CardTitle><CardDescription>Escaneie o código ou copie a chave para pagar.</CardDescription></CardHeader>
                     <CardContent className="flex flex-col items-center gap-8 p-8">
-                        <div className="bg-white p-4 rounded-xl shadow-inner border border-muted">{pixData.qr_code_base64 && <Image src={`data:image/png;base64,${pixData.qr_code_base64}`} alt="QR Code" width={240} height={240} className="rounded-lg" />}</div>
+                        <div className="bg-white p-4 rounded-xl shadow-inner border border-muted">{pixData.qr_code_base_64 && <Image src={`data:image/png;base64,${pixData.qr_code_base_64}`} alt="QR Code" width={240} height={240} className="rounded-lg" />}</div>
                         <div className="w-full space-y-3">
                           <Button onClick={() => { navigator.clipboard.writeText(pixData.qr_code); toast({ title: "Copiado!" }); }} className="w-full h-14 text-lg font-bold">Copiar Código Pix</Button>
                           <Button asChild variant="outline" className="w-full h-12"><Link href="/orders">Ver Meus Pedidos</Link></Button>

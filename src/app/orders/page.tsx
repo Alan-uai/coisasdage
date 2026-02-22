@@ -1,8 +1,8 @@
 
 'use client';
 
-import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, limit } from 'firebase/firestore';
+import { useUser, useFirestore, useCollection, useMemoFirebase, deleteDocumentNonBlocking } from '@/firebase';
+import { collection, query, orderBy, limit, doc, Timestamp } from 'firebase/firestore';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,6 +27,44 @@ import { useState, useEffect } from 'react';
 import { getMLShipmentTracking } from '@/lib/mercado-livre';
 
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "5511999999999";
+
+function Countdown({ expiryTimestamp }: { expiryTimestamp: Timestamp }) {
+  const [timeLeft, setTimeLeft] = useState<string | null>(null);
+
+  useEffect(() => {
+    const expiryTime = expiryTimestamp.toDate().getTime();
+
+    const updateCountdown = () => {
+      const now = new Date().getTime();
+      const distance = expiryTime - now;
+
+      if (distance < 0) {
+        setTimeLeft('Expirado');
+        return;
+      }
+
+      const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+      setTimeLeft(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+    };
+
+    updateCountdown();
+    const intervalId = setInterval(updateCountdown, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [expiryTimestamp]);
+
+  if (!timeLeft) return null;
+
+  return (
+    <div className={`flex items-center gap-2 font-mono text-xs ${timeLeft === 'Expirado' ? 'text-destructive' : 'text-amber-700'}`}>
+      <Clock className="size-3" />
+      <span>{timeLeft === 'Expirado' ? 'Pagamento expirado' : `Pagamento expira em ${timeLeft}`}</span>
+    </div>
+  );
+}
 
 export default function MyOrdersPage() {
   const { user, isUserLoading } = useUser();
@@ -66,6 +104,20 @@ export default function MyOrdersPage() {
       });
     }
   }, [orders]);
+
+  useEffect(() => {
+    // Client-side cleanup of expired 'Processing' orders.
+    if (firestore && user?.uid && orders) {
+      const now = new Date();
+      orders.forEach(order => {
+        if (order.status === 'Processing' && order.expiresAt && order.expiresAt.toDate() < now) {
+          console.log(`Cleaning up expired order: ${order.id}`);
+          const orderRef = doc(firestore, 'users', user.uid, 'orders', order.id);
+          deleteDocumentNonBlocking(orderRef);
+        }
+      });
+    }
+  }, [orders, firestore, user]);
 
   if (isUserLoading) {
     return <div className="p-8 space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-64 w-full" /></div>;
@@ -137,6 +189,13 @@ export default function MyOrdersPage() {
                       </div>
                     ))}
                   </div>
+
+                  {order.status === 'Processing' && order.expiresAt && (
+                    <div className="bg-amber-50 border border-amber-200/50 p-3 rounded-lg flex justify-center">
+                      <Countdown expiryTimestamp={order.expiresAt} />
+                    </div>
+                  )}
+
                   <div className="flex justify-between items-end border-t pt-4">
                     <p className="text-xs text-muted-foreground">{order.createdAt?.toDate().toLocaleDateString('pt-BR')}</p>
                     <p className="text-xl font-bold text-primary">R$ {order.totalAmount.toFixed(2).replace('.', ',')}</p>

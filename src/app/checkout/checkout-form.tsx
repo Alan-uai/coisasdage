@@ -54,7 +54,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
     const [preferenceId, setPreferenceId] = useState<string | null>(resumedOrder?.preferenceId || null);
     const [orderId, setOrderId] = useState<string | null>(resumedOrder?.id || null);
     const [isBrickLoaded, setIsBrickLoaded] = useState(false);
-    const [pixData, setPixData] = useState<{ qr_code: string, qr_code_base_64: string } | null>(null);
+    const [pixData, setPixData] = useState<{ qr_code: string, qrCodeBase64: string } | null>(null);
     const [whatsappMessage, setWhatsappMessage] = useState('');
 
     const brickRendered = useRef(false);
@@ -232,10 +232,10 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
         setIsLoading(true);
         try {
             const finalPaymentData = paymentData.formData || paymentData;
-            const result = await processPayment(finalPaymentData, orderId, user.email, subtotal);
+            const result = await processPayment(finalPaymentData, orderId, user.email, subtotal, user.uid);
             if (result.success) {
-                if (finalPaymentData.payment_method_id === 'pix' && result.qr_code) {
-                    setPixData({ qr_code: result.qr_code, qr_code_base_64: result.qr_code_base_64 || '' });
+                if (finalPaymentData.payment_method_id === 'pix' && result.qr_code && result.qrCodeBase64) {
+                    setPixData({ qr_code: result.qr_code, qrCodeBase64: result.qrCodeBase64 });
                 }
                 setStep('confirmation');
                 clearPaidCartItems();
@@ -258,7 +258,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
         } finally {
           setIsLoading(false);
         }
-    }, [orderId, user.email, firestore, router, subtotal, clearPaidCartItems]);
+    }, [orderId, user.email, firestore, router, subtotal, clearPaidCartItems, user.uid]);
 
     useEffect(() => {
         if (preferenceId && step === 'payment' && !pixData && !brickRendered.current) {
@@ -321,7 +321,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
                     <Card className="border-primary/20 shadow-2xl overflow-hidden">
                         <CardHeader className="text-center bg-primary/5 pb-8"><QrCode className="size-16 text-primary mx-auto mb-4" /><CardTitle className="text-3xl font-headline">Pague com Pix</CardTitle><CardDescription>Escaneie o código ou copie a chave para pagar.</CardDescription></CardHeader>
                         <CardContent className="flex flex-col items-center gap-8 p-8">
-                            <div className="bg-white p-4 rounded-xl shadow-inner border border-muted">{pixData.qr_code_base_64 && <Image src={`data:image/png;base64,${pixData.qr_code_base_64}`} alt="QR Code" width={240} height={240} className="rounded-lg" />}</div>
+                            <div className="bg-white p-4 rounded-xl shadow-inner border border-muted">{pixData.qrCodeBase64 && <Image src={`data:image/png;base64,${pixData.qrCodeBase64}`} alt="QR Code" width={240} height={240} className="rounded-lg" />}</div>
                             <div className="w-full space-y-3">
                               <Button onClick={() => { navigator.clipboard.writeText(pixData.qr_code); toast({ title: "Copiado!" }); }} className="w-full h-14 text-lg font-bold">Copiar Código Pix</Button>
                               <Button asChild variant="outline" className="w-full h-12"><Link href="/orders">Voltar para Meus Pedidos</Link></Button>

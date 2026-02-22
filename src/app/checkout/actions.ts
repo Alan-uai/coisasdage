@@ -31,7 +31,7 @@ type PaymentResult = {
     payment_id?: number | string;
     merchant_order_id?: number | string;
     qr_code?: string;
-    qr_code_base64?: string;
+    qrCodeBase64?: string;
     error?: string;
 };
 
@@ -154,7 +154,8 @@ export async function processPayment(
     paymentData: any, 
     orderId: string, 
     userEmail: string, 
-    amount: number
+    amount: number,
+    userId: string
 ): Promise<PaymentResult> {
     const accessToken = process.env.MP_ACCESS_TOKEN;
     
@@ -171,7 +172,7 @@ export async function processPayment(
                 ...paymentData, 
                 transaction_amount: Number(amount.toFixed(2)), 
                 description: `Pedido ${orderId}`,
-                external_reference: orderId,
+                external_reference: `${userId}|${orderId}`,
                 payer: { ...paymentData.payer, email: userEmail },
             }
         });
@@ -185,7 +186,7 @@ export async function processPayment(
             payment_id: response.id,
             merchant_order_id: merchantOrderId,
             qr_code: response.point_of_interaction?.transaction_data?.qr_code,
-            qr_code_base64: response.point_of_interaction?.transaction_data?.qr_code_base64,
+            qrCodeBase64: response.point_of_interaction?.transaction_data?.qr_code_base64,
         };
     } catch (error: any) {
         console.error('Payment processing error:', error);

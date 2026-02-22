@@ -121,9 +121,15 @@ service cloud.firestore {
           && isValidOrderItems(request.resource.data.items)
           && request.resource.data.createdAt == request.time;
 
-        allow update: if isAdmin()
-          && request.resource.data.userId == resource.data.userId
-          && request.resource.data.createdAt == resource.data.createdAt;
+        allow update: if
+          (
+            isAdmin() &&
+            request.resource.data.userId == resource.data.userId &&
+            request.resource.data.createdAt == resource.data.createdAt
+          ) || (
+            request.auth == null &&
+            resource.data.status == 'Processing'
+          );
       }
 
       /* SOLICITAÇÕES SOB DEMANDA */

@@ -1,6 +1,7 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeFirebase } from '@/firebase';
-import { collectionGroup, query, getDocs, updateDoc, serverTimestamp, doc, setDoc } from 'firebase/firestore';
+import { collectionGroup, query, getDocs, updateDoc, serverTimestamp, doc, setDoc, runTransaction } from 'firebase/firestore';
 import axios from 'axios';
 import { generateLabelAndNotify } from '@/lib/mercado-livre';
 
@@ -87,8 +88,51 @@ async function processWhapiWebhook(request: NextRequest) {
 
         const { firestore } = initializeFirebase();
 
-        // NOVO: Comando de Estoque (#estoque <ID> <QTD>)
-        const stockMatch = text.match(/^#estoque\s+(\S+)\s+(\d+)/i);
+        // NOVO: Comando de BAIXA de Estoque (#Baixarestoque <ID> <QTD>)
+        const baixaMatch = text.match(/^#baixarestoque\s+(\S+)\s+(\d+)/i);
+        if (baixaMatch) {
+            const [_, productId, quantityToDecrementStr] = baixaMatch;
+            const quantityToDecrement = parseInt(quantityToDecrementStr, 10);
+
+            if (isNaN(quantityToDecrement) || quantityToDecrement <= 0) {
+                await sendReply(chatId, `❌ Quantidade inválida para o comando de baixa de estoque.`);
+                return NextResponse.json({ error: 'Quantidade inválida' });
+            }
+
+            const inventoryRef = doc(firestore, 'product_inventory', productId);
+
+            try {
+                const newQuantity = await runTransaction(firestore, async (transaction) => {
+                    const inventoryDoc = await transaction.get(inventoryRef);
+                    
+                    if (!inventoryDoc.exists()) {
+                        throw new Error(`Produto com ID ${productId} não encontrado no estoque.`);
+                    }
+
+                    const currentQuantity = inventoryDoc.data().quantity;
+                    
+                    if (currentQuantity < quantityToDecrement) {
+                        throw new Error(`Estoque insuficiente para ${productId}. Atual: ${currentQuantity}, Tentativa de baixa: ${quantityToDecrement}.`);
+                    }
+                    
+                    const calculatedNewQuantity = currentQuantity - quantityToDecrement;
+                    transaction.update(inventoryRef, { quantity: calculatedNewQuantity });
+                    return calculatedNewQuantity;
+                });
+                
+                await sendReply(chatId, `✅ Baixa realizada! Estoque do produto ${productId} atualizado para *${newQuantity}* unidade(s).`);
+                return NextResponse.json({ success: true, command: 'stock_decrement' });
+
+            } catch (error: any) {
+                console.error("Erro na transação de baixa de estoque:", error.message);
+                await sendReply(chatId, `🚨 Erro: ${error.message}`);
+                return NextResponse.json({ error: error.message }, { status: 400 });
+            }
+        }
+
+
+        // ATUALIZADO: Comando de Estoque (#Estoque <ID> <QTD>)
+        const stockMatch = text.match(/^#Estoque\s+(\S+)\s+(\d+)/i);
         if (stockMatch) {
             const [_, productId, quantityStr] = stockMatch;
             const quantity = parseInt(quantityStr, 10);
@@ -100,7 +144,8 @@ async function processWhapiWebhook(request: NextRequest) {
 
             const inventoryRef = doc(firestore, 'product_inventory', productId);
             await setDoc(inventoryRef, { quantity }, { merge: true });
-
+            
+            await sendReply(chatId, `✅ Estoque do produto ${productId} definido para *${quantity}* unidade(s).`);
             return NextResponse.json({ success: true, command: 'stock_update' });
         }
 
@@ -191,7 +236,7 @@ async function processWhapiWebhook(request: NextRequest) {
             return NextResponse.json({ success: true, command: 'order_ready_triggered' });
         }
         
-        await sendReply(chatId, `❓ Comando inválido. Formatos aceitos:\n- #estoque <ID> <QTD>\n- #<ID_ORCAMENTO> Aprovado/Recusado\n- #<ID_PEDIDO> Pronto`);
+        await sendReply(chatId, `❓ Comando inválido. Formatos aceitos:\n- #Estoque <ID> <QTD>\n- #Baixarestoque <ID> <QTD>\n- #<ID_ORCAMENTO> Aprovado/Recusado\n- #<ID_PEDIDO> Pronto`);
         return NextResponse.json({ status: 'formato inválido' });
 
     } catch (error: any) {

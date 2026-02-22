@@ -1,3 +1,4 @@
+
 'use client';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
@@ -5,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { User } from 'firebase/auth';
 import { createPreference, processPayment, notifyAdminNewRequest } from './actions';
-import type { CartItem, SavedAddress } from '@/lib/types';
+import type { CartItem, SavedAddress, Order, OrderItemSummary } from '@/lib/types';
 import { addressSchema } from './form-schema';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -21,6 +22,8 @@ import { QrCode, Loader2, MapPin, ClipboardList, ShoppingBag, ArrowRight, Truck,
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import type { PreferenceCartItem } from './actions';
+
 
 declare global {
     interface Window {
@@ -30,24 +33,28 @@ declare global {
 
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "5511999999999";
 
-export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { user: User, cartItems: CartItem[], subtotal: number, isCartLoading: boolean }) {
+export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumedOrder }: { user: User, cartItems: (CartItem | OrderItemSummary)[], subtotal: number, isCartLoading: boolean, resumedOrder?: Order }) {
     const searchParams = useSearchParams();
-    const checkoutType = searchParams.get('type') || 'ready';
     
-    const [step, setStep] = useState<'address' | 'payment' | 'confirmation'>('address');
+    const checkoutType = useMemo(() => {
+        if (resumedOrder) {
+            return resumedOrder.items[0].readyMade ? 'ready' : 'custom';
+        }
+        return searchParams.get('type') || 'ready';
+    }, [resumedOrder, searchParams]);
+    
+    const [step, setStep] = useState<'address' | 'payment' | 'confirmation'>(resumedOrder ? 'payment' : 'address');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     
-    // Address related state
-    const [shippingAddress, setShippingAddress] = useState<z.infer<typeof addressSchema> | null>(null);
+    const [shippingAddress, setShippingAddress] = useState<z.infer<typeof addressSchema> | null>(resumedOrder ? resumedOrder.shippingAddress : null);
     const [selectedAddressId, setSelectedAddressId] = useState<string>('');
     const [showAddressForm, setShowAddressForm] = useState(false);
     
-    // Payment related state
-    const [preferenceId, setPreferenceId] = useState<string | null>(null);
-    const [orderId, setOrderId] = useState<string | null>(null);
+    const [preferenceId, setPreferenceId] = useState<string | null>(resumedOrder?.preferenceId || null);
+    const [orderId, setOrderId] = useState<string | null>(resumedOrder?.id || null);
     const [isBrickLoaded, setIsBrickLoaded] = useState(false);
-    const [pixData, setPixData] = useState<{ qr_code: string, qr_code_base64: string } | null>(null);
+    const [pixData, setPixData] = useState<{ qr_code: string, qr_code_base_64: string } | null>(null);
 
     const brickRendered = useRef(false);
     const firestore = useFirestore();
@@ -125,7 +132,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
                   shippingAddress: values,
                   items: cartItems.map(item => ({
                       productId: item.productId, productName: item.productName, imageUrl: item.imageUrl,
-                      quantity: item.quantity, unitPriceAtOrder: item.unitPriceAtAddition,
+                      quantity: item.quantity, unitPriceAtOrder: (item as CartItem).unitPriceAtAddition || (item as OrderItemSummary).unitPriceAtOrder,
                       selectedSize: item.selectedSize, selectedColor: item.selectedColor, selectedMaterial: item.selectedMaterial,
                   })),
                   createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
@@ -146,7 +153,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
       
       setStep('payment');
       setIsLoading(false);
-    }, [user, cartItems, subtotal, firestore, checkoutType, clearPaidCartItems]);
+    }, [user, cartItems, subtotal, firestore, checkoutType, clearPaidCartItems, user.displayName, user.email]);
 
     const initializePayment = useCallback(async () => {
       if (step !== 'payment' || !shippingAddress || !user || !user.email || cartItems.length === 0 || !firestore) return;
@@ -163,21 +170,43 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
           const expirationTime = new Date();
           expirationTime.setHours(expirationTime.getHours() + 72);
 
+          const orderItems = cartItems.map(item => ({
+            productId: item.productId,
+            productGroupId: item.productGroupId,
+            productName: item.productName,
+            imageUrl: item.imageUrl,
+            quantity: item.quantity,
+            unitPriceAtOrder: (item as CartItem).unitPriceAtAddition || (item as OrderItemSummary).unitPriceAtOrder,
+            selectedSize: item.selectedSize,
+            selectedColor: item.selectedColor,
+            selectedMaterial: item.selectedMaterial,
+          }));
+
           await setDocumentNonBlocking(newOrderRef, {
               userId: user.uid, userName: user.displayName || 'Cliente', orderDate: serverTimestamp(),
               totalAmount: subtotal, status: 'Processing', shippingAddress,
-              items: cartItems.map(item => ({
-                  productId: item.productId, productGroupId: item.productGroupId, productName: item.productName,
-                  imageUrl: item.imageUrl, quantity: item.quantity, unitPriceAtOrder: item.unitPriceAtAddition,
-                  selectedSize: item.selectedSize, selectedColor: item.selectedColor, selectedMaterial: item.selectedMaterial,
-              })),
+              items: orderItems,
               createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
               expiresAt: Timestamp.fromDate(expirationTime),
           }, { merge: true });
 
-          const result = await createPreference(user.uid, user.email, user.displayName, cartItems, shippingAddress, generatedOrderId);
-          if (result.preferenceId) setPreferenceId(result.preferenceId);
-          else {
+          const preferenceItems = cartItems.map(item => ({
+             id: item.productId,
+             productName: item.productName,
+             selectedColor: item.selectedColor,
+             selectedSize: item.selectedSize,
+             selectedMaterial: item.selectedMaterial,
+             quantity: item.quantity,
+             unitPriceAtAddition: (item as CartItem).unitPriceAtAddition || (item as OrderItemSummary).unitPriceAtOrder,
+             imageUrl: item.imageUrl,
+          }));
+
+          const result = await createPreference(user.uid, user.email, user.displayName, preferenceItems as PreferenceCartItem[], shippingAddress, generatedOrderId);
+          if (result.preferenceId) {
+            setPreferenceId(result.preferenceId);
+            // Persist the preferenceId for resuming later
+            updateDocumentNonBlocking(newOrderRef, { preferenceId: result.preferenceId });
+          } else {
               setError(result.error || 'Erro ao iniciar pagamento.');
               setStep('address');
           }
@@ -190,10 +219,11 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
     }, [step, shippingAddress, user, cartItems, subtotal, firestore]);
 
     useEffect(() => {
-      if (step === 'payment' && !preferenceId) {
+      // Only initialize a NEW payment if we are on the payment step for a NEW order
+      if (step === 'payment' && !preferenceId && !resumedOrder) {
         initializePayment();
       }
-    }, [step, preferenceId, initializePayment]);
+    }, [step, preferenceId, initializePayment, resumedOrder]);
 
     const handlePaymentSubmit = useCallback(async (paymentData: any) => {
         if (!orderId || !user.email || !firestore) return;
@@ -265,7 +295,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
         );
     }
     
-    if (!isCartLoading && cartItems.length === 0) {
+    if (!isCartLoading && cartItems.length === 0 && !resumedOrder) {
         return (
             <div className="flex flex-col items-center justify-center text-center p-8 py-20 min-h-[400px]">
                 <ShoppingCart className="size-16 text-muted-foreground mb-4" /><h2 className="text-2xl font-bold font-headline">Seu carrinho de checkout está vazio</h2><p className="text-muted-foreground mt-2">Adicione itens ao carrinho para finalizar a compra.</p>
@@ -314,9 +344,9 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
               <Button variant="ghost" size="sm" onClick={() => setStep('address')} className="h-6 text-[10px] px-2 gap-1"><Pencil className="size-3" /> Alterar</Button>
             </div>
             <div className="text-sm">
-                <p className="font-bold text-base">{currentAddress?.label}</p>
-                <p className="text-muted-foreground">{currentAddress?.streetName}, {currentAddress?.streetNumber}</p>
-                <p className="text-muted-foreground">{currentAddress?.city} - {currentAddress?.state}</p>
+                <p className="font-bold text-base">{shippingAddress?.streetName}</p>
+                <p className="text-muted-foreground">{shippingAddress?.streetName}, {shippingAddress?.streetNumber}</p>
+                <p className="text-muted-foreground">{shippingAddress?.city} - {shippingAddress?.state}</p>
             </div>
         </div>
         <div className="space-y-4">
@@ -339,13 +369,13 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
               <Card className="shadow-lg">
                   <CardHeader><CardTitle className="font-headline text-2xl flex items-center gap-2">{checkoutType === 'custom' ? <ClipboardList className="size-6 text-primary" /> : <ShoppingBag className="size-6 text-primary" />}Resumo do Pedido</CardTitle></CardHeader>
                   <CardContent className="space-y-4">
-                      {cartItems.map(item => (
-                          <div key={item.id} className="flex justify-between items-center text-sm">
+                      {cartItems.map((item: any, index) => (
+                          <div key={item.id || index} className="flex justify-between items-center text-sm">
                               <div className="flex items-center gap-3">
                                   <div className="size-12 relative rounded overflow-hidden bg-muted"><Image src={item.imageUrl} alt={item.productName} fill className="object-cover" /></div>
                                   <div className="flex flex-col"><span className="font-bold">{item.productName}</span><span className="text-[10px] text-muted-foreground uppercase">{item.selectedSize} | {item.selectedColor}</span></div>
                               </div>
-                              <span className="font-bold">R$ {(item.unitPriceAtAddition * item.quantity).toFixed(2)}</span>
+                              <span className="font-bold">R$ {((item.unitPriceAtAddition || item.unitPriceAtOrder) * item.quantity).toFixed(2)}</span>
                           </div>
                       ))}
                       <div className="border-t pt-4 flex justify-between font-bold text-xl text-primary"><span>Total</span><span>R$ {subtotal.toFixed(2)}</span></div>

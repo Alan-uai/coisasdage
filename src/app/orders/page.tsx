@@ -20,7 +20,8 @@ import {
   ClipboardList,
   MessageCircle,
   Sparkles,
-  Ticket
+  Ticket,
+  ArrowRight
 } from 'lucide-react';
 import type { Order, CustomRequest } from '@/lib/types';
 import { useState, useEffect } from 'react';
@@ -191,8 +192,14 @@ export default function MyOrdersPage() {
                   </div>
 
                   {order.status === 'Processing' && order.expiresAt && (
-                    <div className="bg-amber-50 border border-amber-200/50 p-3 rounded-lg flex justify-center">
+                    <div className="bg-amber-50 border border-amber-200/50 p-3 rounded-lg flex justify-between items-center">
                       <Countdown expiryTimestamp={order.expiresAt} />
+                      <Button asChild size="sm">
+                        <Link href={`/checkout?order_id=${order.id}`}>
+                          Continuar Pagamento
+                          <ArrowRight className="ml-2 size-4" />
+                        </Link>
+                      </Button>
                     </div>
                   )}
 

@@ -98,6 +98,7 @@ export type Order = {
   updatedAt: Timestamp;
   paymentId?: string | number;
   merchantOrderId?: string;
+  preferenceId?: string;
   productionDays?: number;
   shippingAllowed?: boolean;
   shipmentId?: string;
@@ -121,4 +122,3 @@ export type CustomRequest = {
   productionDays?: number;
   adminNotes?: string;
 };
-

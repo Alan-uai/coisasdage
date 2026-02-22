@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeFirebase } from '@/firebase';
-import { collectionGroup, query, getDocs, updateDoc, serverTimestamp, doc } from 'firebase/firestore';
+import { collectionGroup, query, getDocs, updateDoc, serverTimestamp, doc, setDoc } from 'firebase/firestore';
 import axios from 'axios';
 import { generateLabelAndNotify } from '@/lib/mercado-livre';
 
@@ -12,8 +12,24 @@ const TEST_ID = process.env.WHAPI_TEST_ID || "teste";
 const AUTHORIZED_NUMBERS_RAW = process.env.AUTHORIZED_NUMBERS || "";
 
 /**
+ * Sends a reply message via Whapi.
+ */
+async function sendReply(chatId: string, text: string) {
+    if (!WHAPI_TOKEN) return;
+    try {
+        await axios.post('https://gate.whapi.cloud/messages/text', {
+            to: chatId,
+            body: text,
+        }, {
+            headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` }
+        });
+    } catch (error) {
+        console.error("Erro ao enviar resposta via Whapi:", error);
+    }
+}
+
+/**
  * Função unificada para processar atualizações do Whapi Cloud.
- * Suporta múltiplos usuários autorizados via AUTHORIZED_NUMBERS no .env.
  */
 async function processWhapiWebhook(request: NextRequest) {
     if (!WHAPI_TOKEN) {
@@ -40,13 +56,14 @@ async function processWhapiWebhook(request: NextRequest) {
             .filter(n => n.length > 0);
 
         const senderId = message.from || "";
+        const chatId = message.chat_id || senderId; // Use chat_id for replies
         const senderNumber = senderId.split('@')[0].replace(/\D/g, '');
         
         const isFromMe = !!message.from_me;
         const isAdminNumber = senderNumber === adminNumberOnly;
         const isAuthorizedNumber = authorizedNumbers.includes(senderNumber);
         
-        const isSelfChat = message.chat_id?.includes(adminNumberOnly);
+        const isSelfChat = chatId.includes(adminNumberOnly);
         const isAuthorized = isFromMe || isAdminNumber || isAuthorizedNumber || isSelfChat;
         
         if (!isAuthorized) {
@@ -63,14 +80,32 @@ async function processWhapiWebhook(request: NextRequest) {
         const textLower = text.toLowerCase();
         const testCommand = `#${TEST_ID.toLowerCase()}`;
         
-        // 1. Comando de Teste
         if (textLower === testCommand || textLower === '#teste') {
+            await sendReply(chatId, "✅ Teste do webhook concluído com sucesso!");
             return NextResponse.json({ success: 'teste concluído' });
         }
 
         const { firestore } = initializeFirebase();
 
-        // 2. Processar Comandos de Orçamento (#ID Aprovado/Recusado)
+        // NOVO: Comando de Estoque (#estoque <ID> <QTD>)
+        const stockMatch = text.match(/^#estoque\s+(\S+)\s+(\d+)/i);
+        if (stockMatch) {
+            const [_, productId, quantityStr] = stockMatch;
+            const quantity = parseInt(quantityStr, 10);
+            
+            if (isNaN(quantity)) {
+                await sendReply(chatId, `❌ Quantidade inválida para o comando de estoque.`);
+                return NextResponse.json({ error: 'Quantidade inválida' });
+            }
+
+            const inventoryRef = doc(firestore, 'product_inventory', productId);
+            await setDoc(inventoryRef, { quantity }, { merge: true });
+
+            await sendReply(chatId, `📦 Estoque atualizado! Produto *${productId}* agora tem *${quantity}* unidades.`);
+            return NextResponse.json({ success: true, command: 'stock_update' });
+        }
+
+        // Processar Comandos de Orçamento (#ID Aprovado/Recusado)
         const budgetMatch = text.match(/#(\w+)\s+(Aprovado|Recusado)(?:\s+(.*))?/i);
         if (budgetMatch) {
             const [_, commandId, statusText, optionalPart] = budgetMatch;
@@ -89,6 +124,7 @@ async function processWhapiWebhook(request: NextRequest) {
 
             if (!targetDoc) {
                 console.log(`[WHAPI] Orçamento com ID ${commandId} não encontrado.`);
+                await sendReply(chatId, `❌ Orçamento com ID #${commandId} não encontrado.`);
                 return NextResponse.json({ error: 'Pedido não encontrado' });
             }
 
@@ -108,11 +144,11 @@ async function processWhapiWebhook(request: NextRequest) {
             }
             
             await updateDoc(targetDoc.ref, updateData);
-
+            await sendReply(chatId, `✅ Orçamento #${commandId} foi atualizado para *${status}*.`);
             return NextResponse.json({ success: true, command: 'budget_update' });
         }
 
-        // 3. Processar Comando de Pedido Pronto (#ID Pronto) - NOVO FLUXO
+        // Processar Comando de Pedido Pronto (#ID Pronto)
         const readyMatch = text.match(/#(\w+)\s+(Pronto)/i);
         if (readyMatch) {
             const [_, commandId] = readyMatch;
@@ -128,7 +164,7 @@ async function processWhapiWebhook(request: NextRequest) {
             });
 
             if (!targetDoc) {
-                console.log(`[WHAPI] Pedido com ID ${commandId} não encontrado para marcar como pronto.`);
+                await sendReply(chatId, `❌ Pedido com ID #${commandId} não encontrado.`);
                 return NextResponse.json({ error: 'Pedido não encontrado' });
             }
 
@@ -136,27 +172,27 @@ async function processWhapiWebhook(request: NextRequest) {
             const orderRef = targetDoc.ref;
 
             if (orderData.status !== 'IN_PRODUCTION') {
-                console.log(`[WHAPI] Pedido ${commandId} não está em produção. Status: ${orderData.status}`);
+                await sendReply(chatId, `⚠️ Pedido #${commandId} não está em produção. Status atual: ${orderData.status}`);
                 return NextResponse.json({ error: 'Status do pedido inválido para esta ação.' });
             }
 
-            // Atualiza status para 'READY' e libera a trava de segurança para envio
             await updateDoc(orderRef, {
                 status: 'READY',
                 shippingAllowed: true,
                 updatedAt: serverTimestamp()
             });
             
-            // Chama a função de logística (não bloqueante para o webhook)
+            await sendReply(chatId, `⏳ Processando logística para o pedido #${commandId}... A etiqueta será enviada em breve.`);
             generateLabelAndNotify(firestore, orderRef, orderData.merchantOrderId, targetDoc.id)
               .catch(async (e) => {
                 console.error(`Erro no processo de etiqueta para ${targetDoc.id}:`, e);
+                await sendReply(chatId, `🚨 Erro ao gerar etiqueta para #${commandId}: ${e.message}`);
               });
 
             return NextResponse.json({ success: true, command: 'order_ready_triggered' });
         }
         
-        // Se nenhum comando correspondeu
+        await sendReply(chatId, `❓ Comando inválido. Formatos aceitos:\n- #estoque <ID> <QTD>\n- #<ID_ORCAMENTO> Aprovado/Recusado\n- #<ID_PEDIDO> Pronto`);
         return NextResponse.json({ status: 'formato inválido' });
 
     } catch (error: any) {

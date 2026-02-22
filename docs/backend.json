@@ -41,12 +41,21 @@
         },
         "totalBasePrice": { "type": "number" },
         "finalPrice": { "type": "number" },
-        "status": { "type": "string", "enum": ["Pending", "Approved", "Contested", "AddedToCart"] },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Contested", "AddedToCart", "Cancelled"] },
         "adminNotes": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "items", "status", "createdAt"]
+    },
+    "ProductInventory": {
+        "title": "ProductInventory",
+        "type": "object",
+        "description": "Represents the stock quantity for a ready-made product.",
+        "properties": {
+            "quantity": { "type": "number", "description": "The number of items available in stock." }
+        },
+        "required": ["quantity"]
     }
   },
   "auth": {
@@ -68,6 +77,14 @@
           "entityName": "CustomRequest",
           "schema": { "$ref": "#/backend/entities/CustomRequest" },
           "description": "User specific on-demand requests for admin approval."
+        }
+      },
+      {
+        "path": "/product_inventory/{productId}",
+        "definition": {
+          "entityName": "ProductInventory",
+          "schema": { "$ref": "#/backend/entities/ProductInventory" },
+          "description": "Stores the stock count for ready-made products."
         }
       }
     ]

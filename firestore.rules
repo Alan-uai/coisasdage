@@ -1,3 +1,4 @@
+
 rules_version = '2';
 
 service cloud.firestore {
@@ -18,6 +19,8 @@ service cloud.firestore {
 
     function isAdmin() {
       // O usuário é um administrador.
+      // O acesso ao documento de usuário é protegido, então get() só funciona se o chamador tiver permissão.
+      // A regra abaixo funciona porque a leitura do próprio perfil é permitida por 'isOwner'.
       return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
     }
     
@@ -26,7 +29,7 @@ service cloud.firestore {
       return address.keys().hasOnly(['streetName', 'streetNumber', 'zipCode', 'city', 'state', 'cpf', 'phone'])
         && address.streetName is string && address.streetName.size() > 2
         && address.streetNumber is string && address.streetNumber.size() > 0
-        && address.zipCode is string && address.zipCode.size() >= 8
+        && address.zipCode is string && address.zipCode.size() >= 8 && address.zipCode.matches('^[0-9]{5}-?[0-9]{3}$')
         && address.city is string && address.city.size() > 1
         && address.state is string && address.state.size() == 2
         && address.cpf is string && address.cpf.size() >= 11
@@ -35,7 +38,7 @@ service cloud.firestore {
     
     // Função para validar o schema dos itens do pedido/carrinho
     function isValidOrderItems(items) {
-      return items is list && (items.size() == 0 || (
+      return items is list && items.size() > 0 && (
         items[0].keys().hasOnly(['productId', 'productGroupId', 'productName', 'imageUrl', 'quantity', 'unitPriceAtOrder', 'selectedSize', 'selectedColor', 'selectedMaterial', 'readyMade'])
         && items[0].productId is string
         && items[0].productName is string
@@ -46,7 +49,17 @@ service cloud.firestore {
         && items[0].selectedColor is string
         && items[0].selectedMaterial is string
         && items[0].readyMade is bool
-      ));
+      );
+    }
+    
+    // Função para validar o schema de um perfil de usuário
+    function isValidUserProfile(data) {
+        return data.keys().hasOnly(['displayName', 'email', 'createdAt', 'isAdmin', 'termsAccepted'])
+          && data.displayName is string
+          && data.email is string
+          && data.createdAt is timestamp
+          && data.isAdmin is bool
+          && data.termsAccepted is bool;
     }
 
     /* =============================
@@ -54,16 +67,6 @@ service cloud.firestore {
     ============================== */
     match /users/{userId} {
       allow get: if isOwner(userId);
-
-      // Validação de Schema para UserProfile
-      function isValidUserProfile(data) {
-        return data.keys().hasOnly(['displayName', 'email', 'createdAt', 'isAdmin', 'termsAccepted'])
-          && data.displayName is string
-          && data.email is string
-          && data.createdAt is timestamp
-          && data.isAdmin is bool
-          && data.termsAccepted is bool;
-      }
 
       allow create: if isOwner(userId)
                     // Valida que o usuário não está se promovendo a admin
@@ -77,24 +80,23 @@ service cloud.firestore {
 
       allow update: if isOwner(userId)
                      // Impede que um usuário se promova a administrador
-                     && (request.resource.data.isAdmin == resource.data.isAdmin || isAdmin())
+                     && request.resource.data.isAdmin == resource.data.isAdmin
                      // Impede a alteração do e-mail e data de criação
                      && request.resource.data.email == resource.data.email
                      && request.resource.data.createdAt == resource.data.createdAt
-                     // Validação de Schema
-                     && isValidUserProfile(request.resource.data);
+                     // Validação de Schema (permite campos adicionais no update, como termsAccepted)
+                     && request.resource.data.keys().hasAll(['displayName', 'email', 'createdAt', 'isAdmin', 'termsAccepted']);
       
       /* =============================
           Endereços (Addresses)
       ============================== */
       match /addresses/{addressId} {
-        allow read, write: if isOwner(userId)
-                           && isValidAddress(request.resource.data); // Validação de schema na escrita
-        allow delete: if isOwner(userId);
+        allow read, list, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidAddress(request.resource.data);
       }
       
       /* =============================
-          Carrinho (Carts) - regras simplificadas, pois o checkout é o ponto crítico
+          Carrinho (Carts)
       ============================== */
       match /carts/{cartId} {
         allow read, write, delete: if isOwner(userId);
@@ -120,15 +122,14 @@ service cloud.firestore {
             && data.shippingCost is number && data.shippingCost >= 0
             && isValidOrderItems(data.items)
             && data.expiresAt is timestamp
-            && data.orderDate == request.time // Validação de Timestamp
+            && data.orderDate == request.time
             && data.createdAt == request.time
             && data.updatedAt == request.time;
         }
 
         allow create: if isOwner(userId) && isValidNewOrder(request.resource.data);
         
-        // Regras de Máquina de Estado para Updates
-        function isValidOrderUpdate(data, oldData) {
+        function isValidOrderStateTransition(newData, oldData) {
             let validTransitions = {
                 'Processing': ['IN_PRODUCTION', 'Cancelled'],
                 'IN_PRODUCTION': ['READY', 'Cancelled'],
@@ -136,19 +137,15 @@ service cloud.firestore {
                 'LABEL_GENERATED': ['Shipped', 'Cancelled'],
                 'Shipped': ['Delivered']
             };
-            let validStatuses = validTransitions[oldData.status];
-            
-            return data.status == oldData.status || (validStatuses != null && data.status in validStatuses);
+            let allowedNextStates = validTransitions[oldData.status];
+            return newData.status == oldData.status || (allowedNextStates != null && newData.status in allowedNextStates);
         }
 
-        allow update: if isAdmin()
-                      // Valida transição de status
-                      && isValidOrderUpdate(request.resource.data, resource.data)
+        allow update: if isAdmin() && isValidOrderStateTransition(request.resource.data, resource.data)
                       // Impede alteração de campos imutáveis pelo admin
                       && request.resource.data.userId == resource.data.userId
                       && request.resource.data.createdAt == resource.data.createdAt
                       && request.resource.data.orderDate == resource.data.orderDate;
-                      // Outras validações de schema para update podem ser adicionadas aqui
       }
 
       /* =============================
@@ -163,36 +160,55 @@ service cloud.firestore {
                 && data.userId == request.auth.uid
                 && data.userName is string
                 && data.userEmail is string
-                && data.status == 'Pending' // Validação de Estado Inicial
+                && data.status == 'Pending'
                 && data.totalBasePrice is number
                 && isValidAddress(data.shippingAddress)
                 && data.shippingMethod is string
                 && isValidOrderItems(data.items)
-                && data.createdAt == request.time // Validação de Timestamp
+                && data.createdAt == request.time
                 && data.updatedAt == request.time;
         }
 
         allow create: if isOwner(userId) && isValidNewCustomRequest(request.resource.data);
 
-        // Um usuário pode deletar sua própria solicitação, mas apenas se estiver pendente.
-        allow delete: if isOwner(userId) && resource.data.status == 'Pending';
+        // SOFT-DELETE: Desabilitamos o 'delete'. O cancelamento agora é um 'update' de status.
+        allow delete: if false;
         
-        // Apenas um admin pode aprovar, recusar ou atualizar uma solicitação.
-        function isValidRequestUpdate(data, oldData) {
-            let validTransitions = {
+        function isValidRequestStateTransition(newData, oldData) {
+            let adminTransitions = {
                 'Pending': ['Approved', 'Cancelled'],
-                'Approved': ['Cancelled'] // Admin pode cancelar um pedido aprovado
+                'Approved': ['Cancelled'] 
             };
-             let validStatuses = validTransitions[oldData.status];
+            let userTransitions = {
+                'Pending': ['Cancelled']
+            };
             
-            return data.status == oldData.status || (validStatuses != null && data.status in validStatuses);
+            let adminAllowed = adminTransitions[oldData.status];
+            let userAllowed = userTransitions[oldData.status];
+            
+            let statusChanged = newData.status != oldData.status;
+
+            // Se o status não mudou, permite outras alterações (pelo admin)
+            if (!statusChanged) return isAdmin();
+
+            // Se o status mudou, valida a transição
+            if (isAdmin()) {
+              return adminAllowed != null && newData.status in adminAllowed;
+            }
+            if (isOwner(userId)) {
+               // Usuário só pode mudar de 'Pending' para 'Cancelled' e só pode mudar o status.
+               return userAllowed != null 
+                  && newData.status in userAllowed
+                  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']);
+            }
+            return false;
         }
         
-        allow update: if isAdmin()
-                      && isValidRequestUpdate(request.resource.data, resource.data)
-                      // Impede alteração de campos imutáveis
+        allow update: if (isAdmin() || isOwner(userId))
+                      && isValidRequestStateTransition(request.resource.data, resource.data)
                       && request.resource.data.userId == resource.data.userId
-                      && request.resource.data.createdAt == resource.data.createdAt;
+                      && request.resource.data.createdAt == resource.data.createdAt
+                      && request.resource.data.updatedAt == request.time;
       }
     }
 
@@ -205,6 +221,13 @@ service cloud.firestore {
     match /products/{productId} {
       allow get, list: if true;
       allow write: if false; // Nenhum cliente pode escrever na coleção de produtos
+    }
+    
+    // A coleção de estoque é pública para leitura (para o cliente ver a quantidade),
+    // mas apenas o admin pode escrever (para atualizar o estoque).
+    match /product_inventory/{productId} {
+        allow get, list: if true;
+        allow write: if isAdmin();
     }
   }
 }

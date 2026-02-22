@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo, type CSSProperties } from 'react';
@@ -10,10 +11,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { ShoppingBag, Loader2, Info, ArrowRight, Sparkles, ShoppingCart } from 'lucide-react';
+import { ShoppingBag, Loader2, Info, ArrowRight, Sparkles, ShoppingCart, Archive } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { useUser, useFirestore, addDocumentNonBlocking } from '@/firebase';
+import { useUser, useFirestore, addDocumentNonBlocking, useDoc, useMemoFirebase } from '@/firebase';
 import { collection, doc, serverTimestamp, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import Link from 'next/link';
 
@@ -77,6 +78,11 @@ export function ProductClientPage({ product }: { product: Product }) {
   const firestore = useFirestore();
   const router = useRouter();
 
+  const inventoryRef = useMemoFirebase(() =>
+    (firestore && product.groupId) ? doc(firestore, 'product_inventory', product.groupId) : null
+  , [firestore, product.groupId]);
+  const { data: inventoryData, isLoading: isInventoryLoading } = useDoc<{quantity: number}>(inventoryRef);
+  
   const [selectedImageUrl, setSelectedImageUrl] = useState(product.imageUrl);
   const [currentPrice, setCurrentPrice] = useState(product.price);
   const [isAdding, setIsAdding] = useState(false);
@@ -84,7 +90,6 @@ export function ProductClientPage({ product }: { product: Product }) {
   
   const displayableSizes = useMemo(() => product.options.sizes.filter(s => s.toLowerCase() !== 'padrão'), [product.options.sizes]);
 
-  // States for options
   const [selectedSize, setSelectedSize] = useState<string>(() => 
     getFirstAvailable(product.options.sizes, product.availability?.sizes)
   );
@@ -144,7 +149,10 @@ export function ProductClientPage({ product }: { product: Product }) {
     );
   }, [selectedSize, selectedColor, selectedMaterial, product]);
 
-  const isReady = currentVariant ? currentVariant.readyMade : product.readyMade;
+  const stockQuantity = inventoryData?.quantity ?? 0;
+  const isPotentiallyReadyMade = product.readyMade; // Is this product type ever sold as ready-made?
+  const isReady = isPotentiallyReadyMade && stockQuantity > 0;
+  const isOutOfStock = isPotentiallyReadyMade && stockQuantity === 0;
 
   const handleAddToCart = async () => {
     if (!user || !firestore) {
@@ -152,6 +160,8 @@ export function ProductClientPage({ product }: { product: Product }) {
       router.push('/login');
       return;
     }
+    
+    if (isOutOfStock) return;
 
     setIsAdding(true);
     const cartItemsRef = collection(firestore, 'users', user.uid, 'carts', 'main', 'items');
@@ -167,8 +177,8 @@ export function ProductClientPage({ product }: { product: Product }) {
       selectedColor,
       selectedMaterial,
       unitPriceAtAddition: currentPrice,
-      readyMade: !!isReady,
-      selected: false, // Add to cart but don't select for checkout
+      readyMade: !!isReady, // Based on dynamic stock check
+      selected: false,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
@@ -189,20 +199,20 @@ export function ProductClientPage({ product }: { product: Product }) {
       router.push('/login');
       return;
     }
+    
+    if (isOutOfStock) return;
 
     setIsBuyingNow(true);
     try {
         const cartItemsRef = collection(firestore, 'users', user.uid, 'carts', 'main', 'items');
         const batch = writeBatch(firestore);
 
-        // 1. O Catálogo (garçom) limpa a bandeja: Desmarca todos os outros itens.
         const q = query(cartItemsRef, where('selected', '==', true));
         const querySnapshot = await getDocs(q);
         querySnapshot.forEach((doc) => {
           batch.update(doc.ref, { selected: false });
         });
 
-        // 2. O Catálogo coloca o prato único na bandeja: Adiciona o novo item já selecionado.
         const newCartItemRef = doc(cartItemsRef);
         const cartItemData = {
             cartId: 'main',
@@ -215,17 +225,15 @@ export function ProductClientPage({ product }: { product: Product }) {
             selectedColor,
             selectedMaterial,
             unitPriceAtAddition: currentPrice,
-            readyMade: !!isReady,
-            selected: true, // This is the single item being taken to checkout.
+            readyMade: !!isReady, // Based on dynamic stock check
+            selected: true,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         };
         batch.set(newCartItemRef, cartItemData);
 
-        // 3. Efetiva a preparação da bandeja.
         await batch.commit();
 
-        // 4. Leva a bandeja para a cozinha (Checkout).
         const checkoutType = isReady ? 'ready' : 'custom';
         router.push(`/checkout?type=${checkoutType}`);
 
@@ -239,6 +247,8 @@ export function ProductClientPage({ product }: { product: Product }) {
         setIsBuyingNow(false);
     }
   };
+  
+  const isLoading = isAdding || isBuyingNow;
 
   return (
     <div className="flex flex-col min-h-screen p-4 sm:p-6 lg:p-8">
@@ -263,7 +273,14 @@ export function ProductClientPage({ product }: { product: Product }) {
 
           <div className="flex flex-col justify-center space-y-8">
             <div>
-              <p className="text-primary font-bold tracking-widest uppercase text-xs mb-2">{product.category}</p>
+              <div className="flex justify-between items-center">
+                 <p className="text-primary font-bold tracking-widest uppercase text-xs mb-2">{product.category}</p>
+                 {isPotentiallyReadyMade && !isInventoryLoading && (
+                    <Badge variant={isOutOfStock ? "destructive" : "secondary"}>
+                      {isOutOfStock ? `Esgotado` : `Apenas ${stockQuantity} em estoque!`}
+                    </Badge>
+                  )}
+              </div>
               <h1 className="text-4xl lg:text-5xl font-bold font-headline leading-tight">{product.name}</h1>
               <div className="flex items-baseline gap-4 mt-4">
                 <span className="text-3xl font-bold text-primary">R$ {currentPrice.toFixed(2).replace('.', ',')}</span>
@@ -333,7 +350,7 @@ export function ProductClientPage({ product }: { product: Product }) {
                 onClick={handleBuyNow} 
                 size="lg" 
                 className="h-14 text-lg font-bold shadow-lg shadow-primary/20"
-                disabled={isBuyingNow}
+                disabled={isLoading || isOutOfStock}
               >
                 {isBuyingNow ? <Loader2 className="animate-spin mr-2" /> : <ShoppingBag className="mr-2 size-5" />}
                 Comprar Agora
@@ -343,14 +360,21 @@ export function ProductClientPage({ product }: { product: Product }) {
                 variant="outline" 
                 size="lg" 
                 className="h-14 border-2 font-bold"
-                disabled={isAdding}
+                disabled={isLoading || isOutOfStock}
               >
                 {isAdding ? <Loader2 className="animate-spin mr-2" /> : <ShoppingCart className="mr-2 size-5" />}
                 Adicionar ao Carrinho
               </Button>
             </div>
 
-            {!isReady && (
+            {isOutOfStock ? (
+               <div className="bg-destructive/10 p-4 rounded-xl flex gap-3 border border-destructive/20">
+                <Archive className="size-5 text-destructive shrink-0" />
+                <p className="text-xs text-destructive-foreground/80">
+                  Este item de pronta entrega esgotou! Você ainda pode encomendá-lo como um item "Sob Demanda" e entraremos em contato.
+                </p>
+              </div>
+            ) : !isReady && (
               <div className="bg-primary/5 p-4 rounded-xl flex gap-3 border border-primary/10">
                 <Info className="size-5 text-primary shrink-0" />
                 <p className="text-xs text-muted-foreground">

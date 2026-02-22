@@ -45,7 +45,8 @@ export type Product = {
   imageUrl: string;
   imageHint: string;
   category: string;
-  readyMade?: boolean;
+  readyMade?: boolean; // Is the product type eligible for ready-made?
+  quantity?: number; // The actual stock count from Firestore
   primaryColor?: string;
   size?: string;
   sizeRangeText?: string;

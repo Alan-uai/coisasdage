@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -9,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { Archive } from 'lucide-react';
 
 const renderColorSwatch = (color: string, primaryColor?: string): JSX.Element => {
     const colorHexMap: { [key: string]: string } = {
@@ -65,6 +67,12 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
         const sizes = product.options.sizes.filter(s => s.toLowerCase() !== 'padrão');
         return sizes;
     }, [product.options.sizes]);
+    
+    // Logic for readiness based on new inventory system
+    const isPotentiallyReadyMade = product.readyMade;
+    const stockQuantity = product.quantity ?? 0;
+    const isReady = isPotentiallyReadyMade && stockQuantity > 0;
+    const isOutOfStock = isPotentiallyReadyMade && stockQuantity === 0;
 
     const handleColorChange = (color: string) => {
         const variant = product.variants.find(v => v.color === color) || product;
@@ -94,7 +102,6 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
         }
     };
 
-    // Sorted colors for the card: Available first
     const sortedColors = useMemo(() => {
         const colors = product.options.colors.filter(c => c !== 'Padrão');
         const available = colors.filter(c => !product.availability?.colors || product.availability.colors.includes(c));
@@ -107,16 +114,6 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
     const productUrl = `/products/${product.groupId}`;
     const productLink = activeColor ? `${productUrl}?color=${encodeURIComponent(activeColor)}` : productUrl;
 
-    const currentVariant = useMemo(() => {
-        const size = activeSizeIndex > -1 ? cycleableSizes[activeSizeIndex] : undefined;
-        return product.variants.find(v => 
-            (!activeColor || v.color === activeColor) && 
-            (!size || v.size === size)
-        ) || null;
-    }, [activeColor, activeSizeIndex, product, cycleableSizes]);
-
-    const isReady = currentVariant ? currentVariant.readyMade : product.readyMade;
-
     let priceText = `R$ ${activePrice.toFixed(2).replace('.', ',')}`;
     if (!isReadyMadeCarousel && product.minPrice !== product.maxPrice && activeSizeIndex === -1) {
         priceText = `R$ ${product.minPrice.toFixed(2).replace('.', ',')} - R$ ${product.maxPrice.toFixed(2).replace('.', ',')}`;
@@ -124,13 +121,18 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
 
     return (
         <Card className="overflow-hidden flex flex-col group h-full relative">
-            {!isReady && (
-                <div className="absolute top-2 right-2 z-10">
+            <div className="absolute top-2 right-2 z-10 space-y-1 text-right">
+                {isOutOfStock && (
+                     <Badge variant="destructive" className="shadow-sm">
+                        <Archive className="mr-1.5 size-3" /> Esgotado
+                    </Badge>
+                )}
+                {!isReady && !isOutOfStock && (
                     <Badge variant="secondary" className="bg-primary text-primary-foreground shadow-sm">
                         Sob Demanda
                     </Badge>
-                </div>
-            )}
+                )}
+            </div>
             <CardHeader className="p-0">
                 <Link href={productLink} className="block overflow-hidden">
                     <Image

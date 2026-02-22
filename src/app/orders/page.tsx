@@ -1,8 +1,8 @@
 
 'use client';
 
-import { useUser, useFirestore, useCollection, useMemoFirebase, deleteDocumentNonBlocking, addDocumentNonBlocking, serverTimestamp } from '@/firebase';
-import { collection, query, orderBy, limit, doc, Timestamp } from 'firebase/firestore';
+import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, serverTimestamp } from '@/firebase';
+import { collection, query, orderBy, limit, doc, Timestamp, where } from 'firebase/firestore';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -24,10 +24,10 @@ import {
   Ticket,
   ArrowRight,
   Pencil,
-  RefreshCcw,
   Trash2,
   AlertCircle,
-  Store
+  Store,
+  XCircle
 } from 'lucide-react';
 import type { Order, CustomRequest } from '@/lib/types';
 import { useState, useEffect } from 'react';
@@ -117,27 +117,16 @@ export default function MyOrdersPage() {
     }
   }, [orders]);
 
-  useEffect(() => {
-    // Client-side cleanup of expired 'Processing' orders.
-    if (firestore && user?.uid && orders) {
-      const now = new Date();
-      orders.forEach(order => {
-        if (order.status === 'Processing' && order.expiresAt && order.expiresAt.toDate() < now) {
-          console.log(`Cleaning up expired order: ${order.id}`);
-          const orderRef = doc(firestore, 'users', user.uid, 'orders', order.id);
-          deleteDocumentNonBlocking(orderRef);
-        }
-      });
-    }
-  }, [orders, firestore, user]);
-  
-  const handleDeleteRequest = (requestId: string) => {
+  const handleCancelRequest = (requestId: string) => {
     if (!user || !firestore) return;
     const requestRef = doc(firestore, 'users', user.uid, 'custom_requests', requestId);
-    deleteDocumentNonBlocking(requestRef);
+    updateDocumentNonBlocking(requestRef, { 
+      status: 'Cancelled',
+      updatedAt: serverTimestamp()
+    });
     toast({
-      title: "Solicitação Removida",
-      description: "A solicitação foi removida do seu histórico.",
+      title: "Solicitação Cancelada",
+      description: "Sua solicitação foi movida para o status de cancelada.",
     });
   };
 
@@ -168,7 +157,7 @@ export default function MyOrdersPage() {
       // CustomRequest Statuses
       case 'Pending': return <Badge variant="outline"><MessageCircle className="size-3 mr-1" /> Em Negociação</Badge>;
       case 'Approved': return <Badge variant="default" className="bg-amber-500"><Sparkles className="size-3 mr-1" /> Em Produção</Badge>;
-      case 'Cancelled': return <Badge variant="destructive">Recusado</Badge>;
+      case 'Cancelled': return <Badge variant="destructive">Recusado/Cancelado</Badge>;
       
       default: return <Badge variant="outline">{status}</Badge>;
     }
@@ -229,7 +218,7 @@ export default function MyOrdersPage() {
                     {getShippingInfo(order)}
                   </p>
 
-                  {order.status === 'Processing' && order.expiresAt && (
+                  {order.status === 'Processing' && order.expiresAt && order.expiresAt.toDate() > new Date() && (
                     <div className="bg-amber-50 border border-amber-200/50 p-3 rounded-lg flex justify-between items-center">
                       <Countdown expiryTimestamp={order.expiresAt} />
                       <Button asChild size="sm">
@@ -297,22 +286,14 @@ export default function MyOrdersPage() {
                   )}
 
                   <div className="flex flex-col gap-2 mt-4">
-                     {(req.status === 'Pending' || req.status === 'Approved') && (
-                        <Button variant="secondary" onClick={() => setEditingItem({ type: 'request', data: req })}>
-                            <Pencil className="mr-2 size-4" /> Alterar Endereço
-                        </Button>
-                     )}
-
-                     {req.status === 'Cancelled' && (
+                     {req.status === 'Pending' && (
                        <div className="grid grid-cols-2 gap-2">
-                            <Button asChild variant="outline">
-                                <Link href={`https://wa.me/${WHATSAPP_NUMBER}?text=Ol%C3%A1!%20Gostaria%20de%20conversar%20sobre%20a%20solicita%C3%A7%C3%A3o%20recusada%20%23${req.id.slice(-6).toUpperCase()}`}>
-                                    <RefreshCcw className="mr-2 size-4" /> Refazer Solicitação
-                                </Link>
+                            <Button variant="secondary" onClick={() => setEditingItem({ type: 'request', data: req })}>
+                                <Pencil className="mr-2 size-4" /> Alterar Endereço
                             </Button>
-                          <Button variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={() => handleDeleteRequest(req.id)}>
-                              <Trash2 className="mr-2 size-4" /> Remover
-                          </Button>
+                            <Button variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={() => handleCancelRequest(req.id)}>
+                                <XCircle className="mr-2 size-4" /> Cancelar Solicitação
+                            </Button>
                        </div>
                      )}
 

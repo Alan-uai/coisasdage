@@ -2,10 +2,50 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MercadoPagoConfig, Payment } from 'mercadopago';
 import { initializeFirebase } from '@/firebase';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp, runTransaction, collection, writeBatch, increment } from 'firebase/firestore';
 import { notifyAdminNewOrder } from '@/app/checkout/actions';
+import type { Order, OrderItemSummary } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * Decrements stock for ready-made items in an order using a Firestore transaction.
+ */
+async function decrementStock(orderItems: OrderItemSummary[]) {
+    const { firestore } = initializeFirebase();
+    if (!orderItems || orderItems.length === 0) return;
+
+    try {
+        await runTransaction(firestore, async (transaction) => {
+            for (const item of orderItems) {
+                // Only decrement stock for items marked as ready-made
+                if (item.readyMade) {
+                    const inventoryRef = doc(firestore, 'product_inventory', item.productGroupId);
+                    const inventoryDoc = await transaction.get(inventoryRef);
+
+                    if (!inventoryDoc.exists()) {
+                        throw `Estoque para o produto ${item.productName} (ID: ${item.productGroupId}) não encontrado.`;
+                    }
+
+                    const currentQuantity = inventoryDoc.data().quantity;
+                    if (currentQuantity < item.quantity) {
+                        throw `Estoque insuficiente para ${item.productName}. Pedido: ${item.quantity}, Disponível: ${currentQuantity}.`;
+                    }
+
+                    const newQuantity = currentQuantity - item.quantity;
+                    transaction.update(inventoryRef, { quantity: newQuantity });
+                }
+            }
+        });
+        console.log("Estoque decrementado com sucesso para o pedido.");
+    } catch (error) {
+        console.error("Erro na transação de decremento de estoque:", error);
+        // Em um cenário real, aqui você poderia notificar o admin sobre a falha para reconciliação manual.
+        // Por exemplo: enviar um e-mail/whatsapp de alerta.
+        throw new Error('Falha ao atualizar o estoque. A venda foi concluída, mas o estoque precisa de verificação manual.');
+    }
+}
+
 
 export async function POST(request: NextRequest) {
   const { firestore } = initializeFirebase();
@@ -22,7 +62,6 @@ export async function POST(request: NextRequest) {
     const topic = body.type || body.topic;
     const resourceId = body.data?.id || body.id;
 
-    // SIMULAÇÃO DE TESTE DO MERCADO PAGO
     if (resourceId === '123456' || resourceId === 123456) {
         console.log('Mercado Pago URL Test (ID 123456) successful');
         return NextResponse.json({ test: 'success' }, { status: 200 });
@@ -37,7 +76,7 @@ export async function POST(request: NextRequest) {
       const paymentId = paymentData.id || null;
       const status = paymentData.status || null;
       const merchantOrderId = paymentData.order?.id?.toString() || null;
-      const isLive = paymentData.live_mode ?? true; // Assume live if not present
+      const isLive = paymentData.live_mode ?? true;
 
       if (externalReference && externalReference.includes('|')) {
         const [userId, orderId] = externalReference.split('|');
@@ -60,18 +99,18 @@ export async function POST(request: NextRequest) {
           updatePayload.shippingAllowed = false;
         }
         
-        // Only update if there's something to update besides the timestamp
-        if (Object.keys(updatePayload).length > 1) {
-          await updateDoc(orderRef, updatePayload);
-        }
+        await updateDoc(orderRef, updatePayload);
         
         if (isApproved) {
             console.log(`Successfully updated order ${orderId} to status IN_PRODUCTION.`);
             const orderSnap = await getDoc(orderRef);
+
             if (orderSnap.exists()) {
-                const orderData = orderSnap.data();
-                // Notifica a artesã sobre o novo pedido, indicando se é um teste.
-                // Apenas notifica para pedidos que não são de retirada local
+                const orderData = orderSnap.data() as Order;
+
+                // Decrement stock atomically
+                await decrementStock(orderData.items);
+
                 if (orderData.shippingMethod !== 'pickup') {
                     await notifyAdminNewOrder(orderId, orderData.userName, orderData.items, !isLive);
                 }

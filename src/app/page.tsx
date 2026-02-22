@@ -1,29 +1,15 @@
 
-import Link from 'next/link';
 import Image from 'next/image';
 import { getProducts, getLogoUrl } from '@/lib/cloudinary';
-import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
-import type { Product } from '@/lib/types';
-import { ProductCard } from '@/components/product-card';
 import { Instagram, Facebook, Twitter, Mail, Phone, MapPin } from 'lucide-react';
+import Link from 'next/link';
+import { ProductListClient } from '@/components/product-list-client';
 
 export default async function ProductsPage() {
   const [logoUrl, products] = await Promise.all([
     getLogoUrl(),
     getProducts()
   ]);
-  
-  const readyMadeProducts = products.filter(product => product.readyMade);
-  
-  const categoryDisplayProducts = products.filter(p => !p.readyMade || (p.readyMade && p.isMain));
-  
-  const productsByCategory = categoryDisplayProducts.reduce((acc, product) => {
-    if (!acc[product.category]) {
-      acc[product.category] = [];
-    }
-    acc[product.category].push(product);
-    return acc;
-  }, {} as Record<string, Product[]>);
 
   // Configurações vindas do .env
   const socialLinks = {
@@ -60,64 +46,7 @@ export default async function ProductsPage() {
           <p className="text-muted-foreground mt-2">Explore nossas criações feitas à mão com amor.</p>
         </header>
         
-        <main className="flex-1 space-y-12">
-          {products.length === 0 && (
-            <div className="text-center text-muted-foreground p-12 border-2 border-dashed rounded-lg bg-muted/50">
-                <h2 className="text-2xl font-bold font-headline mb-2 text-foreground">Estamos fechados/sem produtos, obrigado.</h2>
-                <p>Volte em breve para conferir nossas novidades artesanais!</p>
-            </div>
-          )}
-
-          {readyMadeProducts.length > 0 && (
-            <section>
-              <h2 className="text-3xl font-bold tracking-tight font-headline mb-4">A Pronta Entrega</h2>
-              <Carousel 
-                opts={{
-                  align: "start",
-                  loop: readyMadeProducts.length > 3,
-                }}
-                className="w-full"
-              >
-                <CarouselContent className="-ml-4">
-                  {readyMadeProducts.map((product) => (
-                    <CarouselItem key={product.id} className="pl-4 sm:basis-1/2 lg:basis-1/3">
-                      <div className="h-full">
-                        <ProductCard product={product} isReadyMadeCarousel={true} />
-                      </div>
-                    </CarouselItem>
-                  ))}
-                </CarouselContent>
-                <CarouselPrevious className="ml-12" />
-                <CarouselNext className="mr-12"/>
-              </Carousel>
-            </section>
-          )}
-
-          {Object.entries(productsByCategory).map(([category, categoryProducts]) => (
-            <section key={category}>
-              <h2 className="text-3xl font-bold tracking-tight font-headline mb-4">{category}</h2>
-              <Carousel 
-                opts={{
-                  align: "start",
-                  loop: categoryProducts.length > 3,
-                }}
-                className="w-full"
-              >
-                <CarouselContent className="-ml-4">
-                  {categoryProducts.map((product) => (
-                    <CarouselItem key={product.id} className="pl-4 sm:basis-1/2 lg:basis-1/3">
-                      <div className="h-full">
-                         <ProductCard product={product} />
-                      </div>
-                    </CarouselItem>
-                  ))}
-                </CarouselContent>
-                <CarouselPrevious className="ml-12" />
-                <CarouselNext className="mr-12" />
-              </Carousel>
-            </section>
-          ))}
-        </main>
+        <ProductListClient allProducts={products} />
 
         <footer className="mt-20 pt-12 border-t border-primary/20 bg-primary text-primary-foreground -mx-4 sm:-mx-6 lg:-mx-8 px-8 py-12 rounded-t-3xl">
           <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">

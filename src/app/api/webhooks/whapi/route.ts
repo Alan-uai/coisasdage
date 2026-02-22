@@ -62,22 +62,9 @@ async function processWhapiWebhook(request: NextRequest) {
 
         const textLower = text.toLowerCase();
         const testCommand = `#${TEST_ID.toLowerCase()}`;
-        const chatId = message.chat_id || `${adminNumberOnly}@s.whatsapp.net`;
-        const isGroup = chatId.includes('@g.us');
-
+        
         // 1. Comando de Teste
         if (textLower === testCommand || textLower === '#teste') {
-            let replyText = `✅ *Conexão Coisas da Gê OK!*\n\nO sistema reconheceu seu número como autorizado para gerenciar encomendas.`;
-            
-            if (isGroup) {
-                replyText += `\n\n📌 *ID DESTE GRUPO*: \`${chatId}\`\n_Copie este ID para o seu .env como WHATSAPP_GROUP_ID para receber orçamentos aqui._`;
-            }
-
-            await axios.post('https://gate.whapi.cloud/messages/text', {
-                to: chatId,
-                body: replyText
-            }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
-            
             return NextResponse.json({ success: 'teste concluído' });
         }
 
@@ -101,10 +88,7 @@ async function processWhapiWebhook(request: NextRequest) {
             });
 
             if (!targetDoc) {
-                await axios.post('https://gate.whapi.cloud/messages/text', {
-                    to: chatId,
-                    body: `❌ Pedido *#${commandId}* não encontrado.`
-                }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
+                console.log(`[WHAPI] Orçamento com ID ${commandId} não encontrado.`);
                 return NextResponse.json({ error: 'Pedido não encontrado' });
             }
 
@@ -113,19 +97,6 @@ async function processWhapiWebhook(request: NextRequest) {
                 productionDays: productionDays || targetDoc.data().productionDays || 7,
                 updatedAt: serverTimestamp()
             });
-
-            let responseMsg = `✅ Pedido *#${commandId}* atualizado para *${statusText}*!`;
-            if (status === 'Approved') {
-                responseMsg += `\n⏳ Prazo: ${productionDays || 7} dias de produção.`;
-                responseMsg += `\n\n_Ação confirmada por: ${senderNumber || 'Administrador'}_`;
-            } else {
-                responseMsg += `\n\n_A solicitação foi cancelada no sistema._`;
-            }
-
-            await axios.post('https://gate.whapi.cloud/messages/text', {
-                to: chatId,
-                body: responseMsg
-            }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
 
             return NextResponse.json({ success: true, command: 'budget_update' });
         }
@@ -146,10 +117,7 @@ async function processWhapiWebhook(request: NextRequest) {
             });
 
             if (!targetDoc) {
-                await axios.post('https://gate.whapi.cloud/messages/text', {
-                    to: chatId,
-                    body: `❌ Pedido *#${commandId}* não encontrado para marcar como pronto.`
-                }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
+                console.log(`[WHAPI] Pedido com ID ${commandId} não encontrado para marcar como pronto.`);
                 return NextResponse.json({ error: 'Pedido não encontrado' });
             }
 
@@ -157,10 +125,7 @@ async function processWhapiWebhook(request: NextRequest) {
             const orderRef = targetDoc.ref;
 
             if (orderData.status !== 'IN_PRODUCTION') {
-                 await axios.post('https://gate.whapi.cloud/messages/text', {
-                    to: chatId,
-                    body: `⚠️ Pedido *#${commandId}* não está "Em Produção". Status atual: ${orderData.status}. Ação cancelada.`
-                }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
+                console.log(`[WHAPI] Pedido ${commandId} não está em produção. Status: ${orderData.status}`);
                 return NextResponse.json({ error: 'Status do pedido inválido para esta ação.' });
             }
 
@@ -170,21 +135,11 @@ async function processWhapiWebhook(request: NextRequest) {
                 shippingAllowed: true,
                 updatedAt: serverTimestamp()
             });
-
-            // Envia resposta inicial e inicia a geração da etiqueta em background
-            await axios.post('https://gate.whapi.cloud/messages/text', {
-                to: chatId,
-                body: `✅ Pedido *#${commandId}* marcado como *Pronto*. \n\nIniciando geração de etiqueta... Você receberá em breve.`
-            }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
             
             // Chama a função de logística (não bloqueante para o webhook)
             generateLabelAndNotify(firestore, orderRef, orderData.merchantOrderId, targetDoc.id)
               .catch(async (e) => {
                 console.error(`Erro no processo de etiqueta para ${targetDoc.id}:`, e);
-                await axios.post('https://gate.whapi.cloud/messages/text', {
-                    to: chatId,
-                    body: `❌ Falha ao gerar etiqueta para o pedido *#${commandId}*. Verifique os logs.`
-                }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
               });
 
             return NextResponse.json({ success: true, command: 'order_ready_triggered' });

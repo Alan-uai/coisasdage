@@ -16,7 +16,7 @@ import {
   CheckCircle2, 
   ShoppingBag, 
   Truck, 
-  Hammer,
+  PackageCheck,
   ClipboardList,
   MessageCircle,
   Sparkles,
@@ -85,8 +85,8 @@ export default function MyOrdersPage() {
     switch (status) {
       // Order Statuses
       case 'Processing': return <Badge variant="secondary"><Clock className="size-3 mr-1" /> Processando Pagamento</Badge>;
-      case 'IN_PRODUCTION': return <Badge variant="default" className="bg-amber-500"><Hammer className="size-3 mr-1" /> Em Produção</Badge>;
-      case 'READY': return <Badge variant="default" className="bg-cyan-500"><Package className="size-3 mr-1" /> Pronto para Envio</Badge>;
+      case 'IN_PRODUCTION': return <Badge variant="default" className="bg-amber-500"><Package className="size-3 mr-1" /> Preparando Envio</Badge>;
+      case 'READY': return <Badge variant="default" className="bg-cyan-500"><PackageCheck className="size-3 mr-1" /> Pronto para Envio</Badge>;
       case 'LABEL_GENERATED': return <Badge variant="default" className="bg-purple-500"><Ticket className="size-3 mr-1" /> Etiqueta Gerada</Badge>;
       case 'Shipped': return <Badge variant="default" className="bg-blue-500"><Truck className="size-3 mr-1" /> Enviado</Badge>;
       case 'Delivered': return <Badge variant="default" className="bg-green-600"><CheckCircle2 className="size-3 mr-1" /> Entregue</Badge>;

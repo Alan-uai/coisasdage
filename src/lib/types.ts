@@ -86,6 +86,7 @@ export type Address = {
 export type Order = {
   id: string;
   userId: string;
+  userName: string;
   orderDate: Timestamp;
   totalAmount: number;
   status: 'Processing' | 'IN_PRODUCTION' | 'READY' | 'LABEL_GENERATED' | 'Shipped' | 'Delivered' | 'Cancelled';

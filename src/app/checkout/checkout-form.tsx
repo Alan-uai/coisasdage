@@ -182,6 +182,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
 
             setDocumentNonBlocking(newOrderRef, {
                 userId: user.uid,
+                userName: user.displayName || 'Cliente',
                 orderDate: serverTimestamp(),
                 totalAmount: subtotal,
                 status: 'Processing', // Aguardando pagamento

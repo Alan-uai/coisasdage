@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MercadoPagoConfig, Payment } from 'mercadopago';
 import { initializeFirebase } from '@/firebase';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { notifyAdminNewOrder } from '@/app/checkout/actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,7 +51,6 @@ export async function POST(request: NextRequest) {
         const isApproved = status === 'approved';
         
         // Atualiza o pedido com o status de pagamento e a trava de envio.
-        // A geração da etiqueta agora é disparada pelo comando #ID Pronto.
         await updateDoc(orderRef, {
           merchantOrderId: merchantOrderId || undefined,
           paymentId: paymentId || undefined,
@@ -59,7 +59,15 @@ export async function POST(request: NextRequest) {
           updatedAt: serverTimestamp(),
         });
         
-        console.log(`Successfully updated order ${orderId} to status IN_PRODUCTION`);
+        if (isApproved) {
+            console.log(`Successfully updated order ${orderId} to status IN_PRODUCTION.`);
+            const orderSnap = await getDoc(orderRef);
+            if (orderSnap.exists()) {
+                const orderData = orderSnap.data();
+                // Notifica a artesã sobre o novo pedido de pronta entrega para que ela possa dar o comando #ID Pronto
+                await notifyAdminNewOrder(orderId, orderData.userName, orderData.items);
+            }
+        }
       }
     }
 

@@ -92,7 +92,7 @@ export async function createPreference(
                     description: `${item.selectedColor} / ${item.selectedSize}`,
                     quantity: item.quantity,
                     currency_id: 'BRL',
-                    unit_price: item.unit_priceAtAddition,
+                    unit_price: item.unitPriceAtAddition,
                 })),
                 payer: {
                     email: userEmail,
@@ -158,5 +158,28 @@ export async function processPayment(
     } catch (error: any) {
         console.error('Payment processing error:', error);
         return { success: false, error: error.message || 'Erro ao processar pagamento.' };
+    }
+}
+
+/**
+ * Notifica a Artesã sobre um novo pedido PAGO de pronta entrega.
+ */
+export async function notifyAdminNewOrder(orderId: string, clientName: string, items: { productName: string }[]) {
+    if (!WHAPI_TOKEN) return;
+
+    // Se houver um ID de grupo, envia para o grupo, caso contrário para o número privado
+    const destination = GROUP_ID || ARTESA_WPP;
+    const shortId = orderId.slice(-6).toUpperCase();
+    const productList = items.map(item => `- ${item.productName}`).join('\n');
+
+    try {
+        await axios.post('https://gate.whapi.cloud/messages/text', {
+            to: destination,
+            body: `📦 *Novo Pedido Pago (Pronta Entrega)!*\n\nCliente: *${clientName}*\n\nItens:\n${productList}\n\n*ID do Pedido: #${shortId}*\n\nQuando o pacote estiver pronto para envio, responda aqui com:\n` + "`" + `#${shortId} Pronto` + "`"
+        }, {
+            headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` }
+        });
+    } catch (e) {
+        console.error('Erro ao notificar admin sobre novo pedido via Whapi:', e);
     }
 }

@@ -4,40 +4,98 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     /* =============================
-        SECURITY FUNCTIONS
+        Funções de Segurança
     ============================== */
-
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    /* =============================
-        USER PROFILES & SUBCOLLECTIONS
-    ============================== */
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
 
+    function isAdmin() {
+      // Verifica se o usuário que está fazendo a requisição é um administrador.
+      // O documento de perfil do usuário deve ter um campo `isAdmin: true`.
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    /* =============================
+        Perfis de Usuário e Subcoleções
+    ============================== */
     match /users/{userId} {
-      allow get: if isAuthenticated();
-      allow create, update: if isAuthenticated() && request.auth.uid == userId;
+      // Um usuário só pode ler e modificar seu próprio perfil.
+      allow get, update: if isOwner(userId);
       
-      // Regras para pedidos (histórico do usuário)
-      match /orders/{orderId} {
-        allow read: if isAuthenticated() && request.auth.uid == userId;
-        allow create: if isAuthenticated() && request.auth.uid == userId;
+      // Qualquer usuário autenticado pode criar seu próprio perfil.
+      // Impede que um usuário se promova a administrador.
+      allow create: if isOwner(userId)
+                    && request.resource.data.isAdmin == false;
+                    
+      // Impede que um usuário existente se promova a administrador ao atualizar.
+      // Apenas um admin pode alterar o status de admin de outro usuário.
+      update: if request.resource.data.isAdmin == resource.data.isAdmin || isAdmin();
+
+      /* =============================
+          Endereços (Addresses)
+      ============================== */
+      match /addresses/{addressId} {
+        // O usuário tem controle total sobre seus próprios endereços.
+        allow read, write, delete: if isOwner(userId);
       }
       
-      // Carrinho de compras
+      /* =============================
+          Carrinho (Carts)
+      ============================== */
+      // O carrinho e seus itens podem ser livremente modificados pelo dono.
       match /carts/{cartId} {
-        allow read, write: if isAuthenticated() && request.auth.uid == userId;
+        allow read, write, delete: if isOwner(userId);
         match /items/{itemId} {
-          allow read, write: if isAuthenticated() && request.auth.uid == userId;
+           allow read, write, delete: if isOwner(userId);
         }
+      }
+
+      /* =============================
+          Pedidos (Orders) - Pronta Entrega
+      ============================== */
+      match /orders/{orderId} {
+        // O usuário pode ler seus próprios pedidos. Administradores podem ler todos.
+        allow get, list: if isOwner(userId) || isAdmin();
+        
+        // O usuário pode criar um pedido.
+        // O status inicial deve ser 'Processing' e o usuário não pode se passar por outro.
+        allow create: if isOwner(userId)
+                      && request.resource.data.userId == request.auth.uid
+                      && request.resource.data.status == 'Processing';
+
+        // Apenas processos de backend (via webhooks) ou admins devem atualizar pedidos.
+        // O usuário não pode alterar o status ou o valor de um pedido já feito.
+        allow update: if isAdmin();
+      }
+
+      /* =============================
+          Solicitações (Custom Requests) - Sob Demanda
+      ============================== */
+      match /custom_requests/{requestId} {
+        // O usuário pode criar e ler suas próprias solicitações. Admins podem ver todas.
+        allow get, list: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId)
+                      && request.resource.data.userId == request.auth.uid
+                      && request.resource.data.status == 'Pending';
+
+        // Um usuário pode deletar uma solicitação se ela ainda estiver pendente.
+        allow delete: if isOwner(userId) && resource.data.status == 'Pending';
+        
+        // Apenas um admin pode aprovar, recusar ou atualizar uma solicitação.
+        allow update: if isAdmin();
       }
     }
 
     /* =============================
-        PUBLIC COLLECTIONS
+        COLEÇÕES PÚBLICAS
     ============================== */
     
+    // A coleção de produtos é pública para qualquer pessoa ver.
     match /products/{productId} {
       allow get, list: if true;
     }

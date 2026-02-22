@@ -1,4 +1,3 @@
-
 'use client';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
@@ -18,7 +17,7 @@ import Image from 'next/image';
 import { useFirestore, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useMemoFirebase, useCollection } from '@/firebase';
 import { collection, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { QrCode, Loader2, MapPin, ClipboardList, ShoppingBag, ArrowRight, Truck, Calendar, Pencil, ShoppingCart, Phone } from 'lucide-react';
+import { QrCode, Loader2, MapPin, ClipboardList, ShoppingBag, ArrowRight, Truck, Calendar, Pencil, ShoppingCart, Phone, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -66,22 +65,6 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
       savedAddresses?.find(a => a.id === selectedAddressId) || savedAddresses?.find(a => a.isDefault) || savedAddresses?.[0]
     , [savedAddresses, selectedAddressId]);
     
-    // This logic safely redirects to the catalog ONLY after a custom request, preventing race conditions.
-    const shouldRedirectToCatalog = useMemo(() => 
-        !isCartLoading && 
-        !isLoading && 
-        !preferenceId && 
-        !pixData && 
-        !isFinished && 
-        cartItems.length === 0
-    , [isCartLoading, isLoading, preferenceId, pixData, isFinished, cartItems.length]);
-
-    useEffect(() => {
-        if (shouldRedirectToCatalog) {
-            router.replace('/');
-        }
-    }, [shouldRedirectToCatalog, router]);
-
     // Sincroniza a seleção do endereço padrão
     useEffect(() => {
         if (savedAddresses && savedAddresses.length > 0 && !selectedAddressId) {
@@ -296,13 +279,18 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
             </div>
         );
     }
-
-    if (shouldRedirectToCatalog) {
+    
+    // Se o carrinho estiver vazio e não estivermos em um fluxo de pagamento ativo,
+    // mostra um estado de carrinho vazio.
+    if (!isCartLoading && cartItems.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center text-center p-8 py-20 min-h-[400px]">
-                <Loader2 className="size-16 text-primary animate-spin mb-4" />
-                <h2 className="text-2xl font-bold font-headline">Processo finalizado!</h2>
-                <p className="text-muted-foreground mt-2">Redirecionando você para o catálogo...</p>
+                <ShoppingCart className="size-16 text-muted-foreground mb-4" />
+                <h2 className="text-2xl font-bold font-headline">Seu carrinho de checkout está vazio</h2>
+                <p className="text-muted-foreground mt-2">Adicione itens ao carrinho para finalizar a compra.</p>
+                <Button asChild className="mt-6">
+                    <Link href="/">Voltar ao Catálogo</Link>
+                </Button>
             </div>
         );
     }
@@ -468,5 +456,3 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
         </div>
     );
 }
-
-    

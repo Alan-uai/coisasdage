@@ -101,7 +101,6 @@ async function processWhapiWebhook(request: NextRequest) {
             const inventoryRef = doc(firestore, 'product_inventory', productId);
             await setDoc(inventoryRef, { quantity }, { merge: true });
 
-            await sendReply(chatId, `📦 Estoque atualizado! Produto *${productId}* agora tem *${quantity}* unidades.`);
             return NextResponse.json({ success: true, command: 'stock_update' });
         }
 

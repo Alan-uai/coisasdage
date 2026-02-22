@@ -219,14 +219,14 @@ service cloud.firestore {
     // A coleção de produtos é pública para qualquer pessoa ver.
     // A escrita é controlada pelo seu backend/processo de sync com Cloudinary, não por clientes.
     match /products/{productId} {
-      allow get, list: if true;
+      allow read: if true;
       allow write: if false; // Nenhum cliente pode escrever na coleção de produtos
     }
     
     // A coleção de estoque é pública para leitura (para o cliente ver a quantidade),
     // mas apenas o admin pode escrever (para atualizar o estoque).
     match /product_inventory/{productId} {
-        allow get, list: if true;
+        allow read: if true;
         allow write: if isAdmin();
     }
   }

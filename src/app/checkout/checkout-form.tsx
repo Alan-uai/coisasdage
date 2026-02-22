@@ -18,7 +18,7 @@ import Image from 'next/image';
 import { useFirestore, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useMemoFirebase, useCollection } from '@/firebase';
 import { collection, doc, serverTimestamp, query, orderBy, where, getDocs, Timestamp } from 'firebase/firestore';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { QrCode, Loader2, MapPin, ClipboardList, ShoppingBag, ArrowRight, Truck, Calendar, Pencil, ShoppingCart, Phone, CheckCircle, Wallet, Home, Briefcase, Package, Bike, Store, Plus } from 'lucide-react';
+import { QrCode, Loader2, MapPin, ClipboardList, ShoppingBag, ArrowRight, Truck, Calendar, ChevronsUpDown, ShoppingCart, Phone, CheckCircle, Wallet, Home, Briefcase, Package, Bike, Store, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -523,17 +523,24 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
 
     const renderPaymentStep = () => (
       <div className="space-y-6">
-        <div className="p-4 border rounded-xl bg-muted/30 relative group transition-all">
-            <div className="flex justify-between items-start mb-2">
-              <span className="text-[10px] font-bold uppercase text-primary tracking-widest flex items-center gap-1"><MapPin className="size-3" /> Entregar em</span>
-              <Button variant="outline" size="sm" onClick={() => setStep('address')} className="h-7 gap-1.5">
-                <Pencil className="size-3" /> Alterar Endereço
-              </Button>
+        <div className="flex items-center justify-between p-4 border rounded-xl bg-muted/30">
+          <div>
+            <span className="text-[10px] font-bold uppercase text-primary tracking-widest flex items-center gap-1">
+              <MapPin className="size-3" /> Entregar em
+            </span>
+            <div className="text-sm mt-2">
+              <p className="font-bold text-base">
+                {shippingAddress?.streetName}, {shippingAddress?.streetNumber}
+              </p>
+              <p className="text-muted-foreground">
+                {shippingAddress?.city} - {shippingAddress?.state}
+              </p>
             </div>
-            <div className="text-sm">
-                <p className="font-bold text-base">{shippingAddress?.streetName}, {shippingAddress?.streetNumber}</p>
-                <p className="text-muted-foreground">{shippingAddress?.city} - {shippingAddress?.state}</p>
-            </div>
+          </div>
+          <Button variant="ghost" onClick={() => setStep('address')} className="gap-1.5">
+            Alterar
+            <ChevronsUpDown className="size-4" />
+          </Button>
         </div>
         <div className="space-y-4">
           <Label className="text-sm font-bold uppercase text-muted-foreground block">Meios de pagamento</Label>
@@ -607,4 +614,5 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
     
 
     
+
 

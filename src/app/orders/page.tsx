@@ -5,7 +5,7 @@ import { useUser, useFirestore, useCollection, useMemoFirebase, deleteDocumentNo
 import { collection, query, orderBy, limit, doc, Timestamp } from 'firebase/firestore';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -21,11 +21,13 @@ import {
   MessageCircle,
   Sparkles,
   Ticket,
-  ArrowRight
+  ArrowRight,
+  Pencil
 } from 'lucide-react';
 import type { Order, CustomRequest } from '@/lib/types';
 import { useState, useEffect } from 'react';
 import { getMLShipmentTracking } from '@/lib/mercado-livre';
+import { EditAddressDialog } from '@/components/edit-address-dialog';
 
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "5511999999999";
 
@@ -71,6 +73,7 @@ export default function MyOrdersPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const [trackingInfo, setTrackingInfo] = useState<Record<string, any>>({});
+  const [editingItem, setEditingItem] = useState<{ type: 'order' | 'request', data: Order | CustomRequest } | null>(null);
 
   const ordersQuery = useMemoFirebase(
     () => (user && firestore ? query(
@@ -146,8 +149,8 @@ export default function MyOrdersPage() {
       case 'Cancelled': return <Badge variant="destructive">Cancelado</Badge>;
       
       // CustomRequest Statuses
-      case 'Approved': return <Badge variant="default" className="bg-amber-500"><Package className="size-3 mr-1" /> Em Produção</Badge>;
       case 'Pending': return <Badge variant="outline"><MessageCircle className="size-3 mr-1" /> Em Negociação</Badge>;
+      case 'Approved': return <Badge variant="default" className="bg-amber-500"><Sparkles className="size-3 mr-1" /> Em Produção</Badge>;
       
       default: return <Badge variant="outline">{status}</Badge>;
     }
@@ -202,12 +205,17 @@ export default function MyOrdersPage() {
                       </Button>
                     </div>
                   )}
-
-                  <div className="flex justify-between items-end border-t pt-4">
-                    <p className="text-xs text-muted-foreground">{order.createdAt?.toDate().toLocaleDateString('pt-BR')}</p>
-                    <p className="text-xl font-bold text-primary">R$ {order.totalAmount.toFixed(2).replace('.', ',')}</p>
-                  </div>
                 </CardContent>
+                 <CardFooter className="p-4 bg-muted/30 flex justify-between items-center">
+                    <div className="flex items-center gap-4">
+                      {(order.status === 'Processing' || order.status === 'IN_PRODUCTION') && (
+                          <Button variant="outline" size="sm" onClick={() => setEditingItem({ type: 'order', data: order })}>
+                              <Pencil className="mr-2 size-3" /> Editar Endereço
+                          </Button>
+                      )}
+                    </div>
+                    <p className="text-xl font-bold text-primary">R$ {order.totalAmount.toFixed(2).replace('.', ',')}</p>
+                </CardFooter>
               </Card>
             ))
           )}
@@ -246,17 +254,29 @@ export default function MyOrdersPage() {
                     </div>
                   )}
 
-                  <Button asChild variant="outline" className="w-full">
-                    <Link href={`https://wa.me/${WHATSAPP_NUMBER}?text=Olá!%20Gostaria%20de%20falar%20sobre%20a%20solicitação%20#${req.id.slice(-6).toUpperCase()}`}>
-                      Falar com a Gê no WhatsApp
-                    </Link>
-                  </Button>
+                  <div className="flex flex-col gap-2 mt-4">
+                     {req.status === 'Pending' && (
+                        <Button variant="secondary" onClick={() => setEditingItem({ type: 'request', data: req })}>
+                            <Pencil className="mr-2 size-4" /> Alterar Endereço
+                        </Button>
+                     )}
+                     <Button asChild variant="outline" className="w-full">
+                        <Link href={`https://wa.me/${WHATSAPP_NUMBER}?text=Olá!%20Gostaria%20de%20falar%20sobre%20a%20solicitação%20#${req.id.slice(-6).toUpperCase()}`}>
+                          Falar com a Gê no WhatsApp
+                        </Link>
+                      </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))
           )}
         </TabsContent>
       </Tabs>
+
+      <EditAddressDialog
+        item={editingItem}
+        onClose={() => setEditingItem(null)}
+      />
     </div>
   );
 }

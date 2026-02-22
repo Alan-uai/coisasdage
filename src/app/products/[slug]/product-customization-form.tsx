@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo, type CSSProperties } from 'react';
@@ -266,7 +265,11 @@ export function ProductClientPage({ product }: { product: Product }) {
               priority
             />
             <div className="absolute top-6 right-6">
-              {isReady ? (
+              {isInventoryLoading ? (
+                  <Badge variant="secondary" className="px-3 py-1 text-sm font-bold shadow-lg flex items-center gap-2">
+                      <Loader2 className="size-4 animate-spin" />
+                  </Badge>
+              ) : isReady ? (
                   <Badge variant="default" className="bg-green-600 text-primary-foreground shadow-lg hover:bg-green-700 px-4 py-1 text-sm font-bold">
                       {stockQuantity} em estoque
                   </Badge>

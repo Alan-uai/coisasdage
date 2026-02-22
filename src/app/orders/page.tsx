@@ -93,7 +93,7 @@ export default function MyOrdersPage() {
       case 'Cancelled': return <Badge variant="destructive">Cancelado</Badge>;
       
       // CustomRequest Statuses
-      case 'Approved': return <Badge variant="default" className="bg-emerald-500"><Sparkles className="size-3 mr-1" /> Orçamento Aprovado</Badge>;
+      case 'Approved': return <Badge variant="default" className="bg-amber-500"><Package className="size-3 mr-1" /> Em Produção</Badge>;
       case 'Pending': return <Badge variant="outline"><MessageCircle className="size-3 mr-1" /> Em Negociação</Badge>;
       
       default: return <Badge variant="outline">{status}</Badge>;
@@ -173,18 +173,18 @@ export default function MyOrdersPage() {
                       <p><strong>Cor:</strong> {req.items[0].selectedColor}</p>
                     </div>
                   </div>
+                  
                   {req.status === 'Approved' && (
-                    <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-100 space-y-1">
-                      <p className="text-sm font-bold text-emerald-800">ORÇAMENTO APROVADO</p>
-                      <p className="text-sm text-emerald-700">Prazo de confecção: {req.productionDays || 7} dias.</p>
-                      <p className="text-xs text-emerald-600 pt-1">O pagamento será combinado diretamente pelo WhatsApp.</p>
+                    <div className="bg-amber-50 p-3 rounded-lg border border-amber-100 text-amber-800 text-sm">
+                      <p><strong>Prazo de confecção:</strong> {req.productionDays || 7} dias.</p>
                     </div>
                   )}
-                  {req.status === 'Pending' && (
-                    <Button asChild variant="outline" className="w-full">
-                      <Link href={`https://wa.me/${WHATSAPP_NUMBER}`}>Falar com a Gê no WhatsApp</Link>
-                    </Button>
-                  )}
+
+                  <Button asChild variant="outline" className="w-full">
+                    <Link href={`https://wa.me/${WHATSAPP_NUMBER}?text=Olá!%20Gostaria%20de%20falar%20sobre%20a%20solicitação%20#${req.id.slice(-6).toUpperCase()}`}>
+                      Falar com a Gê no WhatsApp
+                    </Link>
+                  </Button>
                 </CardContent>
               </Card>
             ))

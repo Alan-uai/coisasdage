@@ -451,7 +451,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
           ) : (
             <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="cpf" render={({ field }) => (<FormItem><FormLabel>CPF</FormLabel><FormControl><Input {...field} placeholder="000.000.000-00" /></FormControl><FormMessage /></FormItem>)}/>
-              <FormField control={form.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Telefone (WhatsApp)</FormLabel><FormControl><Input {...field} placeholder="(11) 99999-9999" /></FormControl><FormMessage /></FormMessage>)}/>
+              <FormField control={form.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Telefone (WhatsApp)</FormLabel><FormControl><Input {...field} placeholder="(11) 99999-9999" /></FormControl><FormMessage /></FormItem>)}/>
               <FormField control={form.control} name="zipCode" render={({ field }) => (<FormItem className="col-span-1"><FormLabel>CEP</FormLabel><FormControl><Input {...field} placeholder="00000-000" onBlur={(e) => handleCepBlur(e.target.value)} /></FormControl><FormMessage /></FormItem>)}/>
               <FormField control={form.control} name="streetName" render={({ field }) => (<FormItem className="col-span-2"><FormLabel>Rua</FormLabel><FormControl><Input {...field} placeholder="Ex: Av. das Flores" /></FormControl><FormMessage /></FormItem>)}/>
               <FormField control={form.control} name="streetNumber" render={({ field }) => (<FormItem className="col-span-1"><FormLabel>Número</FormLabel><FormControl><Input {...field} placeholder="123" /></FormControl><FormMessage /></FormItem>)}/>
@@ -583,5 +583,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
       </div>
     );
 }
+
+    
 
     

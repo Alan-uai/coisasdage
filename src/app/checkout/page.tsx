@@ -1,4 +1,3 @@
-
 'use client';
 import { useMemo } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
@@ -12,8 +11,11 @@ import Link from 'next/link';
 
 function CheckoutSkeleton() {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-      <Skeleton className="h-64 w-full rounded-lg" />
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start max-w-6xl mx-auto">
+      <div className="space-y-6">
+        <Skeleton className="h-64 w-full rounded-lg" />
+        <Skeleton className="h-24 w-full rounded-lg" />
+      </div>
       <Skeleton className="h-96 w-full rounded-lg" />
     </div>
   );
@@ -47,7 +49,7 @@ export default function CheckoutPage() {
 
     if (!user) {
         return (
-            <div className="flex flex-col flex-1 items-center justify-center text-center p-4 col-span-full">
+            <div className="flex flex-col flex-1 items-center justify-center text-center p-4 col-span-full min-h-[50vh]">
                 <LogIn className="size-16 text-muted-foreground" />
                 <h1 className="text-4xl font-bold tracking-tight font-headline mt-6">Faça Login para Continuar</h1>
                 <p className="text-muted-foreground mt-2">Você precisa estar conectado para finalizar sua compra.</p>
@@ -58,7 +60,6 @@ export default function CheckoutPage() {
         );
     }
 
-    // O CheckoutForm agora lida internamente com o estado vazio para evitar redirecionamento durante o Pix
     return (
       <CheckoutForm 
         user={user} 
@@ -71,15 +72,9 @@ export default function CheckoutPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
-      <header className="mb-8">
-        <h1 className="text-4xl font-bold tracking-tight font-headline">Finalizar Compra</h1>
-        <p className="text-muted-foreground mt-2">Revise seu pedido e informe seus dados para o pagamento.</p>
-      </header>
-      <main className="max-w-6xl mx-auto">
+      <main>
         {renderContent()}
       </main>
     </div>
   );
 }
-
-    

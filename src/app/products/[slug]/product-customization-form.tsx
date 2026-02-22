@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, type CSSProperties } from 'react';
 import Image from 'next/image';
 import { useSearchParams, useRouter } from 'next/navigation';
 import type { Product, ProductVariant } from '@/lib/types';
@@ -16,6 +16,49 @@ import { cn } from '@/lib/utils';
 import { useUser, useFirestore, addDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
 import { collection, doc, serverTimestamp } from 'firebase/firestore';
 import Link from 'next/link';
+
+const renderColorSwatch = (color: string, primaryColor?: string): JSX.Element => {
+    const colorHexMap: { [key: string]: string } = {
+        'preto': '#262626',
+        'branco': '#f8f8f8',
+        'cinza': '#8a8a8a',
+        'vermelho': '#c85c5c',
+        'verde sálvia': '#a8b898',
+        'verde': '#6a9c89',
+        'azul marinho': '#384d70',
+        'azul': '#6c8dae',
+        'amarelo': '#e3b448',
+        'rosa': '#d4a5a5',
+        'roxo': '#9b7e9b',
+        'laranja': '#d88c6c',
+        'marrom': '#8c6c5c',
+        'terracota': '#c27d60',
+        'cru': '#e8e2d9',
+        'salmão': '#FFA07A',
+        'bordô': '#6D2E46',
+        'lima': '#C0D904',
+        'esmeralda': '#50C878',
+        'dourado': '#FFD700',
+    };
+
+    const getHex = (c: string) => colorHexMap[c.toLowerCase().trim()];
+    const optionColors = color.split(' e ').map(c => c.trim().toLowerCase()).filter(Boolean);
+    let allColorNames: string[] = [];
+    if (primaryColor && !optionColors.includes(primaryColor.toLowerCase())) {
+        allColorNames.push(primaryColor.toLowerCase());
+    }
+    allColorNames.push(...optionColors);
+    const finalHexParts = [...new Set(allColorNames)].map(getHex).filter((c): c is string => !!c).slice(0, 3);
+    if (finalHexParts.length === 0) return <div className="w-full h-full rounded-full bg-gray-200" />;
+    let style: CSSProperties;
+    switch (finalHexParts.length) {
+        case 3: style = { background: `linear-gradient(135deg, ${finalHexParts[0]} 33%, ${finalHexParts[1]} 33%, ${finalHexParts[1]} 66%, ${finalHexParts[2]} 66%)` }; break;
+        case 2: style = { background: `linear-gradient(135deg, ${finalHexParts[0]} 50%, ${finalHexParts[1]} 50%)` }; break;
+        default: style = { backgroundColor: finalHexParts[0] }; break;
+    }
+    const hasLightColor = allColorNames.some(c => c.includes('branco') || c.includes('cru'));
+    return <div className={cn("w-full h-full rounded-full", hasLightColor && "border border-gray-300")} style={style} />;
+};
 
 const getFirstAvailable = (allOptions: string[], availableOptions?: string[]): string => {
   if (availableOptions && availableOptions.length > 0) {
@@ -211,14 +254,17 @@ export function ProductClientPage({ product }: { product: Product }) {
                           onClick={() => isAvailable && setSelectedColor(color)}
                           disabled={!isAvailable}
                           className={cn(
-                            "px-4 py-2 border rounded-full text-sm transition-all",
+                            "flex items-center gap-2 px-4 py-2 border rounded-full text-sm transition-all",
                             selectedColor === color
                               ? "bg-primary text-primary-foreground border-primary"
                               : isAvailable ? "hover:bg-muted" : "",
                             !isAvailable && "opacity-40 cursor-not-allowed line-through"
                           )}
                         >
-                          {color}
+                          <div className="size-5 rounded-full shrink-0">
+                            {renderColorSwatch(color, product.primaryColor)}
+                          </div>
+                          <span>{color}</span>
                         </button>
                       );
                     })}

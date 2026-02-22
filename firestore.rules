@@ -106,7 +106,7 @@ service cloud.firestore {
       }
 
       /* CARRINHO */
-      match /carts/{cartId} {
+      match /carts/{cartId}/{document=**} {
         allow read, write, delete: if isOwner(userId);
       }
 

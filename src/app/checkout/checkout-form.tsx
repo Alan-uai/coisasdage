@@ -105,14 +105,15 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
     useEffect(() => {
         if (watchCity && watchCity.trim().toLowerCase() === ARTISAN_CITY) {
             setIsLocalCity(true);
-            if (shippingOption === 'mercado_envios') {
-                setShippingOption('pickup');
+             if (shippingOption === 'mercado_envios') {
+                setShippingOption('pickup'); 
             }
         } else {
             setIsLocalCity(false);
             setShippingOption('mercado_envios');
         }
-    }, [watchCity]);
+    }, [watchCity, shippingOption]);
+
 
     useEffect(() => {
         if (shippingOption === 'local_delivery') {
@@ -162,6 +163,23 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
         }
     }, [savedAddresses, selectedAddressId, isAddressesLoading, handleSelectAddress]);
     
+     const handleCepBlur = async (cep: string) => {
+        const cleanCep = cep.replace(/\D/g, '');
+        if (cleanCep.length !== 8) return;
+
+        try {
+            const res = await fetch(`https://brasilapi.com.br/api/cep/v1/${cleanCep}`);
+            if (!res.ok) throw new Error('CEP não encontrado');
+            const data = await res.json();
+            form.setValue('streetName', data.street, { shouldValidate: true });
+            form.setValue('city', data.city, { shouldValidate: true });
+            form.setValue('state', data.state, { shouldValidate: true });
+            toast({ title: "Endereço preenchido!", description: "Por favor, confirme o número." });
+        } catch (error) {
+            toast({ variant: 'destructive', title: "Erro ao buscar CEP", description: "Verifique o CEP digitado e tente novamente." });
+        }
+    };
+
     const handleAddressSubmit = useCallback(async (values: z.infer<typeof addressSchema>) => {
       if (!user || cartItems.length === 0) return;
       
@@ -434,7 +452,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
             <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="cpf" render={({ field }) => (<FormItem><FormLabel>CPF</FormLabel><FormControl><Input {...field} placeholder="000.000.000-00" /></FormControl><FormMessage /></FormItem>)}/>
               <FormField control={form.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Telefone (WhatsApp)</FormLabel><FormControl><Input {...field} placeholder="(11) 99999-9999" /></FormControl><FormMessage /></FormMessage>)}/>
-              <FormField control={form.control} name="zipCode" render={({ field }) => (<FormItem className="col-span-1"><FormLabel>CEP</FormLabel><FormControl><Input {...field} placeholder="00000-000" /></FormControl><FormMessage /></FormItem>)}/>
+              <FormField control={form.control} name="zipCode" render={({ field }) => (<FormItem className="col-span-1"><FormLabel>CEP</FormLabel><FormControl><Input {...field} placeholder="00000-000" onBlur={(e) => handleCepBlur(e.target.value)} /></FormControl><FormMessage /></FormItem>)}/>
               <FormField control={form.control} name="streetName" render={({ field }) => (<FormItem className="col-span-2"><FormLabel>Rua</FormLabel><FormControl><Input {...field} placeholder="Ex: Av. das Flores" /></FormControl><FormMessage /></FormItem>)}/>
               <FormField control={form.control} name="streetNumber" render={({ field }) => (<FormItem className="col-span-1"><FormLabel>Número</FormLabel><FormControl><Input {...field} placeholder="123" /></FormControl><FormMessage /></FormItem>)}/>
               <FormField control={form.control} name="city" render={({ field }) => (<FormItem className="col-span-1"><FormLabel>Cidade</FormLabel><FormControl><Input {...field} placeholder="Sua Cidade" /></FormControl><FormMessage /></FormItem>)}/>
@@ -442,24 +460,36 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
             </div>
           )}
           
-          {isLocalCity && checkoutType === 'ready' && (
-            <div className="space-y-3 pt-4">
-                <Label>Opções de Entrega para {watchCity}</Label>
+          {checkoutType === 'ready' && (
+             <div className="space-y-3 pt-4">
+                <Label>Opções de Entrega</Label>
                 <RadioGroup value={shippingOption} onValueChange={(v) => setShippingOption(v as any)} className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <Label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer has-[:checked]:bg-primary/5 has-[:checked]:border-primary">
-                        <RadioGroupItem value="local_delivery" id="local_delivery" />
-                        <div className="grid gap-0.5">
-                            <span className="font-bold flex items-center gap-1.5"><Bike className="size-4" /> Entrega Local</span>
-                            <span className="text-xs text-muted-foreground">Taxa: R$ {LOCAL_DELIVERY_FEE.toFixed(2).replace('.',',')}</span>
-                        </div>
-                    </Label>
-                     <Label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer has-[:checked]:bg-primary/5 has-[:checked]:border-primary">
-                        <RadioGroupItem value="pickup" id="pickup" />
-                        <div className="grid gap-0.5">
-                            <span className="font-bold flex items-center gap-1.5"><Store className="size-4" /> Retirar no Local</span>
-                            <span className="text-xs text-muted-foreground">Grátis (a combinar)</span>
-                        </div>
-                    </Label>
+                    {isLocalCity ? (
+                        <>
+                            <Label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer has-[:checked]:bg-primary/5 has-[:checked]:border-primary">
+                                <RadioGroupItem value="local_delivery" id="local_delivery" />
+                                <div className="grid gap-0.5">
+                                    <span className="font-bold flex items-center gap-1.5"><Bike className="size-4" /> Entrega Local</span>
+                                    <span className="text-xs text-muted-foreground">Taxa: R$ {LOCAL_DELIVERY_FEE.toFixed(2).replace('.',',')}</span>
+                                </div>
+                            </Label>
+                             <Label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer has-[:checked]:bg-primary/5 has-[:checked]:border-primary">
+                                <RadioGroupItem value="pickup" id="pickup" />
+                                <div className="grid gap-0.5">
+                                    <span className="font-bold flex items-center gap-1.5"><Store className="size-4" /> Retirar no Local</span>
+                                    <span className="text-xs text-muted-foreground">Grátis (a combinar)</span>
+                                </div>
+                            </Label>
+                        </>
+                    ) : (
+                        <Label className="col-span-full flex items-center gap-3 p-3 border rounded-lg cursor-pointer has-[:checked]:bg-primary/5 has-[:checked]:border-primary">
+                            <RadioGroupItem value="mercado_envios" id="mercado_envios" />
+                             <div className="grid gap-0.5">
+                                <span className="font-bold flex items-center gap-1.5"><Truck className="size-4" /> Mercado Envios</span>
+                                <span className="text-xs text-muted-foreground">Entrega para todo o Brasil</span>
+                            </div>
+                        </Label>
+                    )}
                 </RadioGroup>
             </div>
           )}
@@ -553,3 +583,5 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
       </div>
     );
 }
+
+    

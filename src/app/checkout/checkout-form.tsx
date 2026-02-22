@@ -1,3 +1,4 @@
+
 'use client';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
@@ -138,22 +139,23 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
       }, [savedAddresses, form]);
     
       useEffect(() => {
-        if (isAddressesLoading) return;
+        if (isAddressesLoading || resumedOrder) return;
     
-        // If there are saved addresses and none is selected yet, select the default.
+        // This effect handles the automatic selection of an address when the page loads.
+        // If there are saved addresses and none has been selected yet, it picks the default.
         if (savedAddresses && savedAddresses.length > 0 && selectedAddressId === '') {
             const defaultAddr = savedAddresses.find(a => a.isDefault) || savedAddresses[0];
             if (defaultAddr) {
                 handleSelectAddress(defaultAddr.id);
             }
         } 
-        // If there are no saved addresses, ensure we are in 'add new' mode.
+        // If there are no saved addresses, it ensures the form is ready for a new entry.
         else if (!savedAddresses || savedAddresses.length === 0) {
             if (selectedAddressId !== '_new_') {
                  setSelectedAddressId('_new_');
             }
         }
-      }, [savedAddresses, isAddressesLoading, selectedAddressId, handleSelectAddress]);
+    }, [savedAddresses, isAddressesLoading, selectedAddressId, handleSelectAddress, resumedOrder]);
 
     const clearPaidCartItems = useCallback(() => {
         if (!user || !firestore) return;
@@ -614,6 +616,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
     
 
     
+
 
 
 

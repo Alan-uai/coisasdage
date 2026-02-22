@@ -27,7 +27,7 @@ export default function CheckoutPage() {
   const cartItemsQuery = useMemoFirebase(
     () => (user && firestore ? query(
         collection(firestore, 'users', user.uid, 'carts', 'main', 'items'), 
-        where('selected', '!=', false),
+        where('selected', '==', true),
         limit(20)
     ) : null),
     [user, firestore]
@@ -81,3 +81,5 @@ export default function CheckoutPage() {
     </div>
   );
 }
+
+    

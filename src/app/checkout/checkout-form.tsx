@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import Image from 'next/image';
 import { useFirestore, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useMemoFirebase, useCollection } from '@/firebase';
-import { collection, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { collection, doc, serverTimestamp, query, orderBy, where, getDocs } from 'firebase/firestore';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { QrCode, Loader2, MapPin, ClipboardList, ShoppingBag, ArrowRight, Truck, Calendar, Pencil, ShoppingCart, Phone, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -65,7 +65,6 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
       savedAddresses?.find(a => a.id === selectedAddressId) || savedAddresses?.find(a => a.isDefault) || savedAddresses?.[0]
     , [savedAddresses, selectedAddressId]);
     
-    // Sincroniza a seleção do endereço padrão
     useEffect(() => {
         if (savedAddresses && savedAddresses.length > 0 && !selectedAddressId) {
             const defaultAddr = savedAddresses.find(a => a.isDefault) || savedAddresses[0];
@@ -73,54 +72,20 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
         }
     }, [savedAddresses, selectedAddressId]);
 
-    // Auto-initiate para pronta entrega se já tiver endereço
-    useEffect(() => {
-      if (currentAddress && !hasAttemptedAutoInit && !isLoading && !preferenceId && !orderId && !isFinished) {
-        setHasAttemptedAutoInit(true);
-        const values = {
-          cpf: currentAddress.cpf,
-          streetName: currentAddress.streetName,
-          streetNumber: currentAddress.streetNumber,
-          zipCode: currentAddress.zipCode,
-          city: currentAddress.city,
-          state: currentAddress.state,
-          phone: currentAddress.phone || '',
-        };
-        form.reset(values);
-        if (checkoutType === 'ready' && cartItems.length > 0) {
-          onSubmit(values);
-        }
-      }
-    }, [currentAddress, hasAttemptedAutoInit, isLoading, preferenceId, orderId, checkoutType, form, cartItems.length, isFinished, onSubmit]);
-
-    const handleSelectAddress = (id: string) => {
-      const addr = savedAddresses?.find(a => a.id === id);
-      if (addr) {
-        setSelectedAddressId(id);
-        setShowAddressForm(false);
-        setPreferenceId(null);
-        brickRendered.current = false;
-        form.reset({
-          cpf: addr.cpf,
-          streetName: addr.streetName,
-          streetNumber: addr.streetNumber,
-          zipCode: addr.zipCode,
-          city: addr.city,
-          state: addr.state,
-          phone: addr.phone || '',
-        });
-      }
-    };
-
     const clearPaidCartItems = useCallback(() => {
-        if (!user || !firestore || cartItems.length === 0) return;
-        cartItems.forEach(item => {
-            const itemRef = doc(firestore, 'users', user.uid, 'carts', 'main', 'items', item.id);
-            deleteDocumentNonBlocking(itemRef);
+        if (!user || !firestore) return;
+        const selectedItemsQuery = query(
+            collection(firestore, 'users', user.uid, 'carts', 'main', 'items'),
+            where('selected', '==', true)
+        );
+        getDocs(selectedItemsQuery).then(snapshot => {
+            snapshot.forEach(document => {
+                deleteDocumentNonBlocking(document.ref);
+            });
         });
-    }, [user, firestore, cartItems]);
-
-    async function onSubmit(values: z.infer<typeof addressSchema>) {
+    }, [user, firestore]);
+    
+    const onSubmit = useCallback(async (values: z.infer<typeof addressSchema>) => {
         if (!user || cartItems.length === 0 || !user.email || !firestore) return;
         
         setIsLoading(true);
@@ -197,7 +162,45 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
         } finally {
             setIsLoading(false);
         }
-    }
+    }, [user, cartItems, subtotal, firestore, checkoutType, clearPaidCartItems]);
+
+    useEffect(() => {
+      if (currentAddress && !hasAttemptedAutoInit && !isLoading && !preferenceId && !orderId && !isFinished) {
+        setHasAttemptedAutoInit(true);
+        const values = {
+          cpf: currentAddress.cpf,
+          streetName: currentAddress.streetName,
+          streetNumber: currentAddress.streetNumber,
+          zipCode: currentAddress.zipCode,
+          city: currentAddress.city,
+          state: currentAddress.state,
+          phone: currentAddress.phone || '',
+        };
+        form.reset(values);
+        if (checkoutType === 'ready' && cartItems.length > 0) {
+          onSubmit(values);
+        }
+      }
+    }, [currentAddress, hasAttemptedAutoInit, isLoading, preferenceId, orderId, checkoutType, form, cartItems.length, isFinished, onSubmit]);
+
+    const handleSelectAddress = (id: string) => {
+      const addr = savedAddresses?.find(a => a.id === id);
+      if (addr) {
+        setSelectedAddressId(id);
+        setShowAddressForm(false);
+        setPreferenceId(null);
+        brickRendered.current = false;
+        form.reset({
+          cpf: addr.cpf,
+          streetName: addr.streetName,
+          streetNumber: addr.streetNumber,
+          zipCode: addr.zipCode,
+          city: addr.city,
+          state: addr.state,
+          phone: addr.phone || '',
+        });
+      }
+    };
 
     const handlePaymentSubmit = useCallback(async (paymentData: any) => {
         if (!orderId || !user.email || !firestore) return;
@@ -280,9 +283,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
         );
     }
     
-    // Se o carrinho estiver vazio e não estivermos em um fluxo de pagamento ativo,
-    // mostra um estado de carrinho vazio.
-    if (!isCartLoading && cartItems.length === 0) {
+    if (!isCartLoading && !isFinished && cartItems.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center text-center p-8 py-20 min-h-[400px]">
                 <ShoppingCart className="size-16 text-muted-foreground mb-4" />
@@ -456,3 +457,5 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading }: { use
         </div>
     );
 }
+
+    

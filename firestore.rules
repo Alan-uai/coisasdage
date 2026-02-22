@@ -121,8 +121,11 @@ service cloud.firestore {
           && isValidOrderItems(request.resource.data.items)
           && request.resource.data.createdAt == request.time;
 
-        // Permite que webhooks (não autenticados) atualizem os pedidos.
-        allow update: if request.auth == null;
+        // Permite que webhooks (não autenticados) atualizem os pedidos,
+        // ou que o dono atualize o pedido enquanto ele está em processamento.
+        allow update: if
+          (request.auth == null) ||
+          (isOwner(userId) && resource.data.status == 'Processing');
       }
 
       /* SOLICITAÇÕES SOB DEMANDA */

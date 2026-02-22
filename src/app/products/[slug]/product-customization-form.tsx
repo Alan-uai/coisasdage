@@ -81,6 +81,8 @@ export function ProductClientPage({ product }: { product: Product }) {
   const [currentPrice, setCurrentPrice] = useState(product.price);
   const [isAdding, setIsAdding] = useState(false);
   const [isBuyingNow, setIsBuyingNow] = useState(false);
+  
+  const displayableSizes = useMemo(() => product.options.sizes.filter(s => s.toLowerCase() !== 'padrão'), [product.options.sizes]);
 
   // States for options
   const [selectedSize, setSelectedSize] = useState<string>(() => 
@@ -95,6 +97,8 @@ export function ProductClientPage({ product }: { product: Product }) {
     const globallyAvailableColors = product.availability?.colors || product.options.colors;
     return candidateColors.filter(c => globallyAvailableColors.includes(c));
   }, [selectedSize, product]);
+
+  const displayableColors = useMemo(() => product.options.colors.filter(c => c.toLowerCase() !== 'padrão'), [product.options.colors]);
   
   const [selectedColor, setSelectedColor] = useState<string>(() => {
     if (colorFromUrl && availableColorsForCurrentSize.includes(colorFromUrl)) return colorFromUrl;
@@ -270,11 +274,11 @@ export function ProductClientPage({ product }: { product: Product }) {
             <Separator />
 
             <div className="space-y-6">
-              {product.options.sizes.length > 1 && (
+              {displayableSizes.length > 1 && (
                 <div className="space-y-3">
                   <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Escolha o Tamanho</Label>
                   <RadioGroup value={selectedSize} onValueChange={setSelectedSize} className="flex flex-wrap gap-2">
-                    {product.options.sizes.map((size) => (
+                    {displayableSizes.map((size) => (
                       <div key={size}>
                         <RadioGroupItem value={size} id={`size-${size}`} className="peer sr-only" />
                         <Label 
@@ -289,11 +293,11 @@ export function ProductClientPage({ product }: { product: Product }) {
                 </div>
               )}
 
-              {product.options.colors.length > 1 && (
+              {displayableColors.length > 1 && (
                 <div className="space-y-3">
                   <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Escolha a Cor</Label>
                   <div className="flex flex-wrap gap-3">
-                    {product.options.colors.map((color) => {
+                    {displayableColors.map((color) => {
                       const isAvailable = availableColorsForCurrentSize.includes(color);
                       return (
                         <button

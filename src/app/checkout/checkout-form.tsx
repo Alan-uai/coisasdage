@@ -215,7 +215,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
 
               setDocumentNonBlocking(newRequestRef, { ...newRequestData, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
               
-              const message = `Olá Gê! Acabei de solicitar um orçamento pelo site para: *${cartItems.map(i => i.productName).join(', ')}*. Meu ID de solicitação é #${newRequestRef.id.slice(-6).toUpperCase()}. Aguardo seu retorno!`;
+              const message = `Olá Gê! Gostaria de solicitar um orçamento pelo site para: *${cartItems.map(i => i.productName).join(', ')}*. Aguardo seu retorno!`;
               const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
 
               window.open(whatsappUrl, '_blank');
@@ -614,5 +614,6 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
     
 
     
+
 
 

@@ -183,9 +183,9 @@ export async function getProducts(): Promise<Product[]> {
         
         // IMPORTANT: Use the plural options from the main product
         const mainOptions = {
-            sizes: mainProductForGroup.rawOptions.sizes ? mainProductForGroup.rawOptions.sizes.split(',').map(s => s.trim()) : [],
-            colors: mainProductForGroup.rawOptions.colors ? mainProductForGroup.rawOptions.colors.split(',').map(c => c.trim()) : [],
-            materials: mainProductForGroup.rawOptions.materials ? mainProductForGroup.rawOptions.materials.split(',').map(m => m.trim()) : [],
+            sizes: mainProductForGroup.rawOptions.sizes ? mainProductForGroup.rawOptions.sizes.split(',').map(s => s.trim()).filter(Boolean) : [],
+            colors: mainProductForGroup.rawOptions.colors ? mainProductForGroup.rawOptions.colors.split(',').map(c => c.trim()).filter(Boolean) : [],
+            materials: mainProductForGroup.rawOptions.materials ? mainProductForGroup.rawOptions.materials.split(',').map(m => m.trim()).filter(Boolean) : [],
         };
         
         let sizeRangeText: string | undefined = undefined;
@@ -224,13 +224,13 @@ export async function getProducts(): Promise<Product[]> {
 
         const availability: Product['availability'] = {};
         if (mainProductForGroup.rawOptions.availableColors) {
-            availability.colors = mainProductForGroup.rawOptions.availableColors.split(',').map(s => s.trim());
+            availability.colors = mainProductForGroup.rawOptions.availableColors.split(',').map(s => s.trim()).filter(Boolean);
         }
           if (mainProductForGroup.rawOptions.availableSizes) {
-            availability.sizes = mainProductForGroup.rawOptions.availableSizes.split(',').map(s => s.trim());
+            availability.sizes = mainProductForGroup.rawOptions.availableSizes.split(',').map(s => s.trim()).filter(Boolean);
         }
           if (mainProductForGroup.rawOptions.availableMaterials) {
-            availability.materials = mainProductForGroup.rawOptions.availableMaterials.split(',').map(s => s.trim());
+            availability.materials = mainProductForGroup.rawOptions.availableMaterials.split(',').map(s => s.trim()).filter(Boolean);
         }
 
         const consolidatedProduct: Product = {

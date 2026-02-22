@@ -1,10 +1,11 @@
 
 'use client';
 
-import { useUser, useFirestore, useCollection, useMemoFirebase, deleteDocumentNonBlocking } from '@/firebase';
+import { useUser, useFirestore, useCollection, useMemoFirebase, deleteDocumentNonBlocking, addDocumentNonBlocking, serverTimestamp } from '@/firebase';
 import { collection, query, orderBy, limit, doc, Timestamp } from 'firebase/firestore';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,12 +23,15 @@ import {
   Sparkles,
   Ticket,
   ArrowRight,
-  Pencil
+  Pencil,
+  RefreshCcw,
+  Trash2
 } from 'lucide-react';
 import type { Order, CustomRequest } from '@/lib/types';
 import { useState, useEffect } from 'react';
 import { getMLShipmentTracking } from '@/lib/mercado-livre';
 import { EditAddressDialog } from '@/components/edit-address-dialog';
+import { useToast } from '@/hooks/use-toast';
 
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "5511999999999";
 
@@ -72,6 +76,8 @@ function Countdown({ expiryTimestamp }: { expiryTimestamp: Timestamp }) {
 export default function MyOrdersPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
+  const router = useRouter();
+  const { toast } = useToast();
   const [trackingInfo, setTrackingInfo] = useState<Record<string, any>>({});
   const [editingItem, setEditingItem] = useState<{ type: 'order' | 'request', data: Order | CustomRequest } | null>(null);
 
@@ -122,6 +128,50 @@ export default function MyOrdersPage() {
       });
     }
   }, [orders, firestore, user]);
+  
+  const handleDeleteRequest = (requestId: string) => {
+    if (!user || !firestore) return;
+    const requestRef = doc(firestore, 'users', user.uid, 'custom_requests', requestId);
+    deleteDocumentNonBlocking(requestRef);
+    toast({
+      title: "Solicitação Removida",
+      description: "A solicitação foi removida do seu histórico.",
+    });
+  };
+
+  const handleRedoRequest = (request: CustomRequest) => {
+    if (!user || !firestore || !request.items.length) return;
+
+    const itemToRedo = request.items[0];
+    const cartItemsRef = collection(firestore, 'users', user.uid, 'carts', 'main', 'items');
+    
+    addDocumentNonBlocking(cartItemsRef, {
+      productId: itemToRedo.productId,
+      productGroupId: itemToRedo.productGroupId,
+      productName: itemToRedo.productName,
+      imageUrl: itemToRedo.imageUrl,
+      quantity: itemToRedo.quantity,
+      selectedSize: itemToRedo.selectedSize,
+      selectedColor: itemToRedo.selectedColor,
+      selectedMaterial: itemToRedo.selectedMaterial,
+      unitPriceAtAddition: itemToRedo.unitPriceAtOrder,
+      readyMade: false,
+      selected: true,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    const oldRequestRef = doc(firestore, 'users', user.uid, 'custom_requests', request.id);
+    deleteDocumentNonBlocking(oldRequestRef);
+
+    toast({
+      title: "Item no Carrinho!",
+      description: "A solicitação foi adicionada ao seu carrinho para ser refeita.",
+    });
+
+    router.push('/cart');
+  };
+
 
   if (isUserLoading) {
     return <div className="p-8 space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-64 w-full" /></div>;
@@ -146,11 +196,11 @@ export default function MyOrdersPage() {
       case 'LABEL_GENERATED': return <Badge variant="default" className="bg-purple-500"><Ticket className="size-3 mr-1" /> Etiqueta Gerada</Badge>;
       case 'Shipped': return <Badge variant="default" className="bg-blue-500"><Truck className="size-3 mr-1" /> Enviado</Badge>;
       case 'Delivered': return <Badge variant="default" className="bg-green-600"><CheckCircle2 className="size-3 mr-1" /> Entregue</Badge>;
-      case 'Cancelled': return <Badge variant="destructive">Cancelado</Badge>;
       
       // CustomRequest Statuses
       case 'Pending': return <Badge variant="outline"><MessageCircle className="size-3 mr-1" /> Em Negociação</Badge>;
       case 'Approved': return <Badge variant="default" className="bg-amber-500"><Sparkles className="size-3 mr-1" /> Em Produção</Badge>;
+      case 'Cancelled': return <Badge variant="destructive">Recusado</Badge>;
       
       default: return <Badge variant="outline">{status}</Badge>;
     }
@@ -255,16 +305,30 @@ export default function MyOrdersPage() {
                   )}
 
                   <div className="flex flex-col gap-2 mt-4">
-                     {req.status === 'Pending' && (
+                     {(req.status === 'Pending' || req.status === 'Approved') && (
                         <Button variant="secondary" onClick={() => setEditingItem({ type: 'request', data: req })}>
                             <Pencil className="mr-2 size-4" /> Alterar Endereço
                         </Button>
                      )}
-                     <Button asChild variant="outline" className="w-full">
-                        <Link href={`https://wa.me/${WHATSAPP_NUMBER}?text=Olá!%20Gostaria%20de%20falar%20sobre%20a%20solicitação%20#${req.id.slice(-6).toUpperCase()}`}>
-                          Falar com a Gê no WhatsApp
-                        </Link>
-                      </Button>
+
+                     {req.status === 'Cancelled' && (
+                       <div className="grid grid-cols-2 gap-2">
+                          <Button variant="outline" onClick={() => handleRedoRequest(req)}>
+                              <RefreshCcw className="mr-2 size-4" /> Refazer Solicitação
+                          </Button>
+                          <Button variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={() => handleDeleteRequest(req.id)}>
+                              <Trash2 className="mr-2 size-4" /> Remover
+                          </Button>
+                       </div>
+                     )}
+
+                     {(req.status === 'Pending' || req.status === 'Approved') && (
+                        <Button asChild variant="outline" className="w-full">
+                          <Link href={`https://wa.me/${WHATSAPP_NUMBER}?text=Olá!%20Gostaria%20de%20falar%20sobre%20a%20solicitação%20#${req.id.slice(-6).toUpperCase()}`}>
+                            Falar com a Gê no WhatsApp
+                          </Link>
+                        </Button>
+                     )}
                   </div>
                 </CardContent>
               </Card>
@@ -280,3 +344,5 @@ export default function MyOrdersPage() {
     </div>
   );
 }
+
+    

@@ -1,5 +1,4 @@
 
-
 import Link from 'next/link';
 import Image from 'next/image';
 import { getProducts, getLogoUrl } from '@/lib/cloudinary';
@@ -32,6 +31,9 @@ export default async function ProductsPage() {
     facebook: process.env.NEXT_PUBLIC_FACEBOOK_URL || "#",
     twitter: process.env.NEXT_PUBLIC_TWITTER_URL || "#",
   };
+
+  const whatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "5511999999999";
+  const whatsappLink = `https://wa.me/${whatsappNumber.replace(/\D/g, '')}`;
 
   const contactInfo = {
     email: process.env.NEXT_PUBLIC_CONTACT_EMAIL || "ola@coisasdage.com.br",
@@ -135,10 +137,10 @@ export default async function ProductsPage() {
                   <Mail className="size-5 text-accent" />
                   <span className="text-sm">{contactInfo.email}</span>
                 </div>
-                <div className="flex items-center gap-3">
+                <Link href={whatsappLink} target="_blank" className="flex items-center gap-3 group">
                   <Phone className="size-5 text-accent" />
-                  <span className="text-sm">{contactInfo.phone}</span>
-                </div>
+                  <span className="text-sm group-hover:underline">{contactInfo.phone}</span>
+                </Link>
                 <div className="flex items-center gap-3">
                   <MapPin className="size-5 text-accent" />
                   <span className="text-sm">{contactInfo.location}</span>

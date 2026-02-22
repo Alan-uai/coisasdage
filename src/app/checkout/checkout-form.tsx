@@ -106,7 +106,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
         if (watchCity && watchCity.trim().toLowerCase() === ARTISAN_CITY) {
             setIsLocalCity(true);
              if (shippingOption === 'mercado_envios') {
-                setShippingOption('pickup'); 
+                setShippingOption('local_delivery'); 
             }
         } else {
             setIsLocalCity(false);
@@ -507,11 +507,12 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
         <div className="p-4 border rounded-xl bg-muted/30 relative group transition-all">
             <div className="flex justify-between items-start mb-2">
               <span className="text-[10px] font-bold uppercase text-primary tracking-widest flex items-center gap-1"><MapPin className="size-3" /> Entregar em</span>
-              <Button variant="ghost" size="sm" onClick={() => setStep('address')} className="h-6 text-[10px] px-2 gap-1"><Pencil className="size-3" /> Alterar</Button>
+              <Button variant="outline" size="sm" onClick={() => setStep('address')} className="h-7 gap-1.5">
+                <Pencil className="size-3" /> Alterar Endereço
+              </Button>
             </div>
             <div className="text-sm">
-                <p className="font-bold text-base">{shippingAddress?.streetName}</p>
-                <p className="text-muted-foreground">{shippingAddress?.streetName}, {shippingAddress?.streetNumber}</p>
+                <p className="font-bold text-base">{shippingAddress?.streetName}, {shippingAddress?.streetNumber}</p>
                 <p className="text-muted-foreground">{shippingAddress?.city} - {shippingAddress?.state}</p>
             </div>
         </div>

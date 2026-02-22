@@ -1,5 +1,7 @@
+
 import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore'
 
@@ -22,6 +24,26 @@ export function initializeFirebase() {
       }
       firebaseApp = initializeApp(firebaseConfig);
     }
+
+    // --- App Check Initialization ---
+    // This needs to be on the client, so we check for 'window'.
+    if (typeof window !== 'undefined') {
+      const appCheckSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+      if (appCheckSiteKey) {
+          try {
+            initializeAppCheck(firebaseApp, {
+              provider: new ReCaptchaV3Provider(appCheckSiteKey),
+              isTokenAutoRefreshEnabled: true,
+            });
+            console.log("Firebase App Check inicializado.");
+          } catch (e) {
+            console.error("Falha ao inicializar o Firebase App Check.", e)
+          }
+      } else {
+          console.warn("Firebase App Check não inicializado: a chave NEXT_PUBLIC_RECAPTCHA_SITE_KEY não foi configurada.");
+      }
+    }
+    // --- End App Check ---
 
     return getSdks(firebaseApp);
   }

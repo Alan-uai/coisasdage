@@ -203,18 +203,25 @@ export function ProductClientPage({ product }: { product: Product }) {
                 <div className="space-y-3">
                   <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Escolha a Cor</Label>
                   <div className="flex flex-wrap gap-3">
-                    {product.options.colors.map((color) => (
-                      <button
-                        key={color}
-                        onClick={() => setSelectedColor(color)}
-                        className={cn(
-                          "px-4 py-2 border rounded-full text-sm transition-all",
-                          selectedColor === color ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"
-                        )}
-                      >
-                        {color}
-                      </button>
-                    ))}
+                    {product.options.colors.map((color) => {
+                      const isAvailable = availableColorsForCurrentSize.includes(color);
+                      return (
+                        <button
+                          key={color}
+                          onClick={() => isAvailable && setSelectedColor(color)}
+                          disabled={!isAvailable}
+                          className={cn(
+                            "px-4 py-2 border rounded-full text-sm transition-all",
+                            selectedColor === color
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : isAvailable ? "hover:bg-muted" : "",
+                            !isAvailable && "opacity-40 cursor-not-allowed line-through"
+                          )}
+                        >
+                          {color}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}

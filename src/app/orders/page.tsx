@@ -19,7 +19,8 @@ import {
   Hammer,
   ClipboardList,
   MessageCircle,
-  Sparkles
+  Sparkles,
+  Ticket
 } from 'lucide-react';
 import type { Order, CustomRequest } from '@/lib/types';
 import { useState, useEffect } from 'react';
@@ -55,7 +56,7 @@ export default function MyOrdersPage() {
   useEffect(() => {
     if (orders) {
       orders.forEach(order => {
-        if (order.merchantOrderId && order.status === 'Shipped') {
+        if (order.merchantOrderId && (order.status === 'Shipped' || order.status === 'LABEL_GENERATED')) {
            getMLShipmentTracking(order.merchantOrderId).then(res => {
              if (res.success) {
                setTrackingInfo(prev => ({ ...prev, [order.id]: res }));
@@ -80,14 +81,21 @@ export default function MyOrdersPage() {
     );
   }
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: Order['status'] | CustomRequest['status']) => {
     switch (status) {
-      case 'Processing': return <Badge variant="secondary"><Clock className="size-3 mr-1" /> Processando</Badge>;
-      case 'Crafting': return <Badge variant="default" className="bg-amber-500"><Hammer className="size-3 mr-1" /> Em Produção</Badge>;
+      // Order Statuses
+      case 'Processing': return <Badge variant="secondary"><Clock className="size-3 mr-1" /> Processando Pagamento</Badge>;
+      case 'IN_PRODUCTION': return <Badge variant="default" className="bg-amber-500"><Hammer className="size-3 mr-1" /> Em Produção</Badge>;
+      case 'READY': return <Badge variant="default" className="bg-cyan-500"><Package className="size-3 mr-1" /> Pronto para Envio</Badge>;
+      case 'LABEL_GENERATED': return <Badge variant="default" className="bg-purple-500"><Ticket className="size-3 mr-1" /> Etiqueta Gerada</Badge>;
       case 'Shipped': return <Badge variant="default" className="bg-blue-500"><Truck className="size-3 mr-1" /> Enviado</Badge>;
       case 'Delivered': return <Badge variant="default" className="bg-green-600"><CheckCircle2 className="size-3 mr-1" /> Entregue</Badge>;
+      case 'Cancelled': return <Badge variant="destructive">Cancelado</Badge>;
+      
+      // CustomRequest Statuses
       case 'Approved': return <Badge variant="default" className="bg-emerald-500"><Sparkles className="size-3 mr-1" /> Orçamento Aprovado</Badge>;
       case 'Pending': return <Badge variant="outline"><MessageCircle className="size-3 mr-1" /> Em Negociação</Badge>;
+      
       default: return <Badge variant="outline">{status}</Badge>;
     }
   };

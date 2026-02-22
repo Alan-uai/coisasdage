@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeFirebase } from '@/firebase';
-import { collectionGroup, query, getDocs, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collectionGroup, query, getDocs, updateDoc, serverTimestamp, doc } from 'firebase/firestore';
 import axios from 'axios';
+import { generateLabelAndNotify } from '@/lib/mercado-livre';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +23,6 @@ async function processWhapiWebhook(request: NextRequest) {
     try {
         const body = await request.json();
         
-        // Estratégia de extração flexível: procura em 'messages', 'chats_updates' ou no corpo direto
         const message = body.messages?.[0] || 
                         body.chats_updates?.[0]?.after_update?.last_message ||
                         body.chats_updates?.[0]?.before_update?.last_message ||
@@ -34,13 +34,11 @@ async function processWhapiWebhook(request: NextRequest) {
             return NextResponse.json({ status: 'ignorado: sem conteúdo de mensagem' });
         }
 
-        // Verificação de Segurança Expandida
         const adminNumberOnly = ARTESA_WPP.replace(/\D/g, '');
         const authorizedNumbers = AUTHORIZED_NUMBERS_RAW.split(',')
             .map(n => n.trim().replace(/\D/g, ''))
             .filter(n => n.length > 0);
 
-        // Identifica quem enviou a mensagem
         const senderId = message.from || "";
         const senderNumber = senderId.split('@')[0].replace(/\D/g, '');
         
@@ -48,21 +46,13 @@ async function processWhapiWebhook(request: NextRequest) {
         const isAdminNumber = senderNumber === adminNumberOnly;
         const isAuthorizedNumber = authorizedNumbers.includes(senderNumber);
         
-        // No caso de chat pessoal direto com a Whapi (self-chat)
         const isSelfChat = message.chat_id?.includes(adminNumberOnly);
-
-        // Um usuário é autorizado se:
-        // 1. A mensagem foi enviada pelo próprio celular conectado (from_me)
-        // 2. O número do remetente é o número da artesã configurado
-        // 3. O número do remetente está na lista de autorizados (AUTHORIZED_NUMBERS)
-        // 4. É o chat pessoal da artesã
         const isAuthorized = isFromMe || isAdminNumber || isAuthorizedNumber || isSelfChat;
         
         if (!isAuthorized) {
             return NextResponse.json({ status: 'ignorado: remetente não autorizado', sender: senderNumber });
         }
 
-        // Extrai o texto da mensagem de forma segura (string ou objeto Whapi)
         const textRaw = typeof message.text === 'string' ? message.text : (message.text?.body || '');
         const text = textRaw.trim();
         
@@ -141,7 +131,7 @@ async function processWhapiWebhook(request: NextRequest) {
             return NextResponse.json({ success: true, command: 'budget_update' });
         }
 
-        // 3. Processar Comando de Pedido Pronto (#ID Pronto)
+        // 3. Processar Comando de Pedido Pronto (#ID Pronto) - NOVO FLUXO
         const readyMatch = text.match(/#(\w+)\s+(Pronto)/i);
         if (readyMatch) {
             const [_, orderIdShort] = readyMatch;
@@ -165,19 +155,41 @@ async function processWhapiWebhook(request: NextRequest) {
                 return NextResponse.json({ error: 'Pedido não encontrado' });
             }
 
-            await updateDoc(targetDoc.ref, {
-                status: 'Shipped', // "Pronto" atualiza o status para "Enviado"
+            const orderData = targetDoc.data();
+            const orderRef = targetDoc.ref;
+
+            if (orderData.status !== 'IN_PRODUCTION') {
+                 await axios.post('https://gate.whapi.cloud/messages/text', {
+                    to: chatId,
+                    body: `⚠️ Pedido *#${orderIdShort.toUpperCase()}* não está "Em Produção". Status atual: ${orderData.status}. Ação cancelada.`
+                }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
+                return NextResponse.json({ error: 'Status do pedido inválido para esta ação.' });
+            }
+
+            // Atualiza status para 'READY' e libera a trava de segurança para envio
+            await updateDoc(orderRef, {
+                status: 'READY',
+                shippingAllowed: true,
                 updatedAt: serverTimestamp()
             });
 
-            const responseMsg = `🚚 Pedido *#${orderIdShort.toUpperCase()}* marcado como *Pronto para Envio* (status: Shipped).\n\nO cliente poderá acompanhar o rastreio em breve.`;
-
+            // Envia resposta inicial e inicia a geração da etiqueta em background
             await axios.post('https://gate.whapi.cloud/messages/text', {
                 to: chatId,
-                body: responseMsg
+                body: `✅ Pedido *#${orderIdShort.toUpperCase()}* marcado como *Pronto*. \n\nIniciando geração de etiqueta... Você receberá em breve.`
             }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
             
-            return NextResponse.json({ success: true, command: 'order_ready' });
+            // Chama a função de logística (não bloqueante para o webhook)
+            generateLabelAndNotify(firestore, orderRef, orderData.merchantOrderId, targetDoc.id)
+              .catch(async (e) => {
+                console.error(`Erro no processo de etiqueta para ${targetDoc.id}:`, e);
+                await axios.post('https://gate.whapi.cloud/messages/text', {
+                    to: chatId,
+                    body: `❌ Falha ao gerar etiqueta para o pedido *#${orderIdShort.toUpperCase()}*. Verifique os logs.`
+                }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
+              });
+
+            return NextResponse.json({ success: true, command: 'order_ready_triggered' });
         }
         
         // Se nenhum comando correspondeu

@@ -88,7 +88,7 @@ export type Order = {
   userId: string;
   orderDate: Timestamp;
   totalAmount: number;
-  status: 'Processing' | 'Crafting' | 'Shipped' | 'Delivered' | 'Cancelled';
+  status: 'Processing' | 'IN_PRODUCTION' | 'READY' | 'LABEL_GENERATED' | 'Shipped' | 'Delivered' | 'Cancelled';
   items: OrderItemSummary[];
   shippingAddress: Address;
   createdAt: Timestamp;
@@ -96,6 +96,10 @@ export type Order = {
   paymentId?: string | number;
   merchantOrderId?: string;
   productionDays?: number;
+  shippingAllowed?: boolean;
+  shipmentId?: string;
+  trackingNumber?: string;
+  labelUrl?: string; // Embora não possamos gerar uma URL pública, mantemos o campo para consistência
 };
 
 export type CustomRequest = {

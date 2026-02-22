@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { MercadoPagoConfig, Payment } from 'mercadopago';
 import { initializeFirebase } from '@/firebase';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { automateShippingLabel } from '@/lib/mercado-livre';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +21,6 @@ export async function POST(request: NextRequest) {
     const resourceId = body.data?.id || body.id;
 
     // SIMULAÇÃO DE TESTE DO MERCADO PAGO
-    // Se o ID for o padrão de teste 123456, respondemos 200 OK imediatamente
     if (resourceId === '123456' || resourceId === 123456) {
         console.log('Mercado Pago URL Test (ID 123456) successful');
         return NextResponse.json({ test: 'success' }, { status: 200 });
@@ -45,27 +43,23 @@ export async function POST(request: NextRequest) {
         merchantOrderId = paymentData.order?.id?.toString() || null;
       }
 
-      // Se temos nossa referência combinada (userId|orderId), podemos atualizar diretamente
       if (externalReference && externalReference.includes('|')) {
         const [userId, orderId] = externalReference.split('|');
         const orderRef = doc(firestore, 'users', userId, 'orders', orderId);
         
         const isApproved = status === 'approved';
         
+        // Atualiza o pedido com o status de pagamento e a trava de envio.
+        // A geração da etiqueta agora é disparada pelo comando #ID Pronto.
         await updateDoc(orderRef, {
           merchantOrderId: merchantOrderId || undefined,
           paymentId: paymentId || undefined,
-          status: isApproved ? 'Crafting' : undefined,
+          status: isApproved ? 'IN_PRODUCTION' : undefined,
+          shippingAllowed: isApproved ? false : undefined,
           updatedAt: serverTimestamp(),
         });
         
-        console.log(`Successfully updated order ${orderId} via direct path`);
-
-        // AUTOMAÇÃO WHAPI CLOUD: Dispara envio de etiqueta se aprovado
-        if (isApproved && merchantOrderId) {
-            // Chamada não bloqueante para o webhook responder rápido
-            automateShippingLabel(merchantOrderId, orderId).catch(console.error);
-        }
+        console.log(`Successfully updated order ${orderId} to status IN_PRODUCTION`);
       }
     }
 

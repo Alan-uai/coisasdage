@@ -2,6 +2,7 @@
 'use server';
 
 import axios from 'axios';
+import { Firestore, DocumentReference, updateDoc } from 'firebase/firestore';
 
 /**
  * @fileOverview Integração robusta com Mercado Livre Envios e Automação Whapi Cloud.
@@ -97,7 +98,7 @@ export async function sendLabelToAdmin(labelBase64: string, orderId: string) {
             to: ARTESA_WPP,
             media: `data:application/pdf;base64,${labelBase64}`,
             filename: `etiqueta-${shortId}.pdf`,
-            caption: `📦 *Etiqueta Gerada!*\nPedido: #${shortId}\n\n_Imprima e prepare o pacote._`
+            caption: `📦 Pedido #${shortId}\nProduto finalizado com sucesso.\n\n🖨️ A etiqueta de envio está em anexo. Assim que imprimir e postar, o rastreio será atualizado automaticamente.`
         }, {
             headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` }
         });
@@ -106,31 +107,64 @@ export async function sendLabelToAdmin(labelBase64: string, orderId: string) {
     }
 }
 
+
 /**
- * ENVIO AUTOMÁTICO PARA WHAPI CLOUD
+ * Orquestra a geração da etiqueta, atualização do pedido no Firestore e notificação para a artesã.
+ * Este é o novo fluxo logístico central.
  */
-export async function automateShippingLabel(merchantOrderId: string, orderId: string) {
-  if (!WHAPI_TOKEN) return;
-
+export async function generateLabelAndNotify(db: Firestore, orderRef: DocumentReference, merchantOrderId: string, orderId: string) {
   try {
-    const shipmentId = await getShipmentIdFromOrder(merchantOrderId);
-    if (!shipmentId) throw new Error('Shipment ID não encontrado.');
+    const orderDoc = (await orderRef.get()).data();
+    if (!orderDoc || orderDoc.status !== 'READY' || !orderDoc.shippingAllowed) {
+        throw new Error(`O pedido ${orderId} não está pronto para envio ou a trava de segurança está ativa.`);
+    }
 
-    const labelData = await getMLShipmentLabel(shipmentId);
-    if (!labelData.success || !labelData.base64) throw new Error('Falha ao gerar PDF.');
+    const shipmentId = await getShipmentIdFromOrder(merchantOrderId);
+    if (!shipmentId) throw new Error(`Shipment ID não encontrado para o Merchant Order ${merchantOrderId}.`);
+
+    const [labelData, trackingInfo] = await Promise.all([
+        getMLShipmentLabel(shipmentId),
+        getMLShipmentTrackingByShipmentId(shipmentId) 
+    ]);
+    
+    if (!labelData.success || !labelData.base64) throw new Error('Falha ao gerar o PDF da etiqueta.');
+
+    await updateDoc(orderRef, {
+      shipmentId: shipmentId,
+      status: 'LABEL_GENERATED',
+      trackingNumber: trackingInfo.success ? trackingInfo.trackingNumber : undefined,
+      labelUrl: '', // O PDF é enviado diretamente, não há URL pública.
+    });
 
     await sendLabelToAdmin(labelData.base64, orderId);
 
-    console.log(`Etiqueta do pedido ${orderId} enviada via Whapi.`);
+    console.log(`Etiqueta do pedido ${orderId} gerada e enviada via Whapi.`);
   } catch (error: any) {
-    console.error('Falha na automação Whapi:', error.message);
+    console.error(`Falha na automação de etiqueta para o pedido ${orderId}:`, error.message);
+    throw error; // Re-throw para que o webhook do Whapi possa tratar
   }
 }
 
 /**
- * BUSCAR STATUS E RASTREAMENTO
+ * BUSCAR STATUS E RASTREAMENTO por Merchant Order ID (com correção).
  */
-export async function getMLShipmentTracking(shipmentId: string) {
+export async function getMLShipmentTracking(merchantOrderId: string) {
+  try {
+    const shipmentId = await getShipmentIdFromOrder(merchantOrderId);
+    if (!shipmentId) {
+      return { success: false, error: 'Shipment ID não encontrado.' };
+    }
+    return await getMLShipmentTrackingByShipmentId(shipmentId);
+  } catch (error: any) {
+    console.error('Error fetching ML tracking:', error.response?.data || error.message);
+    return { success: false, error: 'Falha ao buscar rastreio.' };
+  }
+}
+
+/**
+ * Função interna para buscar rastreamento com o ID do envio.
+ */
+async function getMLShipmentTrackingByShipmentId(shipmentId: string) {
   try {
     const accessToken = await getAccessToken();
     const response = await axios.get(`${ML_API}/shipments/${shipmentId}`, {
@@ -146,7 +180,7 @@ export async function getMLShipmentTracking(shipmentId: string) {
       trackingUrl: envio.tracking_url,
     };
   } catch (error: any) {
-    console.error('Error fetching ML tracking:', error.response?.data || error.message);
-    return { success: false, error: 'Falha ao buscar rastreio.' };
+    return { success: false, error: 'Falha ao buscar detalhes do envio.' };
   }
 }
+

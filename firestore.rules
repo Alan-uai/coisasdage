@@ -159,7 +159,7 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    match /product_inventory/{productId} {
+    match /product_inventory/{variantId} {
       allow read: if true;
       allow write: if isAdmin();
     }

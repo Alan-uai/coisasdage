@@ -1,4 +1,3 @@
-
 'use client';
 import { useMemo } from 'react';
 import type { Product } from '@/lib/types';
@@ -36,28 +35,77 @@ export function ProductListClient({ allProducts }: { allProducts: Product[] }) {
 
     const enrichedProducts = useMemo(() => {
         if (!inventory) {
-            return allProducts;
+            // Se o inventário não foi carregado, assume quantidade 0 para tudo.
+             return allProducts.map(p => ({
+                ...p,
+                quantity: 0,
+                variants: p.variants.map(v => ({ ...v, quantity: 0 })),
+            }));
         }
+        
         const inventoryMap = new Map(inventory.map(item => [item.id, item.quantity]));
-        return allProducts.map(p => ({
-            ...p,
-            quantity: inventoryMap.get(p.groupId) ?? 0,
-        }));
+        
+        return allProducts.map(p => {
+            let totalGroupQuantity = 0;
+            const variantsWithQuantity = p.variants.map(v => {
+                const quantity = inventoryMap.get(v.id) ?? 0;
+                totalGroupQuantity += quantity;
+                return { ...v, quantity };
+            });
+
+            return {
+                ...p,
+                variants: variantsWithQuantity,
+                quantity: totalGroupQuantity, // A quantidade do grupo é a soma das variantes
+            };
+        });
     }, [allProducts, inventory]);
 
-    const readyMadeProducts = enrichedProducts.filter(product => {
-        return product.isMain && (product.quantity ?? 0) > 0;
-    });
+    const readyMadeProducts = useMemo(() => {
+        const inStock: Product[] = [];
+        if (!enrichedProducts) return inStock;
 
-    const categoryDisplayProducts = enrichedProducts.filter(p => p.quantity === 0 || (p.quantity > 0 && p.isMain));
+        enrichedProducts.forEach(group => {
+            // Filtra as variantes que realmente têm estoque
+            const variantsInStock = group.variants.filter(v => (v as any).quantity > 0);
 
-    const productsByCategory = categoryDisplayProducts.reduce((acc, product) => {
-        if (!acc[product.category]) {
-            acc[product.category] = [];
-        }
-        acc[product.category].push(product);
-        return acc;
-    }, {} as Record<string, Product[]>);
+            variantsInStock.forEach(variant => {
+                // Para cada variante em estoque, cria um card de "Produto" para o carrossel
+                inStock.push({
+                    ...group,
+                    id: variant.id, // ID da variante específica
+                    name: group.name,
+                    imageUrl: variant.imageUrl,
+                    price: variant.price || group.price,
+                    minPrice: variant.price || group.price,
+                    maxPrice: variant.price || group.price,
+                    // Propriedades específicas da variante para exibição no card
+                    color: (variant as any).color,
+                    size: (variant as any).size,
+                    quantity: (variant as any).quantity,
+                    isMain: false,
+                    variants: [], // Não são necessárias sub-variantes no card de pronta-entrega
+                    options: { sizes: [], colors: [], materials: [] },
+                    sizeRangeText: (variant as any).size,
+                });
+            });
+        });
+        return inStock;
+    }, [enrichedProducts]);
+
+
+    const categoryDisplayProducts = enrichedProducts.filter(p => p.isMain);
+
+    const productsByCategory = useMemo(() => {
+        return categoryDisplayProducts.reduce((acc, product) => {
+            const category = product.category || 'Outros';
+            if (!acc[category]) {
+                acc[category] = [];
+            }
+            acc[category].push(product);
+            return acc;
+        }, {} as Record<string, Product[]>);
+    }, [categoryDisplayProducts]);
 
     if (isInventoryLoading && allProducts.length > 0) {
         return (

@@ -80,11 +80,11 @@
         }
       },
       {
-        "path": "/product_inventory/{productId}",
+        "path": "/product_inventory/{variantId}",
         "definition": {
           "entityName": "ProductInventory",
           "schema": { "$ref": "#/backend/entities/ProductInventory" },
-          "description": "Stores the stock count for ready-made products."
+          "description": "Stores the stock count for individual ready-made product variants."
         }
       }
     ]

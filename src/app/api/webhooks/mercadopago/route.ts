@@ -20,16 +20,18 @@ async function decrementStock(orderItems: OrderItemSummary[]) {
             for (const item of orderItems) {
                 // Only decrement stock for items marked as ready-made
                 if (item.readyMade) {
-                    const inventoryRef = doc(firestore, 'product_inventory', item.productGroupId);
+                    // Acessa o inventário pela ID da variante específica (productId) em vez do ID do grupo.
+                    const inventoryRef = doc(firestore, 'product_inventory', item.productId);
                     const inventoryDoc = await transaction.get(inventoryRef);
 
                     if (!inventoryDoc.exists()) {
-                        throw `Estoque para o produto ${item.productName} (ID: ${item.productGroupId}) não encontrado.`;
+                        // A mensagem de erro agora reflete a busca por variante.
+                        throw `Estoque para a variante do produto ${item.productName} (ID: ${item.productId}) não encontrado.`;
                     }
 
                     const currentQuantity = inventoryDoc.data().quantity;
                     if (currentQuantity < item.quantity) {
-                        throw `Estoque insuficiente para ${item.productName}. Pedido: ${item.quantity}, Disponível: ${currentQuantity}.`;
+                        throw `Estoque insuficiente para ${item.productName} (Variante ID: ${item.productId}). Pedido: ${item.quantity}, Disponível: ${currentQuantity}.`;
                     }
 
                     const newQuantity = currentQuantity - item.quantity;
@@ -37,7 +39,7 @@ async function decrementStock(orderItems: OrderItemSummary[]) {
                 }
             }
         });
-        console.log("Estoque decrementado com sucesso para o pedido.");
+        console.log("Estoque decrementado com sucesso para o pedido (por variante).");
     } catch (error) {
         console.error("Erro na transação de decremento de estoque:", error);
         // Em um cenário real, aqui você poderia notificar o admin sobre a falha para reconciliação manual.

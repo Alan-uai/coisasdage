@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { ShoppingBag, Loader2, Info, ArrowRight, Sparkles, ShoppingCart, Archive } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { useUser, useFirestore, addDocumentNonBlocking, useDoc, useMemoFirebase } from '@/firebase';
+import { useUser, useFirestore, addDocumentNonBlocking, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, serverTimestamp, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import Link from 'next/link';
 
@@ -78,11 +78,16 @@ export function ProductClientPage({ product }: { product: Product }) {
   const firestore = useFirestore();
   const router = useRouter();
 
-  const inventoryRef = useMemoFirebase(() =>
-    (firestore && product.groupId) ? doc(firestore, 'product_inventory', product.groupId) : null
-  , [firestore, product.groupId]);
-  const { data: inventoryData, isLoading: isInventoryLoading } = useDoc<{quantity: number}>(inventoryRef);
-  
+  const inventoryCollectionRef = useMemoFirebase(() =>
+    firestore ? collection(firestore, 'product_inventory') : null
+  , [firestore]);
+  const { data: inventoryItems, isLoading: isInventoryLoading } = useCollection<{quantity: number}>(inventoryCollectionRef);
+
+  const inventoryMap = useMemo(() => {
+    if (!inventoryItems) return new Map<string, number>();
+    return new Map(inventoryItems.map(item => [item.id, item.quantity]));
+  }, [inventoryItems]);
+
   const [selectedImageUrl, setSelectedImageUrl] = useState(product.imageUrl);
   const [currentPrice, setCurrentPrice] = useState(product.price);
   const [isAdding, setIsAdding] = useState(false);
@@ -149,7 +154,11 @@ export function ProductClientPage({ product }: { product: Product }) {
     );
   }, [selectedSize, selectedColor, selectedMaterial, product]);
 
-  const stockQuantity = inventoryData?.quantity ?? 0;
+  const stockQuantity = useMemo(() => {
+    const variantId = currentVariant?.id || product.id;
+    return inventoryMap.get(variantId) ?? 0;
+  }, [currentVariant, product.id, inventoryMap]);
+
   const isReady = stockQuantity > 0;
 
   const handleAddToCart = async () => {

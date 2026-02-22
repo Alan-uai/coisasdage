@@ -94,6 +94,8 @@ export type Order = {
   status: 'Processing' | 'IN_PRODUCTION' | 'READY' | 'LABEL_GENERATED' | 'Shipped' | 'Delivered' | 'Cancelled';
   items: OrderItemSummary[];
   shippingAddress: Address;
+  shippingMethod: 'mercado_envios' | 'local_delivery' | 'pickup';
+  shippingCost: number;
   createdAt: Timestamp;
   updatedAt: Timestamp;
   paymentId?: string | number;
@@ -117,6 +119,7 @@ export type CustomRequest = {
   finalPrice?: number;
   items: OrderItemSummary[];
   shippingAddress: Address;
+  shippingMethod?: 'mercado_envios' | 'local_delivery' | 'pickup';
   createdAt: Timestamp;
   updatedAt: Timestamp;
   productionDays?: number;

@@ -26,7 +26,8 @@ import {
   Pencil,
   RefreshCcw,
   Trash2,
-  AlertCircle
+  AlertCircle,
+  Store
 } from 'lucide-react';
 import type { Order, CustomRequest } from '@/lib/types';
 import { useState, useEffect } from 'react';
@@ -172,6 +173,18 @@ export default function MyOrdersPage() {
       default: return <Badge variant="outline">{status}</Badge>;
     }
   };
+  
+  const getShippingInfo = (order: Order) => {
+    switch (order.shippingMethod) {
+        case 'local_delivery':
+            return `Entrega local (Taxa: R$ ${order.shippingCost.toFixed(2).replace('.', ',')})`;
+        case 'pickup':
+            return 'Retirada no local (A combinar)';
+        case 'mercado_envios':
+        default:
+            return 'Entrega via Mercado Envios';
+    }
+  };
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-8 max-w-5xl mx-auto">
@@ -211,6 +224,11 @@ export default function MyOrdersPage() {
                     ))}
                   </div>
 
+                   <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
+                    {order.shippingMethod === 'pickup' ? <Store className="size-3.5" /> : <Truck className="size-3.5" />}
+                    {getShippingInfo(order)}
+                  </p>
+
                   {order.status === 'Processing' && order.expiresAt && (
                     <div className="bg-amber-50 border border-amber-200/50 p-3 rounded-lg flex justify-between items-center">
                       <Countdown expiryTimestamp={order.expiresAt} />
@@ -225,7 +243,7 @@ export default function MyOrdersPage() {
                 </CardContent>
                  <CardFooter className="p-4 bg-muted/30 flex justify-between items-center">
                     <div className="flex items-center gap-4">
-                      {(order.status === 'Processing' || order.status === 'IN_PRODUCTION') && (
+                      {(order.status === 'Processing' || order.status === 'IN_PRODUCTION') && order.shippingMethod !== 'pickup' && (
                           <Button variant="outline" size="sm" onClick={() => setEditingItem({ type: 'order', data: order })}>
                               <Pencil className="mr-2 size-3" /> Editar Endereço
                           </Button>
@@ -320,5 +338,3 @@ export default function MyOrdersPage() {
     </div>
   );
 }
-
-    

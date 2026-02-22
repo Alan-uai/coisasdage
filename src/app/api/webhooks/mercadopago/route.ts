@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { MercadoPagoConfig, Payment } from 'mercadopago';
 import { initializeFirebase } from '@/firebase';
@@ -70,7 +71,10 @@ export async function POST(request: NextRequest) {
             if (orderSnap.exists()) {
                 const orderData = orderSnap.data();
                 // Notifica a artesã sobre o novo pedido, indicando se é um teste.
-                await notifyAdminNewOrder(orderId, orderData.userName, orderData.items, !isLive);
+                // Apenas notifica para pedidos que não são de retirada local
+                if (orderData.shippingMethod !== 'pickup') {
+                    await notifyAdminNewOrder(orderId, orderData.userName, orderData.items, !isLive);
+                }
             }
         }
       }

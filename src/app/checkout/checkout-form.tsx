@@ -6,19 +6,20 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { User } from 'firebase/auth';
 import { createPreference, processPayment, notifyAdminNewRequest } from './actions';
-import type { CartItem, SavedAddress, Order, OrderItemSummary, CustomRequest } from '@/lib/types';
+import type { CartItem, SavedAddress, Order, OrderItemSummary, CustomRequest, Address } from '@/lib/types';
 import { addressSchema } from './form-schema';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import Image from 'next/image';
 import { useFirestore, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useMemoFirebase, useCollection } from '@/firebase';
 import { collection, doc, serverTimestamp, query, orderBy, where, getDocs, Timestamp } from 'firebase/firestore';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { QrCode, Loader2, MapPin, ClipboardList, ShoppingBag, ArrowRight, Truck, Calendar, Pencil, ShoppingCart, Phone, CheckCircle, Wallet, Home, Briefcase, Package } from 'lucide-react';
+import { QrCode, Loader2, MapPin, ClipboardList, ShoppingBag, ArrowRight, Truck, Calendar, Pencil, ShoppingCart, Phone, CheckCircle, Wallet, Home, Briefcase, Package, Bike, Store } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -32,6 +33,8 @@ declare global {
 }
 
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "5511999999999";
+const ARTISAN_CITY = (process.env.NEXT_PUBLIC_ARTISAN_CITY || 'Piracicaba').toLowerCase();
+const LOCAL_DELIVERY_FEE = parseFloat(process.env.NEXT_PUBLIC_LOCAL_DELIVERY_FEE || '10');
 
 const ConfirmationActions = () => (
     <div className="w-full space-y-3 pt-6">
@@ -75,7 +78,10 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
     const [isBrickLoaded, setIsBrickLoaded] = useState(false);
     const [pixData, setPixData] = useState<{ qr_code: string, qrCodeBase64: string } | null>(null);
     const [confirmedItem, setConfirmedItem] = useState<Order | CustomRequest | null>(null);
-
+    
+    const [isLocalCity, setIsLocalCity] = useState(false);
+    const [shippingOption, setShippingOption] = useState<'mercado_envios' | 'local_delivery' | 'pickup'>('mercado_envios');
+    const [shippingCost, setShippingCost] = useState(0);
 
     const brickRendered = useRef(false);
     const firestore = useFirestore();
@@ -92,6 +98,26 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
         resolver: zodResolver(addressSchema),
         defaultValues: { cpf: '', phone: '', streetName: '', streetNumber: '', zipCode: '', city: '', state: '' },
     });
+    
+    const finalTotal = useMemo(() => (resumedOrder ? resumedOrder.totalAmount : subtotal + shippingCost), [subtotal, shippingCost, resumedOrder]);
+
+    const watchCity = form.watch('city');
+    useEffect(() => {
+        if (watchCity && watchCity.trim().toLowerCase() === ARTISAN_CITY) {
+            setIsLocalCity(true);
+        } else {
+            setIsLocalCity(false);
+            setShippingOption('mercado_envios');
+        }
+    }, [watchCity]);
+
+    useEffect(() => {
+        if (shippingOption === 'local_delivery') {
+            setShippingCost(LOCAL_DELIVERY_FEE);
+        } else {
+            setShippingCost(0);
+        }
+    }, [shippingOption]);
 
     const currentAddress = useMemo(() => 
       savedAddresses?.find(a => a.id === selectedAddressId), 
@@ -153,6 +179,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
                   status: 'Pending',
                   totalBasePrice: subtotal,
                   shippingAddress: values,
+                  shippingMethod: shippingOption,
                   items: cartItems.map(item => ({
                       productId: item.productId,
                       productGroupId: item.productGroupId || '',
@@ -184,7 +211,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
       
       setStep('payment');
       setIsLoading(false);
-    }, [user, cartItems, subtotal, firestore, checkoutType, clearPaidCartItems, user.displayName, user.email]);
+    }, [user, cartItems, subtotal, firestore, checkoutType, clearPaidCartItems, user.displayName, user.email, shippingOption]);
 
     const initializePayment = useCallback(async () => {
       if (step !== 'payment' || !shippingAddress || !user || !user.email || cartItems.length === 0 || !firestore) return;
@@ -213,12 +240,22 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
             selectedMaterial: item.selectedMaterial,
           }));
 
-          await setDocumentNonBlocking(newOrderRef, {
-              userId: user.uid, userName: user.displayName || 'Cliente', orderDate: serverTimestamp(),
-              totalAmount: subtotal, status: 'Processing', shippingAddress,
+          const newOrderData: Omit<Order, 'id' | 'createdAt' | 'updatedAt' | 'orderDate'> = {
+              userId: user.uid, userName: user.displayName || 'Cliente', 
+              totalAmount: finalTotal, 
+              status: 'Processing', 
+              shippingAddress,
+              shippingMethod: shippingOption,
+              shippingCost: shippingCost,
               items: orderItems,
-              createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
               expiresAt: Timestamp.fromDate(expirationTime),
+          };
+
+          await setDocumentNonBlocking(newOrderRef, {
+              ...newOrderData,
+              orderDate: serverTimestamp(),
+              createdAt: serverTimestamp(), 
+              updatedAt: serverTimestamp(),
           }, { merge: true });
 
           const preferenceItems = cartItems.map(item => ({
@@ -232,7 +269,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
              imageUrl: item.imageUrl,
           }));
 
-          const result = await createPreference(user.uid, user.email, user.displayName, preferenceItems as PreferenceCartItem[], shippingAddress, generatedOrderId);
+          const result = await createPreference(user.uid, user.email, user.displayName, preferenceItems as PreferenceCartItem[], shippingAddress, generatedOrderId, shippingOption, shippingCost);
           if (result.preferenceId) {
             setPreferenceId(result.preferenceId);
             updateDocumentNonBlocking(newOrderRef, { preferenceId: result.preferenceId });
@@ -246,7 +283,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
       } finally {
           setIsLoading(false);
       }
-    }, [step, shippingAddress, user, cartItems, subtotal, firestore]);
+    }, [step, shippingAddress, user, cartItems, firestore, finalTotal, shippingOption, shippingCost]);
 
     useEffect(() => {
       if (step === 'payment' && !preferenceId && !resumedOrder) {
@@ -259,14 +296,14 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
         setIsLoading(true);
         try {
             const finalPaymentData = paymentData.formData || paymentData;
-            const result = await processPayment(finalPaymentData, orderId, user.email, subtotal, user.uid);
+            const result = await processPayment(finalPaymentData, orderId, user.email, finalTotal, user.uid);
             
             if (result.success) {
                 const orderDataForConfirmation: Partial<Order> = {
                     id: orderId,
                     createdAt: resumedOrder?.createdAt || Timestamp.now(),
                     items: (resumedOrder?.items || cartItems) as OrderItemSummary[],
-                    totalAmount: resumedOrder?.totalAmount || subtotal,
+                    totalAmount: finalTotal,
                     shippingAddress: shippingAddress!,
                     status: result.status as Order['status'],
                 };
@@ -294,7 +331,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
         } finally {
           setIsLoading(false);
         }
-    }, [orderId, user.email, firestore, router, subtotal, clearPaidCartItems, user.uid, resumedOrder, cartItems, shippingAddress]);
+    }, [orderId, user.email, firestore, router, finalTotal, clearPaidCartItems, user.uid, resumedOrder, cartItems, shippingAddress]);
 
     useEffect(() => {
         if (preferenceId && step === 'payment' && !pixData && !brickRendered.current) {
@@ -303,7 +340,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
                 brickRendered.current = true;
                 const mp = new (window as any).MercadoPago(publicKey, { locale: 'pt-BR' });
                 mp.bricks().create('payment', 'paymentCard', {
-                    initialization: { amount: subtotal, preferenceId, payer: { email: user.email } },
+                    initialization: { amount: finalTotal, preferenceId, payer: { email: user.email } },
                     customization: { paymentMethods: { ticket: 'all', bankTransfer: ['pix'], creditCard: 'all' } },
                     callbacks: {
                         onReady: () => setIsBrickLoaded(true),
@@ -313,7 +350,7 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
                 });
             }
         }
-    }, [preferenceId, step, pixData, subtotal, handlePaymentSubmit, user.email]);
+    }, [preferenceId, step, pixData, finalTotal, handlePaymentSubmit, user.email]);
 
     const isTrulyEmpty = !isCartLoading && cartItems.length === 0 && !resumedOrder && step !== 'confirmation';
 
@@ -401,6 +438,23 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
               <FormField control={form.control} name="state" render={({ field }) => (<FormItem className="col-span-1"><FormLabel>UF</FormLabel><FormControl><Input {...field} maxLength={2} placeholder="SP" /></FormControl><FormMessage /></FormItem>)}/>
             </div>
           )}
+          
+          {isLocalCity && checkoutType === 'ready' && (
+            <div className="space-y-3 pt-4">
+                <Label>Opções de Entrega para {watchCity}</Label>
+                <RadioGroup value={shippingOption} onValueChange={(v) => setShippingOption(v as any)} className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <Label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer has-[:checked]:bg-primary/5 has-[:checked]:border-primary">
+                        <RadioGroupItem value="mercado_envios" id="mercado_envios" />
+                        <div className="grid gap-0.5"><span className="font-bold flex items-center gap-1.5"><Truck className="size-4" /> Mercado Envios</span><span className="text-xs text-muted-foreground">Receba em casa via Correios.</span></div>
+                    </Label>
+                     <Label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer has-[:checked]:bg-primary/5 has-[:checked]:border-primary">
+                        <RadioGroupItem value="pickup" id="pickup" />
+                        <div className="grid gap-0.5"><span className="font-bold flex items-center gap-1.5"><Store className="size-4" /> Retirar no Local</span><span className="text-xs text-muted-foreground">Grátis (a combinar)</span></div>
+                    </Label>
+                </RadioGroup>
+            </div>
+          )}
+
           <Button type="submit" disabled={isLoading} className="w-full h-14 text-lg font-bold mt-6 shadow-lg shadow-primary/20">
             {isLoading ? <Loader2 className="animate-spin mr-2" /> : (checkoutType === 'custom' ? 'Solicitar no WhatsApp' : 'Continuar para Pagamento')}
           </Button>
@@ -451,10 +505,16 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
                               <span className="font-bold">R$ {((item.unitPriceAtAddition || item.unitPriceAtOrder) * item.quantity).toFixed(2)}</span>
                           </div>
                       ))}
-                      <div className="border-t pt-4 flex justify-between font-bold text-xl text-primary"><span>Total</span><span>R$ {subtotal.toFixed(2)}</span></div>
+                      {shippingCost > 0 && (
+                          <div className="flex justify-between items-center text-sm border-t pt-2 mt-2">
+                             <div className="flex items-center gap-3"><Bike className="size-5 text-muted-foreground" /><span>Taxa de Entrega</span></div>
+                             <span className="font-bold">R$ {shippingCost.toFixed(2)}</span>
+                          </div>
+                      )}
+                      <div className="border-t pt-4 flex justify-between font-bold text-xl text-primary"><span>Total</span><span>R$ {finalTotal.toFixed(2)}</span></div>
                   </CardContent>
               </Card>
-              <Card className="border-primary/10 bg-primary/5 shadow-sm"><CardHeader className="py-4"><CardTitle className="text-sm uppercase font-bold text-primary flex items-center gap-2"><Truck className="size-4" /> Previsão de Entrega</CardTitle></CardHeader><CardContent className="text-sm space-y-2"><div className="flex items-center gap-2 text-muted-foreground"><Calendar className="size-4" /><span>{checkoutType === 'custom' ? 'Prazo de confecção + ' : ''} Chega em aprox. 5 dias úteis</span></div><p className="text-[10px] opacity-60">Enviado via Mercado Envios (Expresso)</p></CardContent></Card>
+              <Card className="border-primary/10 bg-primary/5 shadow-sm"><CardHeader className="py-4"><CardTitle className="text-sm uppercase font-bold text-primary flex items-center gap-2"><Truck className="size-4" /> Previsão de Entrega</CardTitle></CardHeader><CardContent className="text-sm space-y-2"><div className="flex items-center gap-2 text-muted-foreground"><Calendar className="size-4" /><span>{checkoutType === 'custom' ? 'Prazo de confecção + ' : ''} {shippingOption === 'mercado_envios' ? 'Chega em aprox. 5 dias úteis' : 'A combinar via WhatsApp'}</span></div><p className="text-[10px] opacity-60">Enviado via {shippingOption === 'mercado_envios' ? 'Mercado Envios' : 'Entrega Local'}</p></CardContent></Card>
           </div>
           
           <Card className="shadow-xl min-h-[500px] border-primary/20">
@@ -484,5 +544,3 @@ export function CheckoutForm({ user, cartItems, subtotal, isCartLoading, resumed
       </div>
     );
 }
-
-    

@@ -1,3 +1,4 @@
+
 'use server';
 
 import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
@@ -95,7 +96,9 @@ export async function createPreference(
     userName: string | null,
     cartItems: PreferenceCartItem[],
     addressData: AddressData,
-    orderId: string
+    orderId: string,
+    shippingOption: 'mercado_envios' | 'local_delivery' | 'pickup',
+    shippingCost: number
 ): Promise<PreferenceResult> {
     const accessToken = process.env.MP_ACCESS_TOKEN;
     
@@ -112,34 +115,53 @@ export async function createPreference(
         const protocol = host?.includes('localhost') ? 'http' : 'https';
         const notificationUrl = `${protocol}://${host}/api/webhooks/mercadopago`;
 
-        const response = await preference.create({
-            body: {
-                items: cartItems.map(item => ({
-                    id: item.id,
-                    title: item.productName,
-                    description: `${item.selectedColor} / ${item.selectedSize}`,
-                    quantity: item.quantity,
-                    currency_id: 'BRL',
-                    unit_price: item.unitPriceAtAddition,
-                })),
-                payer: {
-                    email: userEmail,
-                    name: userName?.split(' ')[0] || 'Cliente',
-                    surname: userName?.split(' ').slice(1).join(' ') || 'Artesã',
-                    phone: {
-                        area_code: addressData.phone.replace(/\D/g, '').substring(0, 2),
-                        number: addressData.phone.replace(/\D/g, '').substring(2),
-                    },
-                    identification: {
-                        type: 'CPF',
-                        number: addressData.cpf.replace(/\D/g, ''),
-                    },
+        const preferenceItems = cartItems.map(item => ({
+            id: item.id,
+            title: item.productName,
+            description: `${item.selectedColor} / ${item.selectedSize}`,
+            quantity: item.quantity,
+            currency_id: 'BRL',
+            unit_price: item.unitPriceAtAddition,
+        }));
+
+        if (shippingCost > 0) {
+            preferenceItems.push({
+                id: 'shipping-cost',
+                title: 'Taxa de Entrega',
+                description: 'Custo de envio do pedido',
+                quantity: 1,
+                currency_id: 'BRL',
+                unit_price: shippingCost,
+            });
+        }
+
+        const preferenceBody: any = {
+            items: preferenceItems,
+            payer: {
+                email: userEmail,
+                name: userName?.split(' ')[0] || 'Cliente',
+                surname: userName?.split(' ').slice(1).join(' ') || 'Artesã',
+                phone: {
+                    area_code: addressData.phone.replace(/\D/g, '').substring(0, 2),
+                    number: addressData.phone.replace(/\D/g, '').substring(2),
                 },
-                external_reference: `${userId}|${orderId}`,
-                notification_url: notificationUrl,
-                statement_descriptor: "COISAS DAGE",
-            }
-        });
+                identification: {
+                    type: 'CPF',
+                    number: addressData.cpf.replace(/\D/g, ''),
+                },
+            },
+            external_reference: `${userId}|${orderId}`,
+            notification_url: notificationUrl,
+            statement_descriptor: "COISAS DAGE",
+        };
+        
+        if (shippingOption === 'local_delivery' || shippingOption === 'pickup') {
+            preferenceBody.shipments = {
+                mode: 'not_specified',
+            };
+        }
+
+        const response = await preference.create({ body: preferenceBody });
         
         if (!response.id) throw new Error('Falha ao gerar ID da preferência.');
 

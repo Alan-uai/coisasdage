@@ -2,7 +2,7 @@
 'use server';
 
 import axios from 'axios';
-import { Firestore, DocumentReference, updateDoc } from 'firebase/firestore';
+import { Firestore, DocumentReference, updateDoc, getDoc } from 'firebase/firestore';
 
 /**
  * @fileOverview Integração robusta com Mercado Livre Envios e Automação Whapi Cloud.
@@ -114,9 +114,19 @@ export async function sendLabelToAdmin(labelBase64: string, orderId: string) {
  */
 export async function generateLabelAndNotify(db: Firestore, orderRef: DocumentReference, merchantOrderId: string, orderId: string) {
   try {
-    const orderDoc = (await orderRef.get()).data();
+    const orderDocSnap = await getDoc(orderRef);
+    const orderDoc = orderDocSnap.data();
+    
     if (!orderDoc || orderDoc.status !== 'READY' || !orderDoc.shippingAllowed) {
         throw new Error(`O pedido ${orderId} não está pronto para envio ou a trava de segurança está ativa.`);
+    }
+
+    // Adiciona verificação para não gerar etiqueta para retirada local
+    if (orderDoc.shippingMethod === 'pickup' || orderDoc.shippingMethod === 'local_delivery') {
+        console.log(`Pedido ${orderId} é para entrega local/retirada. Etiqueta do Mercado Envios não aplicável.`);
+        // Apenas atualiza o status, se necessário
+        await updateDoc(orderRef, { status: 'READY' });
+        return;
     }
 
     const shipmentId = await getShipmentIdFromOrder(merchantOrderId);
@@ -183,4 +193,3 @@ async function getMLShipmentTrackingByShipmentId(shipmentId: string) {
     return { success: false, error: 'Falha ao buscar detalhes do envio.' };
   }
 }
-

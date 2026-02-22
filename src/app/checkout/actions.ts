@@ -47,7 +47,7 @@ export async function notifyAdminNewRequest(requestId: string, clientName: strin
     if (!WHAPI_TOKEN) return;
 
     const destination = GROUP_ID || ARTESA_WPP;
-    const shortId = requestId.slice(-6).toUpperCase();
+    const commandId = requestId; // Usando o ID completo do Firestore
 
     let caption = `🧶 *Nova Solicitação Sob Demanda!*\n\n`;
     caption += `Cliente: *${clientName}*\n`;
@@ -60,8 +60,8 @@ export async function notifyAdminNewRequest(requestId: string, clientName: strin
     }
 
     caption += `Produto: *${productName}*\n\n`;
-    caption += `*ID para Comando: #${shortId}*\n\n`;
-    caption += `_Para aprovar, responda com:_\n#${shortId} Aprovado [dias]`;
+    caption += `*ID para Comando: #${commandId}*\n\n`;
+    caption += `_Para aprovar, responda com:_\n#${commandId} Aprovado [dias]`;
 
     try {
         // Tenta enviar uma imagem com a legenda construída
@@ -201,13 +201,13 @@ export async function notifyAdminNewOrder(orderId: string, clientName: string, i
 
     // Se houver um ID de grupo, envia para o grupo, caso contrário para o número privado
     const destination = GROUP_ID || ARTESA_WPP;
-    const shortId = orderId.slice(-6).toUpperCase();
+    const commandId = orderId; // Usando o ID completo do Firestore
     const productList = items.map(item => `- ${item.productName}`).join('\n');
 
     try {
         await axios.post('https://gate.whapi.cloud/messages/text', {
             to: destination,
-            body: `📦 *Novo Pedido Pago (Pronta Entrega)!*\n\nCliente: *${clientName}*\n\nItens:\n${productList}\n\n*ID do Pedido: #${shortId}*\n\nQuando o pacote estiver pronto para envio, responda aqui com:\n` + "`" + `#${shortId} Pronto` + "`"
+            body: `📦 *Novo Pedido Pago (Pronta Entrega)!*\n\nCliente: *${clientName}*\n\nItens:\n${productList}\n\n*ID do Pedido: #${commandId}*\n\nQuando o pacote estiver pronto para envio, responda aqui com:\n` + "`" + `#${commandId} Pronto` + "`"
         }, {
             headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` }
         });

@@ -86,17 +86,16 @@ async function processWhapiWebhook(request: NextRequest) {
         // 2. Processar Comandos de Orçamento (#ID Aprovado/Recusado)
         const budgetMatch = text.match(/#(\w+)\s+(Aprovado|Recusado)(?:\s+(\d+))?/i);
         if (budgetMatch) {
-            const [_, requestIdShort, statusText, daysText] = budgetMatch;
+            const [_, commandId, statusText, daysText] = budgetMatch;
             const status = statusText.toLowerCase() === 'aprovado' ? 'Approved' : 'Cancelled';
             const productionDays = daysText ? parseInt(daysText) : null;
-            const requestIdLower = requestIdShort.toLowerCase();
             
             const q = query(collectionGroup(firestore, 'custom_requests'));
             const querySnapshot = await getDocs(q);
             
             let targetDoc: any = null;
             querySnapshot.forEach((d) => {
-                if (d.id.toLowerCase().startsWith(requestIdLower)) {
+                if (d.id === commandId) {
                     targetDoc = d;
                 }
             });
@@ -104,7 +103,7 @@ async function processWhapiWebhook(request: NextRequest) {
             if (!targetDoc) {
                 await axios.post('https://gate.whapi.cloud/messages/text', {
                     to: chatId,
-                    body: `❌ Pedido *#${requestIdShort.toUpperCase()}* não encontrado.`
+                    body: `❌ Pedido *#${commandId}* não encontrado.`
                 }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
                 return NextResponse.json({ error: 'Pedido não encontrado' });
             }
@@ -115,7 +114,7 @@ async function processWhapiWebhook(request: NextRequest) {
                 updatedAt: serverTimestamp()
             });
 
-            let responseMsg = `✅ Pedido *#${requestIdShort.toUpperCase()}* atualizado para *${statusText}*!`;
+            let responseMsg = `✅ Pedido *#${commandId}* atualizado para *${statusText}*!`;
             if (status === 'Approved') {
                 responseMsg += `\n⏳ Prazo: ${productionDays || 7} dias de produção.`;
                 responseMsg += `\n\n_Ação confirmada por: ${senderNumber || 'Administrador'}_`;
@@ -134,15 +133,14 @@ async function processWhapiWebhook(request: NextRequest) {
         // 3. Processar Comando de Pedido Pronto (#ID Pronto) - NOVO FLUXO
         const readyMatch = text.match(/#(\w+)\s+(Pronto)/i);
         if (readyMatch) {
-            const [_, orderIdShort] = readyMatch;
-            const orderIdLower = orderIdShort.toLowerCase();
+            const [_, commandId] = readyMatch;
 
             const q = query(collectionGroup(firestore, 'orders'));
             const querySnapshot = await getDocs(q);
 
             let targetDoc: any = null;
             querySnapshot.forEach((d) => {
-                if (d.id.toLowerCase().startsWith(orderIdLower)) {
+                if (d.id === commandId) {
                     targetDoc = d;
                 }
             });
@@ -150,7 +148,7 @@ async function processWhapiWebhook(request: NextRequest) {
             if (!targetDoc) {
                 await axios.post('https://gate.whapi.cloud/messages/text', {
                     to: chatId,
-                    body: `❌ Pedido *#${orderIdShort.toUpperCase()}* não encontrado para marcar como pronto.`
+                    body: `❌ Pedido *#${commandId}* não encontrado para marcar como pronto.`
                 }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
                 return NextResponse.json({ error: 'Pedido não encontrado' });
             }
@@ -161,7 +159,7 @@ async function processWhapiWebhook(request: NextRequest) {
             if (orderData.status !== 'IN_PRODUCTION') {
                  await axios.post('https://gate.whapi.cloud/messages/text', {
                     to: chatId,
-                    body: `⚠️ Pedido *#${orderIdShort.toUpperCase()}* não está "Em Produção". Status atual: ${orderData.status}. Ação cancelada.`
+                    body: `⚠️ Pedido *#${commandId}* não está "Em Produção". Status atual: ${orderData.status}. Ação cancelada.`
                 }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
                 return NextResponse.json({ error: 'Status do pedido inválido para esta ação.' });
             }
@@ -176,7 +174,7 @@ async function processWhapiWebhook(request: NextRequest) {
             // Envia resposta inicial e inicia a geração da etiqueta em background
             await axios.post('https://gate.whapi.cloud/messages/text', {
                 to: chatId,
-                body: `✅ Pedido *#${orderIdShort.toUpperCase()}* marcado como *Pronto*. \n\nIniciando geração de etiqueta... Você receberá em breve.`
+                body: `✅ Pedido *#${commandId}* marcado como *Pronto*. \n\nIniciando geração de etiqueta... Você receberá em breve.`
             }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
             
             // Chama a função de logística (não bloqueante para o webhook)
@@ -185,7 +183,7 @@ async function processWhapiWebhook(request: NextRequest) {
                 console.error(`Erro no processo de etiqueta para ${targetDoc.id}:`, e);
                 await axios.post('https://gate.whapi.cloud/messages/text', {
                     to: chatId,
-                    body: `❌ Falha ao gerar etiqueta para o pedido *#${orderIdShort.toUpperCase()}*. Verifique os logs.`
+                    body: `❌ Falha ao gerar etiqueta para o pedido *#${commandId}*. Verifique os logs.`
                 }, { headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` } });
               });
 

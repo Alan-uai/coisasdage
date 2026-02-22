@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { ShoppingBag, Loader2, Info, ArrowRight, Sparkles } from 'lucide-react';
+import { ShoppingBag, Loader2, Info, ArrowRight, Sparkles, ShoppingCart } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useUser, useFirestore, addDocumentNonBlocking } from '@/firebase';
@@ -274,7 +274,7 @@ export function ProductClientPage({ product }: { product: Product }) {
             <Separator />
 
             <div className="space-y-6">
-              {displayableSizes.length > 1 && (
+              {displayableSizes.length > 0 && (
                 <div className="space-y-3">
                   <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Escolha o Tamanho</Label>
                   <RadioGroup value={selectedSize} onValueChange={setSelectedSize} className="flex flex-wrap gap-2">
@@ -293,7 +293,7 @@ export function ProductClientPage({ product }: { product: Product }) {
                 </div>
               )}
 
-              {displayableColors.length > 1 && (
+              {displayableColors.length > 0 && (
                 <div className="space-y-3">
                   <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Escolha a Cor</Label>
                   <div className="flex flex-wrap gap-3">
@@ -335,7 +335,7 @@ export function ProductClientPage({ product }: { product: Product }) {
                 className="h-14 text-lg font-bold shadow-lg shadow-primary/20"
                 disabled={isBuyingNow}
               >
-                {isBuyingNow ? <Loader2 className="animate-spin mr-2" /> : <Sparkles className="mr-2 size-5" />}
+                {isBuyingNow ? <Loader2 className="animate-spin mr-2" /> : <ShoppingBag className="mr-2 size-5" />}
                 Comprar Agora
               </Button>
               <Button 
@@ -345,7 +345,7 @@ export function ProductClientPage({ product }: { product: Product }) {
                 className="h-14 border-2 font-bold"
                 disabled={isAdding}
               >
-                {isAdding ? <Loader2 className="animate-spin mr-2" /> : <ShoppingBag className="mr-2 size-5" />}
+                {isAdding ? <Loader2 className="animate-spin mr-2" /> : <ShoppingCart className="mr-2 size-5" />}
                 Adicionar ao Carrinho
               </Button>
             </div>

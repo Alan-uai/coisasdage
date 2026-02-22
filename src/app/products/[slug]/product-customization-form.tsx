@@ -13,8 +13,8 @@ import { Badge } from '@/components/ui/badge';
 import { ShoppingBag, Loader2, Info, ArrowRight, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { useUser, useFirestore, addDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
-import { collection, doc, serverTimestamp } from 'firebase/firestore';
+import { useUser, useFirestore, addDocumentNonBlocking } from '@/firebase';
+import { collection, doc, serverTimestamp, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import Link from 'next/link';
 
 const renderColorSwatch = (color: string, primaryColor?: string): JSX.Element => {
@@ -149,13 +149,8 @@ export function ProductClientPage({ product }: { product: Product }) {
       return;
     }
 
-    if (redirect) {
-      setIsBuyingNow(true);
-    } else {
-      // Para o carrinho, a ação deve ser instantânea sem travar o botão com loading demorado
-      setIsAdding(true);
-    }
-
+    const cartItemsRef = collection(firestore, 'users', user.uid, 'carts', 'main', 'items');
+    
     const cartItemData = {
       cartId: 'main',
       productId: currentVariant?.id || product.id,
@@ -173,20 +168,52 @@ export function ProductClientPage({ product }: { product: Product }) {
       updatedAt: serverTimestamp(),
     };
 
-    const cartItemsRef = collection(firestore, 'users', user.uid, 'carts', 'main', 'items');
-    addDocumentNonBlocking(cartItemsRef, cartItemData);
-
+    // "Buy Now" Flow - this must isolate the item
     if (redirect) {
-      router.push('/checkout');
-    } else {
-      // Feedback imediato e reseta o estado de carregamento rápido
-      toast({
+      setIsBuyingNow(true);
+      try {
+        const batch = writeBatch(firestore);
+
+        // 1. Unselect all other items to isolate this purchase
+        const q = query(cartItemsRef, where('selected', '==', true));
+        const querySnapshot = await getDocs(q);
+        querySnapshot.forEach((doc) => {
+          batch.update(doc.ref, { selected: false });
+        });
+
+        // 2. Add the new item as selected
+        const newCartItemRef = doc(cartItemsRef);
+        batch.set(newCartItemRef, cartItemData);
+
+        // 3. Commit changes
+        await batch.commit();
+
+        // 4. Redirect to the correct checkout flow
+        const checkoutType = isReady ? 'ready' : 'custom';
+        router.push(`/checkout?type=${checkoutType}`);
+
+      } catch (error) {
+        console.error("Error during 'Buy Now':", error);
+        toast({
+          variant: "destructive",
+          title: "Algo deu errado",
+          description: "Não foi possível iniciar a compra. Tente novamente.",
+        });
+        setIsBuyingNow(false);
+      }
+      return;
+    }
+
+    // "Add to Cart" Flow
+    setIsAdding(true);
+    addDocumentNonBlocking(cartItemsRef, cartItemData);
+    setIsAdding(false);
+
+    toast({
         title: "No Carrinho!",
         description: `${product.name} foi adicionado.`,
         action: <Button variant="outline" size="sm" asChild><Link href="/cart">Ver Carrinho</Link></Button>
-      });
-      setTimeout(() => setIsAdding(false), 500);
-    }
+    });
   };
 
   return (

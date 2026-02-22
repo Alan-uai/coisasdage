@@ -27,22 +27,16 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ test: 'success' }, { status: 200 });
     }
 
-    if (topic === 'payment' || topic === 'merchant_order' || topic === 'order') {
+    if (topic === 'payment') {
       const client = new MercadoPagoConfig({ accessToken });
+      const payment = new Payment(client);
+      const paymentData = await payment.get({ id: resourceId });
       
-      let externalReference: string | null = null;
-      let merchantOrderId: string | null = null;
-      let paymentId: string | number | null = null;
-      let status: string | null = null;
-
-      if (topic === 'payment') {
-        const payment = new Payment(client);
-        const paymentData = await payment.get({ id: resourceId });
-        externalReference = paymentData.external_reference || null;
-        paymentId = paymentData.id || null;
-        status = paymentData.status || null;
-        merchantOrderId = paymentData.order?.id?.toString() || null;
-      }
+      const externalReference = paymentData.external_reference || null;
+      const paymentId = paymentData.id || null;
+      const status = paymentData.status || null;
+      const merchantOrderId = paymentData.order?.id?.toString() || null;
+      const isLive = paymentData.live_mode ?? true; // Assume live if not present
 
       if (externalReference && externalReference.includes('|')) {
         const [userId, orderId] = externalReference.split('|');
@@ -64,8 +58,8 @@ export async function POST(request: NextRequest) {
             const orderSnap = await getDoc(orderRef);
             if (orderSnap.exists()) {
                 const orderData = orderSnap.data();
-                // Notifica a artesã sobre o novo pedido de pronta entrega para que ela possa dar o comando #ID Pronto
-                await notifyAdminNewOrder(orderId, orderData.userName, orderData.items);
+                // Notifica a artesã sobre o novo pedido, indicando se é um teste.
+                await notifyAdminNewOrder(orderId, orderData.userName, orderData.items, !isLive);
             }
         }
       }

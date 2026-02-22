@@ -197,7 +197,7 @@ export async function processPayment(
 /**
  * Notifica a Artesã sobre um novo pedido PAGO de pronta entrega.
  */
-export async function notifyAdminNewOrder(orderId: string, clientName: string, items: { productName: string }[]) {
+export async function notifyAdminNewOrder(orderId: string, clientName: string, items: { productName: string }[], isTest: boolean = false) {
     if (!WHAPI_TOKEN) return;
 
     // Se houver um ID de grupo, envia para o grupo, caso contrário para o número privado
@@ -205,10 +205,16 @@ export async function notifyAdminNewOrder(orderId: string, clientName: string, i
     const commandId = orderId; // Usando o ID completo do Firestore
     const productList = items.map(item => `- ${item.productName}`).join('\n');
 
+    let messageBody = '';
+    if (isTest) {
+        messageBody += "🧪 *ESTE É UM PEDIDO DE TESTE*\n\n";
+    }
+    messageBody += `📦 *Novo Pedido Pago (Pronta Entrega)!*\n\nCliente: *${clientName}*\n\nItens:\n${productList}\n\n*ID do Pedido: #${commandId}*\n\nQuando o pacote estiver pronto para envio, responda aqui com:\n` + "`" + `#${commandId} Pronto` + "`";
+
     try {
         await axios.post('https://gate.whapi.cloud/messages/text', {
             to: destination,
-            body: `📦 *Novo Pedido Pago (Pronta Entrega)!*\n\nCliente: *${clientName}*\n\nItens:\n${productList}\n\n*ID do Pedido: #${commandId}*\n\nQuando o pacote estiver pronto para envio, responda aqui com:\n` + "`" + `#${commandId} Pronto` + "`"
+            body: messageBody
         }, {
             headers: { 'Authorization': `Bearer ${WHAPI_TOKEN}` }
         });

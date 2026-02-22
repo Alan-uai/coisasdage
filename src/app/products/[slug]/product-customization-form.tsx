@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo, type CSSProperties } from 'react';
@@ -351,25 +352,51 @@ export function ProductClientPage({ product }: { product: Product }) {
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-              <Button 
-                onClick={handleBuyNow} 
-                size="lg" 
-                className="h-14 text-lg font-bold shadow-lg shadow-primary/20"
-                disabled={isLoading}
-              >
-                {isBuyingNow ? <Loader2 className="animate-spin mr-2" /> : <ShoppingBag className="mr-2 size-5" />}
-                Comprar Agora
-              </Button>
-              <Button 
-                onClick={handleAddToCart}
-                variant="outline" 
-                size="lg" 
-                className="h-14 border-2 font-bold"
-                disabled={isLoading}
-              >
-                {isAdding ? <Loader2 className="animate-spin mr-2" /> : <ShoppingCart className="mr-2 size-5" />}
-                Adicionar ao Carrinho
-              </Button>
+              {isReady ? (
+                <>
+                  <Button 
+                    onClick={handleBuyNow} 
+                    size="lg" 
+                    className="h-14 text-lg font-bold shadow-lg shadow-primary/20"
+                    disabled={isLoading}
+                  >
+                    {isBuyingNow ? <Loader2 className="animate-spin mr-2" /> : <ShoppingBag className="mr-2 size-5" />}
+                    Comprar Agora
+                  </Button>
+                  <Button 
+                    onClick={handleAddToCart}
+                    variant="outline" 
+                    size="lg" 
+                    className="h-14 border-2 font-bold"
+                    disabled={isLoading}
+                  >
+                    {isAdding ? <Loader2 className="animate-spin mr-2" /> : <ShoppingCart className="mr-2 size-5" />}
+                    Adicionar ao Carrinho
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button 
+                    onClick={handleBuyNow} 
+                    size="lg" 
+                    className="h-14 text-lg font-bold shadow-lg shadow-primary/20"
+                    disabled={isLoading}
+                  >
+                    {isBuyingNow ? <Loader2 className="animate-spin mr-2" /> : <Sparkles className="mr-2 size-5" />}
+                    Solicitar Orçamento
+                  </Button>
+                  <Button 
+                    onClick={handleAddToCart}
+                    variant="outline" 
+                    size="lg" 
+                    className="h-14 border-2 font-bold"
+                    disabled={isLoading}
+                  >
+                    {isAdding ? <Loader2 className="animate-spin mr-2" /> : <Archive className="mr-2 size-5" />}
+                    Guardar para Orçar
+                  </Button>
+                </>
+              )}
             </div>
 
             {!isReady && (

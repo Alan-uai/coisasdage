@@ -61,7 +61,7 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
     const [activeImageUrl, setActiveImageUrl] = useState(product.imageUrl);
     const [activeColor, setActiveColor] = useState<string | undefined>(initialActiveColor);
     const [activePrice, setActivePrice] = useState(product.price);
-    const [activeStockQuantity, setActiveStockQuantity] = useState(product.quantity ?? 0);
+    const [activeStockQuantity, setActiveStockQuantity] = useState((mainVariant as any)?.quantity ?? 0);
     const [activeSizeIndex, setActiveSizeIndex] = useState(-1);
 
     const cycleableSizes = useMemo(() => {
@@ -86,7 +86,7 @@ export const ProductCard = ({ product, isReadyMadeCarousel = false }: { product:
             setActiveImageUrl(product.imageUrl);
             setActivePrice(product.price);
             setActiveColor(initialActiveColor);
-            setActiveStockQuantity(product.quantity ?? 0);
+            setActiveStockQuantity((mainVariant as any)?.quantity ?? 0);
         } else {
             setActiveSizeIndex(nextSizeIndex);
             const size = cycleableSizes[nextSizeIndex];
